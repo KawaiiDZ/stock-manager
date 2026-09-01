@@ -101,6 +101,7 @@ export const App: React.FC = () => {
       {/* Sidebar */}
       <Sidebar
         currentTab={currentTab}
+        settings={settings}
         onTabChange={(tab) => {
           if (tab !== 'returns') setReturnSaleId(undefined);
           if (tab !== 'new_sale') setPreLoadedSellProduct(null);

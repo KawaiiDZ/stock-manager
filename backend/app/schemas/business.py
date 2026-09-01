@@ -9,6 +9,7 @@ class BusinessSettingsResponse(BaseModel):
     phone: str
     address: str
     logo_path: Optional[str] = None
+    receipt_logo_path: Optional[str] = None
     currency: str
     tax_enabled: bool
     default_tax_rate: Decimal
@@ -25,6 +26,8 @@ class BusinessSettingsUpdate(BaseModel):
     business_name: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    logo_path: Optional[str] = None
+    receipt_logo_path: Optional[str] = None
     currency: Optional[str] = None
     tax_enabled: Optional[bool] = None
     default_tax_rate: Optional[Decimal] = None

@@ -1,4 +1,5 @@
 import React from 'react';
+import { BusinessSettings } from '../../types';
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -33,12 +34,14 @@ interface SidebarProps {
   currentTab: string;
   onTabChange: (tab: string) => void;
   urgentBillsCount?: number;
+  settings?: BusinessSettings | null;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   currentTab,
   onTabChange,
   urgentBillsCount = 0,
+  settings,
 }) => {
   const navSections: NavSection[] = [
     {
@@ -99,16 +102,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside className="w-64 bg-white border-r border-slate-200 flex flex-col h-screen select-none shrink-0">
       {/* Brand Header */}
-      <div className="h-16 flex items-center px-6 border-b border-slate-100 gap-3">
-        <div className="h-9 w-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-bold shadow-md shadow-emerald-500/20">
-          <ShoppingCart className="h-5 w-5" />
+      <div className="h-16 flex items-center px-5 border-b border-slate-100 justify-between">
+        <div className="flex items-center gap-2.5">
+          <img
+            src={settings?.logo_path || '/stokflow-logo.png'}
+            alt={settings?.business_name || 'StokFlow'}
+            className="h-8 w-auto max-w-[145px] object-contain"
+          />
         </div>
-        <div>
-          <h1 className="font-bold text-slate-800 leading-tight">Stock Manager</h1>
-          <p className="text-[10px] font-semibold text-emerald-600 uppercase tracking-widest">
-            Offline Edition
-          </p>
-        </div>
+        <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 tracking-wider">
+          v1.0
+        </span>
       </div>
 
       {/* Navigation List */}

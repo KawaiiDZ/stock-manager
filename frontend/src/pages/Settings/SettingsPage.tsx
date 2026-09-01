@@ -17,6 +17,8 @@ import {
   Plus,
   RefreshCw,
   Download,
+  Upload,
+  Image,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -167,6 +169,88 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       onSettingsUpdated();
     } catch (err: any) {
       setErrorMsg(err.detail || 'Failed to update settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLogoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      setErrorMsg('Logo file size must be under 2MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64Data = reader.result as string;
+      setSaving(true);
+      setErrorMsg(null);
+      try {
+        await api.updateSettings({ logo_path: base64Data });
+        setSuccessMsg('Store logo uploaded and applied successfully!');
+        onSettingsUpdated();
+      } catch (err: any) {
+        setErrorMsg(err.detail || 'Failed to upload store logo.');
+      } finally {
+        setSaving(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleResetLogo = async () => {
+    setSaving(true);
+    setErrorMsg(null);
+    try {
+      await api.updateSettings({ logo_path: '' });
+      setSuccessMsg('Logo reset to default StokFlow branding!');
+      onSettingsUpdated();
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to reset logo.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReceiptLogoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      setErrorMsg('Receipt logo file size must be under 2MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64Data = reader.result as string;
+      setSaving(true);
+      setErrorMsg(null);
+      try {
+        await api.updateSettings({ receipt_logo_path: base64Data });
+        setSuccessMsg('Thermal receipt logo uploaded and applied successfully!');
+        onSettingsUpdated();
+      } catch (err: any) {
+        setErrorMsg(err.detail || 'Failed to upload thermal receipt logo.');
+      } finally {
+        setSaving(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleResetReceiptLogo = async () => {
+    setSaving(true);
+    setErrorMsg(null);
+    try {
+      await api.updateSettings({ receipt_logo_path: '' });
+      setSuccessMsg('Receipt logo reset to default StokFlow branding!');
+      onSettingsUpdated();
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to reset receipt logo.');
     } finally {
       setSaving(false);
     }
@@ -381,37 +465,124 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
       {/* Tab: Business Profile */}
       {activeTab === 'business' && (
-        <form onSubmit={handleSaveSettings} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm max-w-2xl space-y-4">
-          <h3 className="font-bold text-slate-800 text-base mb-2">Business Profile</h3>
-          <Input
-            label="Shop / Business Name *"
-            value={bizName}
-            onChange={(e) => setBizName(e.target.value)}
-            required
-          />
-          <Input
-            label="Phone Number"
-            value={bizPhone}
-            onChange={(e) => setBizPhone(e.target.value)}
-          />
-          <Input
-            label="Shop Address"
-            value={bizAddress}
-            onChange={(e) => setBizAddress(e.target.value)}
-          />
-          <Input
-            label="Currency Symbol *"
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
-            hint="e.g. Rs., PKR, $"
-            required
-          />
-          <div className="pt-2">
-            <Button type="submit" variant="primary" loading={saving}>
-              Save Profile
-            </Button>
+        <div className="max-w-3xl space-y-6">
+          <form onSubmit={handleSaveSettings} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+            <h3 className="font-bold text-slate-800 text-base mb-2">Business Profile</h3>
+            <Input
+              label="Shop / Business Name *"
+              value={bizName}
+              onChange={(e) => setBizName(e.target.value)}
+              required
+            />
+            <Input
+              label="Phone Number"
+              value={bizPhone}
+              onChange={(e) => setBizPhone(e.target.value)}
+            />
+            <Input
+              label="Shop Address"
+              value={bizAddress}
+              onChange={(e) => setBizAddress(e.target.value)}
+            />
+            <Input
+              label="Currency Symbol *"
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              hint="e.g. Rs., PKR, $"
+              required
+            />
+            <div className="pt-2">
+              <Button type="submit" variant="primary" loading={saving}>
+                Save Profile
+              </Button>
+            </div>
+          </form>
+
+          {/* 1-Click Store Logo Uploader */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="font-bold text-slate-800 text-base">Store Brand Logo</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Upload your shop logo to replace StokFlow branding across Login, Sidebar, and Receipts.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/png, image/jpeg, image/svg+xml, image/webp"
+                    onChange={handleLogoFileUpload}
+                    className="hidden"
+                  />
+                  <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition">
+                    <Upload className="h-4 w-4" />
+                    Upload Logo
+                  </span>
+                </label>
+
+                {settings?.logo_path && (
+                  <button
+                    type="button"
+                    onClick={handleResetLogo}
+                    className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 font-semibold text-xs transition"
+                    title="Revert back to StokFlow default logo"
+                  >
+                    Reset to Default
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Clean Live Preview */}
+            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="h-16 w-48 flex items-center justify-center">
+                  <img
+                    src={settings?.logo_path || '/stokflow-logo.png'}
+                    alt="Active Brand Logo"
+                    className="h-12 w-auto max-w-[180px] object-contain"
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-800">
+                      {settings?.logo_path ? 'Custom Store Logo' : 'Default StokFlow Logo'}
+                    </span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      settings?.logo_path ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700'
+                    }`}>
+                      {settings?.logo_path ? 'Custom Active' : 'Default Active'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Automatically applied to Login Screen, Sidebar Header, and Print Invoices.
+                  </p>
+                </div>
+              </div>
+
+              {/* Recommended Dimensions Badges */}
+              <div className="text-left sm:text-right space-y-1">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Recommended Dimensions
+                </div>
+                <div className="flex items-center gap-1.5 justify-start sm:justify-end">
+                  <span className="font-mono text-[11px] font-bold px-2 py-0.5 bg-white border border-slate-200 rounded-md text-slate-700">
+                    480 × 120 px
+                  </span>
+                  <span className="text-xs text-slate-400 font-bold">or</span>
+                  <span className="font-mono text-[11px] font-bold px-2 py-0.5 bg-white border border-slate-200 rounded-md text-slate-700">
+                    512 × 512 px
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-400">
+                  Transparent PNG or SVG (Max 2MB)
+                </div>
+              </div>
+            </div>
           </div>
-        </form>
+        </div>
       )}
 
       {/* Tab: Tax Settings */}
@@ -460,44 +631,131 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
       {/* Tab: Receipt & Printer */}
       {activeTab === 'printer' && (
-        <form onSubmit={handleSaveSettings} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm max-w-2xl space-y-4">
-          <h3 className="font-bold text-slate-800 text-base mb-2">Receipt & Thermal Printer Settings</h3>
-          
-          <div>
-            <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">
-              Receipt Printer Paper Size
-            </label>
-            <select
-              value={printerType}
-              onChange={(e) => setPrinterType(e.target.value as any)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
-            >
-              <option value="80mm">80mm Thermal Receipt (Standard Wide)</option>
-              <option value="58mm">58mm Thermal Receipt (Narrow Compact)</option>
-              <option value="standard">Standard A4 / Letter Page</option>
-            </select>
+        <div className="max-w-3xl space-y-6">
+          <form onSubmit={handleSaveSettings} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+            <h3 className="font-bold text-slate-800 text-base mb-2">Receipt & Thermal Printer Settings</h3>
+            
+            <div>
+              <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">
+                Receipt Printer Paper Size
+              </label>
+              <select
+                value={printerType}
+                onChange={(e) => setPrinterType(e.target.value as any)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
+              >
+                <option value="80mm">80mm Thermal Receipt (Standard Wide)</option>
+                <option value="58mm">58mm Thermal Receipt (Narrow Compact)</option>
+                <option value="standard">Standard A4 / Letter Page</option>
+              </select>
+            </div>
+
+            <Input
+              label="Receipt Header Subtitle"
+              placeholder="e.g. Welcome to our store"
+              value={receiptHeader}
+              onChange={(e) => setReceiptHeader(e.target.value)}
+            />
+
+            <Input
+              label="Receipt Footer Note"
+              placeholder="e.g. Thank you for shopping with us!"
+              value={receiptFooter}
+              onChange={(e) => setReceiptFooter(e.target.value)}
+            />
+
+            <div className="pt-2">
+              <Button type="submit" variant="primary" loading={saving}>
+                Save Printer Settings
+              </Button>
+            </div>
+          </form>
+
+          {/* 1-Click Thermal Receipt Print Logo Uploader */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="font-bold text-slate-800 text-base">Thermal Receipt Print Logo</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  High-contrast black & white logo printed at the top of 80mm & 58mm customer receipts.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/png, image/jpeg, image/svg+xml, image/webp"
+                    onChange={handleReceiptLogoFileUpload}
+                    className="hidden"
+                  />
+                  <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition">
+                    <Upload className="h-4 w-4" />
+                    Upload Receipt Logo
+                  </span>
+                </label>
+
+                {settings?.receipt_logo_path && (
+                  <button
+                    type="button"
+                    onClick={handleResetReceiptLogo}
+                    className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 font-semibold text-xs transition"
+                    title="Revert back to StokFlow default thermal logo"
+                  >
+                    Reset to Default
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Clean Live Receipt Preview */}
+            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="h-16 w-48 flex items-center justify-center">
+                  <img
+                    src={settings?.receipt_logo_path || settings?.logo_path || '/stokflow-receipt.png'}
+                    alt="Active Receipt Logo"
+                    className="h-10 w-auto max-w-[170px] object-contain filter grayscale contrast-200"
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-800">
+                      {settings?.receipt_logo_path ? 'Custom Receipt Logo' : 'Default StokFlow Thermal Logo'}
+                    </span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      settings?.receipt_logo_path ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700'
+                    }`}>
+                      {settings?.receipt_logo_path ? 'Custom Active' : 'Default Active'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Printed cleanly at the top of customer POS thermal receipts.
+                  </p>
+                </div>
+              </div>
+
+              {/* Recommended Dimensions Badges */}
+              <div className="text-left sm:text-right space-y-1">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Recommended Dimensions
+                </div>
+                <div className="flex items-center gap-1.5 justify-start sm:justify-end">
+                  <span className="font-mono text-[11px] font-bold px-2 py-0.5 bg-white border border-slate-200 rounded-md text-slate-700">
+                    384 × 128 px
+                  </span>
+                  <span className="text-xs text-slate-400 font-bold">or</span>
+                  <span className="font-mono text-[11px] font-bold px-2 py-0.5 bg-white border border-slate-200 rounded-md text-slate-700">
+                    200 × 100 px
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-400">
+                  Pure Black (#000000) on White/Transparent
+                </div>
+              </div>
+            </div>
           </div>
-
-          <Input
-            label="Receipt Header Subtitle"
-            placeholder="e.g. Welcome to our store"
-            value={receiptHeader}
-            onChange={(e) => setReceiptHeader(e.target.value)}
-          />
-
-          <Input
-            label="Receipt Footer Note"
-            placeholder="e.g. Thank you for shopping with us!"
-            value={receiptFooter}
-            onChange={(e) => setReceiptFooter(e.target.value)}
-          />
-
-          <div className="pt-2">
-            <Button type="submit" variant="primary" loading={saving}>
-              Save Printer Settings
-            </Button>
-          </div>
-        </form>
+        </div>
       )}
 
       {/* Tab: Backup & Restore */}

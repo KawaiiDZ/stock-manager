@@ -4,6 +4,7 @@ export interface BusinessSettings {
   phone: string;
   address: string;
   logo_path?: string | null;
+  receipt_logo_path?: string | null;
   currency: string;
   tax_enabled: boolean;
   default_tax_rate: number;

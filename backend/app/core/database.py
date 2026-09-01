@@ -39,6 +39,8 @@ def auto_upgrade_schema():
                     conn.execute(text("ALTER TABLE business_settings ADD COLUMN industry_preset VARCHAR(50) DEFAULT 'general'"))
                 if "setup_completed" not in cols:
                     conn.execute(text("ALTER TABLE business_settings ADD COLUMN setup_completed BOOLEAN DEFAULT 0"))
+                if "receipt_logo_path" not in cols:
+                    conn.execute(text("ALTER TABLE business_settings ADD COLUMN receipt_logo_path TEXT NULL"))
                 conn.commit()
         except Exception as e:
             print("Auto-upgrade error (business_settings):", e)

@@ -47,7 +47,17 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
       }}
     >
       {/* Header */}
-      <div className="text-center pb-2 border-b border-dashed border-black">
+      <div className="text-center pb-2 border-b border-dashed border-black space-y-1">
+        <div className="flex justify-center pb-1">
+          <img
+            src={settings?.receipt_logo_path || settings?.logo_path || '/stokflow-receipt.png'}
+            alt="Logo"
+            className="h-8 w-auto max-w-[140px] object-contain filter grayscale contrast-200"
+            onError={(e) => {
+              (e.target as HTMLElement).style.display = 'none';
+            }}
+          />
+        </div>
         <h2 className="text-base font-black tracking-wider uppercase">{shopName}</h2>
         {shopAddress && <p className="text-[11px] text-slate-700">{shopAddress}</p>}
         {shopPhone && <p className="text-[11px] text-slate-700">Phone: {shopPhone}</p>}

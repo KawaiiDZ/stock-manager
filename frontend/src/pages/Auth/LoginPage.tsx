@@ -47,15 +47,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 flex flex-col justify-center items-center p-4">
       <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl border border-slate-100/10">
         {/* Brand Header */}
-        <div className="text-center mb-8">
-          <div className="h-16 w-16 rounded-3xl bg-emerald-600 flex items-center justify-center text-white mx-auto mb-4 shadow-lg shadow-emerald-600/30">
-            <ShoppingCart className="h-8 w-8" />
-          </div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">
-            {settings?.business_name || 'Stock Manager'}
+        <div className="text-center mb-8 flex flex-col items-center">
+          <img
+            src={settings?.logo_path || '/stokflow-logo.png'}
+            alt={settings?.business_name || 'StokFlow'}
+            className="h-14 w-auto max-w-[240px] object-contain mb-3"
+          />
+          <h1 className="text-xl font-black text-slate-800 tracking-tight">
+            {settings?.business_name || 'Business Portal Login'}
           </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Offline Inventory, Sales & Business System
+          <p className="text-xs text-slate-400 mt-0.5">
+            Offline Inventory, POS & Financial Ledgers
           </p>
         </div>
 
