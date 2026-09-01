@@ -62,8 +62,61 @@ def test_sales_and_customer_returns_financial_rule(db_session):
     cust_state2 = get_customer(db_session, cust.id)
     assert cust_state2.current_due == Decimal("900.00")
 
-    # 4. Stock must have been restored: was 50 - 5 = 45, now 45 + 2 = 47
     prod_check = db_session.query(ProductCreate).filter().first() if False else None
     from backend.app.services.product_service import get_product
     p_now = get_product(db_session, prod["id"])
     assert p_now["current_stock"] == Decimal("47.00")
+
+def test_return_partial_units_and_overpayment_prevention(db_session):
+    import pytest
+    from backend.app.core.errors import BusinessRuleException
+    from backend.app.schemas.customer import CustomerPaymentCreate
+    from backend.app.services.customer_service import record_customer_payment
+
+    cust = create_customer(db_session, CustomerCreate(name="Zara", phone="03009998877"))
+    prod = create_product(db_session, ProductCreate(
+        name="Wireless Mouse",
+        purchase_price=Decimal("400.00"),
+        selling_price=Decimal("500.00"),
+        opening_stock=Decimal("10.00")
+    ))
+
+    # 1. Sale: 2 units @ Rs. 500 = Rs. 1000. Paid Rs. 400, Due Rs. 600.
+    sale = create_sale(db_session, SaleCreate(
+        customer_id=cust.id,
+        items=[SaleItemCreate(
+            product_id=prod["id"],
+            quantity=Decimal("2.00"),
+            unit_price=Decimal("500.00")
+        )],
+        paid_amount=Decimal("400.00")
+    ))
+    assert sale.due_amount == Decimal("600.00")
+    assert get_customer(db_session, cust.id).current_due == Decimal("600.00")
+
+    # 2. Overpayment Prevention: Customer owes 600. Attempting to pay 1000 must raise BusinessRuleException!
+    with pytest.raises(BusinessRuleException) as exc_info:
+        record_customer_payment(db_session, cust.id, CustomerPaymentCreate(amount=Decimal("1000.00")))
+    assert "cannot exceed current outstanding due" in str(exc_info.value)
+
+    # 3. Valid payment of Rs. 100
+    record_customer_payment(db_session, cust.id, CustomerPaymentCreate(amount=Decimal("100.00")))
+    assert get_customer(db_session, cust.id).current_due == Decimal("500.00")
+
+    # 4. Return 1 of the 2 units (Return value Rs. 500)
+    ret = create_sales_return(db_session, SalesReturnCreate(
+        sale_id=sale.id,
+        customer_id=cust.id,
+        items=[SalesReturnItemCreate(
+            product_id=prod["id"],
+            quantity=Decimal("1.00"),
+            unit_price=Decimal("500.00")
+        )]
+    ))
+    assert ret.total_return_amount == Decimal("500.00")
+    assert ret.cash_refund_amount == Decimal("400.00") # Paid 400 originally, so max cash refund is 400
+    assert ret.balance_credit_amount == Decimal("100.00")
+
+    # 5. Verify stock restored (10 - 2 + 1 = 9)
+    from backend.app.services.product_service import get_product
+    assert get_product(db_session, prod["id"])["current_stock"] == Decimal("9.00")

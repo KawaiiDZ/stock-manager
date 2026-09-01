@@ -106,13 +106,17 @@ def create_sales_return(db: Session, data: SalesReturnCreate) -> SalesReturnResp
         })
 
     # 4. Financial Cashback Rule (Section 29)
-    # If customer has already paid money, refund up to the paid amount; remaining value goes as credit against due
+    # If customer paid partially, only refund up to the actual cash paid.
     if original_sale:
-        actual_paid = original_sale.paid_amount
-        cash_refund = min(total_return_amount, actual_paid)
+        prev_returns = db.query(SalesReturn).filter(SalesReturn.sale_id == original_sale.id).all()
+        prev_cash_refunded = sum((pr.cash_refund_amount for pr in prev_returns), Decimal("0.00"))
+        remaining_refundable_cash = max(Decimal("0.00"), original_sale.paid_amount - prev_cash_refunded)
+
+        cash_refund = min(total_return_amount, remaining_refundable_cash)
         balance_credit = total_return_amount - cash_refund
     else:
-        # For manual returns, if Walk-in customer -> full cash refund; if named customer -> balance credit by default
+        # For manual returns without receipt:
+        # If Walk-in customer -> full cash refund; if named customer -> credit towards their ledger balance
         if customer.customer_id == "C-000001":
             cash_refund = total_return_amount
             balance_credit = Decimal("0.00")

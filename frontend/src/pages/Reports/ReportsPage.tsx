@@ -77,10 +77,38 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
     { id: 'expenses', label: '9. Expenses' },
   ];
 
+  const handleExportCSV = () => {
+    if (!reportData || reportData.length === 0) return;
+    const currentTabLabel = reportTabs.find((t) => t.id === activeTab)?.label || 'report';
+    const keys = Object.keys(reportData[0]);
+    const csvContent = [
+      keys.join(','),
+      ...reportData.map((row) =>
+        keys
+          .map((k) => {
+            const val = row[k] === null || row[k] === undefined ? '' : String(row[k]);
+            return `"${val.replace(/"/g, '""')}"`;
+          })
+          .join(',')
+      ),
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${activeTab}_report_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const activeTabObj = reportTabs.find((t) => t.id === activeTab);
+
   return (
     <div className="space-y-6 pb-12">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print">
         <div>
           <h1 className="text-2xl font-black text-slate-800 tracking-tight">Business Reports</h1>
           <p className="text-xs text-slate-400 mt-0.5">
@@ -88,18 +116,30 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
           </p>
         </div>
 
-        <Button
-          variant="secondary"
-          size="md"
-          icon={<Printer className="h-4 w-4" />}
-          onClick={() => window.print()}
-        >
-          Print Report
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="md"
+            icon={<Download className="h-4 w-4" />}
+            onClick={handleExportCSV}
+            disabled={reportData.length === 0}
+          >
+            Export CSV
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="md"
+            icon={<Printer className="h-4 w-4" />}
+            onClick={() => window.print()}
+          >
+            Print / Save PDF
+          </Button>
+        </div>
       </div>
 
       {/* Tabs Navigation */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-slate-200">
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-slate-200 no-print">
         {reportTabs.map((tab) => (
           <button
             key={tab.id}
@@ -117,7 +157,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
 
       {/* Date Filter Bar (where applicable) */}
       {['sales', 'sales_detail', 'purchases', 'movements', 'expenses'].includes(activeTab) && (
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3 no-print">
           <DateFilter
             onFilterChange={(start, end) => {
               setStartDate(start);
@@ -130,8 +170,34 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
         </div>
       )}
 
-      {/* Report Table Card */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+      {/* Report Table Card / Printable Report Document */}
+      <div id="printable-report" className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-0 sm:p-2 print:border-none print:shadow-none print:p-0">
+        {/* Print-Only Corporate Header */}
+        <div className="hidden print:block mb-6 pb-4 border-b-2 border-slate-800">
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-xl font-black text-slate-900 tracking-tight">{settings?.business_name || 'My Business'}</h1>
+              {settings?.address && <p className="text-xs text-slate-600 mt-0.5">{settings.address}</p>}
+              {settings?.phone && <p className="text-xs text-slate-600">Phone: {settings.phone}</p>}
+            </div>
+            <div className="text-right">
+              <h2 className="text-base font-bold text-slate-800 uppercase tracking-wide">{activeTabObj?.label}</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {startDate && endDate
+                  ? `Period: ${startDate} to ${endDate}`
+                  : startDate
+                  ? `From: ${startDate}`
+                  : endDate
+                  ? `To: ${endDate}`
+                  : 'Period: All Time Records'}
+              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5">
+                Printed on: {new Date().toLocaleString()}
+              </p>
+            </div>
+          </div>
+        </div>
+
         {loading ? (
           <div className="py-20 text-center text-slate-400 font-medium">
             Generating {reportTabs.find((t) => t.id === activeTab)?.label}...

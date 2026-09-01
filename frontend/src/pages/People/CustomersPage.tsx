@@ -372,26 +372,39 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({ settings }) => {
         </form>
       </Modal>
 
-      {/* Receive Due Payment Modal */}
+      {/* Receive Payment Modal */}
       <Modal
         isOpen={Boolean(paymentCustomer)}
         onClose={() => setPaymentCustomer(null)}
-        title={`Receive Payment from ${paymentCustomer?.name}`}
+        title={`Receive Payment: ${paymentCustomer?.name}`}
         subtitle={`Current Balance Due: ${formatCurrency(paymentCustomer?.current_due, currency)}`}
         maxWidth="sm"
       >
         <form onSubmit={handleSavePayment} className="space-y-4">
-          <Input
-            label="Payment Amount *"
-            type="number"
-            step="0.01"
-            min="0.01"
-            prefix={currency}
-            value={payAmount}
-            onChange={(e) => setPayAmount(Number(e.target.value))}
-            required
-            autoFocus
-          />
+          <div className="space-y-1">
+            <Input
+              label={`Payment Amount (Max: ${formatCurrency(paymentCustomer?.current_due, currency)}) *`}
+              type="number"
+              step="0.01"
+              min="0.01"
+              max={Number(paymentCustomer?.current_due || 0)}
+              prefix={currency}
+              value={payAmount}
+              onChange={(e) => setPayAmount(Math.min(Number(paymentCustomer?.current_due || 0), Math.max(0, Number(e.target.value))))}
+              required
+              autoFocus
+            />
+            <div className="flex justify-between items-center text-[11px] text-slate-500 pt-1">
+              <span>Customer Balance: <strong>{formatCurrency(paymentCustomer?.current_due, currency)}</strong></span>
+              <button
+                type="button"
+                onClick={() => setPayAmount(Number(paymentCustomer?.current_due || 0))}
+                className="text-emerald-700 font-bold hover:underline"
+              >
+                Pay Full Balance
+              </button>
+            </div>
+          </div>
           <Input
             label="Notes (Optional)"
             placeholder="e.g. Cash paid at counter"
@@ -402,7 +415,7 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({ settings }) => {
             <Button type="button" variant="secondary" onClick={() => setPaymentCustomer(null)}>
               Cancel
             </Button>
-            <Button type="submit" variant="primary" loading={paying}>
+            <Button type="submit" variant="primary" loading={paying} disabled={payAmount <= 0 || payAmount > Number(paymentCustomer?.current_due || 0)}>
               Receive Payment
             </Button>
           </div>

@@ -11,6 +11,7 @@ import {
   Eye,
   Plus,
   ArrowRight,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Modal } from '../../components/common/Modal';
@@ -78,8 +79,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
     }
   };
 
-  // Find max sales in month for relative bar heights
-  const maxSale = Math.max(
+  // Find peak sales in month for relative bar heights
+  const peakSale = Math.max(
     ...monthlyChart.map((d) => Number(d.sales_revenue || 0)),
     1000
   );
@@ -248,72 +249,105 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
               </div>
             </div>
 
-            {/* Custom Simple Bar Chart */}
+            {/* Custom Simple Bar Chart with Reference Grid */}
             {loading ? (
-              <div className="py-24 text-center text-slate-400 text-xs">
-                Loading sales trends...
+              <div className="py-24 text-center text-slate-400 text-xs flex flex-col items-center justify-center gap-2">
+                <RefreshCw className="h-5 w-5 animate-spin text-emerald-600" />
+                <span>Loading daily sales performance...</span>
               </div>
             ) : monthlyChart.length === 0 ? (
               <div className="py-24 text-center text-slate-400 text-xs">
                 No sales records found for this month.
               </div>
             ) : (
-              <div className="pt-6">
-                <div className="flex items-end gap-1.5 h-48 border-b border-slate-100 pb-2">
-                  {monthlyChart.map((d) => {
-                    const revenueNum = Number(d.sales_revenue || 0);
-                    const heightPercent = maxSale > 0 ? (revenueNum / maxSale) * 100 : 0;
-                    const hasSales = revenueNum > 0;
-                    return (
-                      <div
-                        key={d.day}
-                        onClick={() => hasSales && handleOpenDayDetail(d)}
-                        className={`flex-1 flex flex-col items-center group relative ${
-                          hasSales ? 'cursor-pointer' : ''
-                        }`}
-                      >
-                        {/* Tooltip */}
-                        <div className="absolute -top-10 opacity-0 group-hover:opacity-100 pointer-events-none transition bg-slate-900 text-white text-[10px] py-1 px-2 rounded-md shadow-lg whitespace-nowrap z-20">
-                          Day {d.day}: {formatCurrency(revenueNum, currency)} ({d.transaction_count} sales)
-                        </div>
+              <div className="pt-4">
+                {/* Revenue Reference Guidelines */}
+                <div className="relative">
+                  <div className="flex flex-col justify-between absolute -left-1 top-0 bottom-6 right-0 pointer-events-none opacity-40">
+                    <div className="border-b border-dashed border-slate-200 text-[9px] font-bold text-slate-400 pl-1">
+                      {formatCurrency(peakSale, currency)}
+                    </div>
+                    <div className="border-b border-dashed border-slate-200 text-[9px] font-bold text-slate-400 pl-1">
+                      {formatCurrency(peakSale / 2, currency)}
+                    </div>
+                    <div className="border-b border-slate-200 text-[9px] font-bold text-slate-400 pl-1">
+                      0
+                    </div>
+                  </div>
 
-                        {/* Bar */}
+                  <div className="flex items-end gap-1 sm:gap-1.5 h-56 border-b border-slate-200 pb-2 relative z-10 pl-2 pr-1">
+                    {monthlyChart.map((d) => {
+                      const revenueNum = Number(d.sales_revenue || 0);
+                      const heightPercent = peakSale > 0 ? (revenueNum / peakSale) * 100 : 0;
+                      const hasSales = revenueNum > 0;
+                      const isToday =
+                        selectedYear === new Date().getFullYear() &&
+                        selectedMonth === new Date().getMonth() + 1 &&
+                        d.day === new Date().getDate();
+
+                      return (
                         <div
-                          style={{ height: `${Math.max(4, heightPercent)}%` }}
-                          className={`w-full rounded-t-md transition-all duration-300 ${
-                            hasSales
-                              ? 'bg-emerald-500 hover:bg-emerald-400 group-hover:shadow-md'
-                              : 'bg-slate-100'
-                          }`}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
+                          key={d.day}
+                          onClick={() => handleOpenDayDetail(d)}
+                          className="flex-1 h-full flex flex-col justify-end items-center group relative cursor-pointer"
+                        >
+                          {/* Tooltip */}
+                          <div className="absolute -top-12 opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 bg-slate-900 text-white text-[11px] py-1.5 px-2.5 rounded-xl shadow-xl whitespace-nowrap z-30 font-semibold">
+                            <div className="font-bold text-emerald-400">Day {d.day} ({d.date})</div>
+                            <div>{formatCurrency(revenueNum, currency)} • {d.transaction_count} sale{d.transaction_count === 1 ? '' : 's'}</div>
+                          </div>
 
-                {/* Day numbers */}
-                <div className="flex justify-between text-[9px] font-bold text-slate-400 mt-2 px-1">
-                  <span>Day 1</span>
-                  <span>Day 10</span>
-                  <span>Day 20</span>
-                  <span>Day {monthlyChart.length}</span>
+                          {/* Bar */}
+                          <div
+                            style={{ height: `${hasSales ? Math.max(8, heightPercent) : 4}%` }}
+                            className={`w-full rounded-t-md transition-all duration-300 ${
+                              hasSales
+                                ? 'bg-emerald-500 hover:bg-emerald-400 group-hover:shadow-md shadow-emerald-500/20'
+                                : 'bg-slate-100 hover:bg-slate-200'
+                            } ${isToday ? 'ring-2 ring-emerald-600 ring-offset-1' : ''}`}
+                          />
+
+                          {/* Day Label */}
+                          <span
+                            className={`text-[9px] font-bold mt-1.5 ${
+                              isToday
+                                ? 'text-emerald-700 font-black'
+                                : hasSales
+                                ? 'text-slate-700'
+                                : 'text-slate-300'
+                            }`}
+                          >
+                            {d.day}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             )}
           </div>
 
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 mt-4">
-            <span>
-              Total Month Revenue:{' '}
-              <strong className="text-slate-800 font-bold">
-                {formatCurrency(monthlyChart.reduce((sum, d) => sum + Number(d.sales_revenue || 0), 0), currency)}
-              </strong>
-            </span>
+          <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 mt-4">
+            <div className="flex items-center gap-4">
+              <span>
+                Total Month Revenue:{' '}
+                <strong className="text-slate-800 font-bold">
+                  {formatCurrency(monthlyChart.reduce((sum, d) => sum + Number(d.sales_revenue || 0), 0), currency)}
+                </strong>
+              </span>
+              <span>
+                Total Transactions:{' '}
+                <strong className="text-slate-800 font-bold">
+                  {monthlyChart.reduce((sum, d) => sum + Number(d.transaction_count || 0), 0)}
+                </strong>
+              </span>
+            </div>
             <Button
               variant="outline"
               size="sm"
               onClick={() => onNavigate('sales_history')}
-              className="text-xs"
+              className="text-xs font-bold"
             >
               View Full History →
             </Button>

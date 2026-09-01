@@ -59,19 +59,38 @@ def test_dashboard_stats_and_monthly_sales(client: TestClient):
     assert len(day_data["sales"]) == 1
 
 def test_reset_inventory_and_data(client: TestClient):
-    # 1. Add product and sale
+    # 1. Add customer, supplier, product, purchase, sale, return, bills
     client.post("/api/customers", json={"name": "Bob", "phone": "03002222222"})
+    client.post("/api/suppliers", json={"name": "Supplier X", "phone": "03001111111"})
     client.post("/api/products", json={
         "name": "Test iPhone",
         "purchase_price": 800.0,
         "selling_price": 1000.0,
         "opening_stock": 5.0
     })
-    client.post("/api/sales", json={
+    
+    # Add a purchase order
+    client.post("/api/purchases", json={
+        "supplier_id": 1,
+        "items": [{"product_id": 1, "quantity": 10, "unit_cost": 750.0}],
+        "paid_amount": 7500.0,
+        "payment_method": "Cash"
+    })
+
+    # Add a sale
+    r_sale = client.post("/api/sales", json={
         "customer_id": 1,
-        "items": [{"product_id": 1, "quantity": 1, "unit_price": 1000.0}],
+        "items": [{"product_id": 1, "quantity": 2, "unit_price": 1000.0}],
         "paid_amount": 1000.0,
         "payment_method": "Cash"
+    })
+    sale_id = r_sale.json()["id"]
+
+    # Add a return
+    client.post("/api/returns/sales", json={
+        "sale_id": sale_id,
+        "customer_id": 1,
+        "items": [{"product_id": 1, "quantity": 1, "unit_price": 1000.0}]
     })
 
     # Verify 1 product exists
@@ -96,9 +115,12 @@ def test_reset_inventory_and_data(client: TestClient):
     assert reset_resp["success"] is True
     assert reset_resp["deleted_products_count"] == 1
 
-    # 4. Verify products and sales are wiped
+    # 4. Verify products, sales, purchases are wiped
     products_after = client.get("/api/products").json()
     assert len(products_after) == 0
 
     sales_after = client.get("/api/sales").json()
     assert len(sales_after) == 0
+
+    purchases_after = client.get("/api/purchases").json()
+    assert len(purchases_after) == 0

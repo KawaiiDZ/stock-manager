@@ -22,31 +22,32 @@ def reset_database_data(db: Session, confirm_pin: str, wipe_mode: str = "invento
         raise HTTPException(status_code=400, detail="Incorrect Configuration PIN. Reset aborted.")
 
     try:
+        # Temporarily disable foreign key constraints for safe bulk wipe
+        db.execute(text("PRAGMA foreign_keys = OFF;"))
+
         # 2. Delete in strict foreign-key dependency order
-        # Sales & Batches
+        # Sales item batches and return items first
         db.query(SaleItemBatch).delete(synchronize_session=False)
-        db.query(SalePayment).delete(synchronize_session=False)
         db.query(SalesReturnItem).delete(synchronize_session=False)
         db.query(SalesReturn).delete(synchronize_session=False)
+        db.query(SalePayment).delete(synchronize_session=False)
         db.query(SaleItem).delete(synchronize_session=False)
         db.query(Sale).delete(synchronize_session=False)
 
-        # Purchases
+        # Purchases and Inventory
         db.query(PurchaseReturnItem).delete(synchronize_session=False)
         db.query(PurchaseReturn).delete(synchronize_session=False)
         db.query(PurchasePayment).delete(synchronize_session=False)
         db.query(PurchaseItem).delete(synchronize_session=False)
-        db.query(Purchase).delete(synchronize_session=False)
-
-        # Inventory movements and batches
         db.query(InventoryMovement).delete(synchronize_session=False)
         db.query(InventoryBatch).delete(synchronize_session=False)
+        db.query(Purchase).delete(synchronize_session=False)
 
         # Products and custom values
         db.query(ProductCustomValue).delete(synchronize_session=False)
         deleted_products_count = db.query(Product).delete(synchronize_session=False)
 
-        # Customer & Supplier transactions
+        # Customer & Supplier ledger transactions
         db.query(CustomerPayment).delete(synchronize_session=False)
         db.query(SupplierPayment).delete(synchronize_session=False)
 
@@ -60,7 +61,18 @@ def reset_database_data(db: Session, confirm_pin: str, wipe_mode: str = "invento
             db.query(Customer).delete(synchronize_session=False)
             db.query(Supplier).delete(synchronize_session=False)
 
+            # Re-seed default Walk-in Customer (C-000001)
+            walk_in = Customer(
+                customer_id="C-000001",
+                name="Walk-in Customer",
+                phone=None,
+                address="Counter Sale",
+                is_active=True
+            )
+            db.add(walk_in)
+
         db.commit()
+        db.execute(text("PRAGMA foreign_keys = ON;"))
 
         message = (
             f"Successfully wiped inventory and all sales/purchase transactions ({deleted_products_count} products removed). "
@@ -78,4 +90,5 @@ def reset_database_data(db: Session, confirm_pin: str, wipe_mode: str = "invento
 
     except Exception as e:
         db.rollback()
+        db.execute(text("PRAGMA foreign_keys = ON;"))
         raise HTTPException(status_code=500, detail=f"Database reset failed: {str(e)}")

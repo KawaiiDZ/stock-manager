@@ -8,15 +8,32 @@
   }
 }
 
-/* Thermal Printer CSS Rules */
+/* Print & PDF Export Rules */
 @media print {
-  body * {
+  /* Hide UI navigation, action buttons, sidebars */
+  aside,
+  header,
+  nav,
+  .no-print,
+  button,
+  .btn-no-print {
+    display: none !important;
+  }
+
+  body {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  /* Thermal Receipt Mode (when #printable-receipt is explicitly active) */
+  body:has(#printable-receipt) * {
     visibility: hidden;
   }
-  #printable-receipt, #printable-receipt * {
+  body:has(#printable-receipt) #printable-receipt,
+  body:has(#printable-receipt) #printable-receipt * {
     visibility: visible;
   }
-  #printable-receipt {
+  body:has(#printable-receipt) #printable-receipt {
     position: absolute;
     left: 0;
     top: 0;
@@ -24,8 +41,28 @@
     margin: 0;
     padding: 0;
   }
+
+  /* Standard Report Document Printing (when #printable-report is active or standard print) */
+  #printable-report {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  #printable-report table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  #printable-report th,
+  #printable-report td {
+    border: 1px solid #e2e8f0 !important;
+    padding: 6px 8px !important;
+  }
+
   @page {
-    margin: 0;
+    margin: 1.5cm;
     size: auto;
   }
 }

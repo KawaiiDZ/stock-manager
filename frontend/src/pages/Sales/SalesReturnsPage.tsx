@@ -24,6 +24,8 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
 
   // Receipt Return Mode
   const [receiptSearch, setReceiptSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<Sale[]>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
   const [foundSale, setFoundSale] = useState<Sale | null>(null);
   const [returnQtys, setReturnQtys] = useState<Record<number, number>>({});
   const [returnReason, setReturnReason] = useState('');
@@ -36,6 +38,7 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
   const [manualReason, setManualReason] = useState('');
 
   const [loading, setLoading] = useState(false);
+  const [searchingSales, setSearchingSales] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -65,40 +68,66 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
     loadData();
   }, []);
 
+  const selectSaleForReturn = (sale: Sale) => {
+    setFoundSale(sale);
+    setReceiptSearch(sale.receipt_number);
+    setShowSearchResults(false);
+    setErrorMsg(null);
+    // Automatically pick up the full number of units bought (e.g. 2 units)
+    const initQtys: Record<number, number> = {};
+    sale.items.forEach((it) => {
+      initQtys[it.product_id] = it.quantity;
+    });
+    setReturnQtys(initQtys);
+  };
+
   useEffect(() => {
     if (initialSaleId) {
       api.getSale(initialSaleId).then((sale) => {
-        setFoundSale(sale);
-        setReceiptSearch(sale.receipt_number);
-        const initQtys: Record<number, number> = {};
-        sale.items.forEach((it) => (initQtys[it.product_id] = 0));
-        setReturnQtys(initQtys);
+        selectSaleForReturn(sale);
         setActiveTab('receipt');
       });
     }
   }, [initialSaleId]);
 
-  const handleSearchReceipt = async (e: React.FormEvent) => {
+  // Live search sales by receipt number, customer name, phone, or date
+  useEffect(() => {
+    if (!receiptSearch.trim()) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setSearchingSales(true);
+      try {
+        const sales = await api.getSales({ search: receiptSearch.trim() });
+        setSearchResults(sales.slice(0, 8));
+        setShowSearchResults(true);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setSearchingSales(false);
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [receiptSearch]);
+
+  const handleSearchReceiptSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!receiptSearch.trim()) return;
     setLoading(true);
     setErrorMsg(null);
-    setFoundSale(null);
     try {
       const sales = await api.getSales({ search: receiptSearch.trim() });
-      const exact = sales.find(
-        (s) => s.receipt_number.toLowerCase() === receiptSearch.trim().toLowerCase()
-      );
-      if (!exact) {
-        setErrorMsg(`Receipt '${receiptSearch}' was not found.`);
+      if (sales.length === 0) {
+        setErrorMsg(`No sales found matching '${receiptSearch}'.`);
         return;
       }
-      setFoundSale(exact);
-      const initQtys: Record<number, number> = {};
-      exact.items.forEach((it) => (initQtys[it.product_id] = 0));
-      setReturnQtys(initQtys);
+      selectSaleForReturn(sales[0]);
     } catch (err: any) {
-      setErrorMsg(err.detail || 'Receipt not found.');
+      setErrorMsg(err.detail || 'Sale not found.');
     } finally {
       setLoading(false);
     }
@@ -113,12 +142,21 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
     });
   }
 
-  const cashRefund = foundSale ? Math.min(totalReturnAmount, foundSale.paid_amount) : 0;
-  const balanceCredit = foundSale ? totalReturnAmount - cashRefund : 0;
+  // Financial calculations for partial payments
+  const originalTotal = foundSale ? Number(foundSale.total_amount) : 0;
+  const originalPaid = foundSale ? Number(foundSale.paid_amount) : 0;
+  const originalDue = foundSale ? Math.max(0, originalTotal - originalPaid) : 0;
+
+  // Debt reduction offsets remaining due first
+  const dueReduction = foundSale ? Math.min(totalReturnAmount, originalDue) : 0;
+  // Cash refund is only given for return value exceeding remaining due, capped at actual cash paid
+  const excessReturn = Math.max(0, totalReturnAmount - dueReduction);
+  const cashRefund = foundSale ? Math.min(originalPaid, excessReturn) : 0;
+  const remainingDueAfterReturn = Math.max(0, originalDue - dueReduction);
 
   const handleProcessReceiptReturn = async () => {
     if (!foundSale || totalReturnAmount <= 0) {
-      setErrorMsg('Please select at least 1 item to return.');
+      setErrorMsg('Please select at least 1 item to return (quantity > 0).');
       return;
     }
 
@@ -140,8 +178,11 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
         reason: returnReason.trim() || undefined,
       });
 
-      alert(
-        `Return ${res.return_number} completed. Cash refund: ${formatCurrency(res.cash_refund_amount, currency)}, Customer due reduced by: ${formatCurrency(res.balance_credit_amount, currency)}.`
+      setSuccessMsg(
+        `Return ${res.return_number} completed successfully! Cash Refund: ${formatCurrency(
+          res.cash_refund_amount,
+          currency
+        )}, Customer Debt Reduced: ${formatCurrency(res.balance_credit_amount, currency)}.`
       );
       setFoundSale(null);
       setReceiptSearch('');
@@ -190,7 +231,7 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
         <div>
           <h1 className="text-2xl font-black text-slate-800 tracking-tight">Customer Returns</h1>
           <p className="text-xs text-slate-400 mt-0.5">
-            Process returns with automatic stock restoration and cashback calculation
+            Search sales by receipt #, customer, or phone. Automatic batch restoration and partial refund tracking.
           </p>
         </div>
 
@@ -199,20 +240,20 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
           <button
             onClick={() => {
               setActiveTab('receipt');
-              setErrorMsg(null);
               setSuccessMsg(null);
+              setErrorMsg(null);
             }}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
               activeTab === 'receipt' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
             }`}
           >
-            Return from Receipt
+            Return from Sale
           </button>
           <button
             onClick={() => {
               setActiveTab('manual');
-              setErrorMsg(null);
               setSuccessMsg(null);
+              setErrorMsg(null);
             }}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
               activeTab === 'manual' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
@@ -223,8 +264,8 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
           <button
             onClick={() => {
               setActiveTab('history');
-              setErrorMsg(null);
               setSuccessMsg(null);
+              setErrorMsg(null);
             }}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
               activeTab === 'history' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
@@ -257,20 +298,72 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
         </div>
       )}
 
-      {/* Tab 1: Return from Receipt */}
+      {/* Tab 1: Return from Sale / Receipt */}
       {activeTab === 'receipt' && (
         <div className="space-y-6">
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
-            <form onSubmit={handleSearchReceipt} className="flex gap-3 max-w-xl">
-              <Input
-                placeholder="Enter Receipt Number (e.g. R-000001)..."
-                value={receiptSearch}
-                onChange={(e) => setReceiptSearch(e.target.value)}
-                autoFocus
-              />
-              <Button type="submit" variant="primary" loading={loading} icon={<Search className="h-4 w-4" />}>
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm relative">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+              Search Sale by Receipt #, Customer Name, or Phone
+            </h3>
+            <form onSubmit={handleSearchReceiptSubmit} className="flex gap-3 max-w-2xl relative">
+              <div className="relative flex-1">
+                <Input
+                  placeholder="Type Receipt # (R-000001), Customer Name, or Phone..."
+                  value={receiptSearch}
+                  onChange={(e) => setReceiptSearch(e.target.value)}
+                  onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
+                  autoFocus
+                />
+              </div>
+              <Button
+                type="submit"
+                variant="primary"
+                loading={loading || searchingSales}
+                icon={<Search className="h-4 w-4" />}
+              >
                 Find Sale
               </Button>
+
+              {/* Live Search Results Dropdown */}
+              {showSearchResults && searchResults.length > 0 && (
+                <div className="absolute top-full left-0 right-32 mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden z-40 max-h-72 overflow-y-auto">
+                  <div className="p-2 bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Matching Sales ({searchResults.length})
+                  </div>
+                  {searchResults.map((s) => (
+                    <div
+                      key={s.id}
+                      onClick={() => selectSaleForReturn(s)}
+                      className="p-3 hover:bg-emerald-50/70 border-b border-slate-100 last:border-0 cursor-pointer flex items-center justify-between transition"
+                    >
+                      <div>
+                        <div className="font-bold text-xs text-slate-900 flex items-center gap-2">
+                          <span>{s.receipt_number}</span>
+                          <span className="text-[11px] font-normal text-slate-500">
+                            • {s.customer_name || 'Walk-in'}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">
+                          {new Date(s.created_at).toLocaleString()} • {s.items.length} item{s.items.length === 1 ? '' : 's'}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-xs text-slate-800">
+                          {formatCurrency(s.total_amount, currency)}
+                        </div>
+                        <div className="text-[10px] font-semibold text-emerald-600">
+                          Paid: {formatCurrency(s.paid_amount, currency)}
+                          {Number(s.due_amount) > 0 && (
+                            <span className="text-rose-600 ml-1">
+                              (Due: {formatCurrency(s.due_amount, currency)})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </form>
           </div>
 
@@ -280,103 +373,172 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
               <div className="lg:col-span-8 bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                   <div>
-                    <h3 className="font-bold text-slate-800">
+                    <h3 className="font-bold text-slate-900 text-base">
                       Receipt {foundSale.receipt_number}
                     </h3>
-                    <p className="text-xs text-slate-400">
-                      Customer: {foundSale.customer_name || 'Walk-in'} • Original Total:{' '}
-                      {currency} {foundSale.total_amount} (Paid: {currency} {foundSale.paid_amount})
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Customer: <strong className="text-slate-800">{foundSale.customer_name || 'Walk-in Customer'}</strong> • Date: {new Date(foundSale.created_at).toLocaleString()}
                     </p>
                   </div>
+                  <button
+                    onClick={() => {
+                      setFoundSale(null);
+                      setReceiptSearch('');
+                    }}
+                    className="text-xs text-slate-400 hover:text-slate-600 font-semibold"
+                  >
+                    ✕ Close
+                  </button>
                 </div>
 
+                {/* Items List */}
                 <div className="space-y-3">
-                  {foundSale.items.map((item) => (
-                    <div
-                      key={item.product_id}
-                      className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between gap-4"
-                    >
-                      <div>
-                        <h4 className="font-bold text-slate-800 text-sm">{item.product_name}</h4>
-                        <p className="text-xs text-slate-500">
-                          Sold: {item.quantity} units @ {currency} {item.unit_price}
-                        </p>
-                      </div>
+                  <div className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                    Select quantities to return (max units bought):
+                  </div>
+                  {foundSale.items.map((item) => {
+                    const currentQty = returnQtys[item.product_id] ?? item.quantity;
+                    const maxQty = item.quantity;
 
-                      <div className="flex items-center gap-3">
-                        <label className="text-xs font-semibold text-slate-500">
-                          Return Qty:
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          max={item.quantity}
-                          value={returnQtys[item.product_id] || 0}
-                          onChange={(e) =>
-                            setReturnQtys({
-                              ...returnQtys,
-                              [item.product_id]: Math.min(
-                                item.quantity,
-                                Math.max(0, Number(e.target.value))
-                              ),
-                            })
-                          }
-                          className="w-16 text-center font-bold bg-white border border-slate-200 rounded-xl py-1 text-sm text-slate-800 focus:outline-none focus:border-emerald-500"
-                        />
+                    return (
+                      <div
+                        key={item.product_id}
+                        className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                      >
+                        <div>
+                          <h4 className="font-bold text-slate-800 text-sm">{item.product_name}</h4>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Purchased: <strong className="text-slate-700">{maxQty} units</strong> @ {formatCurrency(item.unit_price, currency)} / unit
+                          </p>
+                          <p className="text-[11px] text-slate-400">
+                            Line Total: {formatCurrency(item.total_price, currency)}
+                          </p>
+                        </div>
+
+                        {/* Stepper Quantity Control */}
+                        <div className="flex items-center gap-3">
+                          <label className="text-xs font-bold text-slate-600">Return Qty:</label>
+                          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-2xl p-1 shadow-sm">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setReturnQtys({
+                                  ...returnQtys,
+                                  [item.product_id]: Math.max(0, currentQty - 1),
+                                })
+                              }
+                              className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center transition"
+                            >
+                              -
+                            </button>
+                            <input
+                              type="number"
+                              min="0"
+                              max={maxQty}
+                              value={currentQty}
+                              onChange={(e) => {
+                                const val = Number(e.target.value);
+                                setReturnQtys({
+                                  ...returnQtys,
+                                  [item.product_id]: Math.min(maxQty, Math.max(0, isNaN(val) ? 0 : val)),
+                                });
+                              }}
+                              className="w-14 text-center font-black text-sm text-slate-900 focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setReturnQtys({
+                                  ...returnQtys,
+                                  [item.product_id]: Math.min(maxQty, currentQty + 1),
+                                })
+                              }
+                              className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center transition"
+                            >
+                              +
+                            </button>
+                          </div>
+                          <span className="text-[11px] font-semibold text-slate-400">
+                            / {maxQty} max
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <Input
                   label="Reason for Return (Optional)"
-                  placeholder="e.g. Customer returned damaged item"
+                  placeholder="e.g. Customer returned undamaged box / change of mind"
                   value={returnReason}
                   onChange={(e) => setReturnReason(e.target.value)}
                 />
               </div>
 
-              {/* Refund Breakdown (Section 29) */}
-              <div className="lg:col-span-4 bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
-                <h3 className="font-bold text-slate-800 border-b border-slate-100 pb-3">
-                  Financial Breakdown
-                </h3>
+              {/* Refund Breakdown & Financial Rules */}
+              <div className="lg:col-span-4 bg-white rounded-3xl border border-slate-200 p-6 shadow-sm flex flex-col justify-between space-y-6">
+                <div>
+                  <h3 className="font-bold text-slate-800 border-b border-slate-100 pb-3 text-base">
+                    Financial & Refund Summary
+                  </h3>
 
-                <div className="space-y-2.5 text-sm">
-                  <div className="flex justify-between text-slate-600">
-                    <span>Total Return Value:</span>
-                    <span className="font-bold text-slate-800">
-                      {formatCurrency(totalReturnAmount, currency)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-emerald-700 font-semibold bg-emerald-50 p-2 rounded-xl">
-                    <span>Cash Refund (Max Paid):</span>
-                    <span>
-                      {formatCurrency(cashRefund, currency)}
-                    </span>
-                  </div>
-                  {balanceCredit > 0 && (
-                    <div className="flex justify-between text-blue-700 font-semibold bg-blue-50 p-2 rounded-xl">
-                      <span>Credit to Customer Due:</span>
-                      <span>
-                        {formatCurrency(balanceCredit, currency)}
-                      </span>
+                  <div className="mt-4 space-y-3 text-xs">
+                    <div className="flex justify-between text-slate-600">
+                      <span>Original Sale Bill:</span>
+                      <span className="font-bold text-slate-800">{formatCurrency(originalTotal, currency)}</span>
                     </div>
-                  )}
+                    <div className="flex justify-between text-slate-600">
+                      <span>Customer Cash Paid:</span>
+                      <span className="font-bold text-emerald-700">{formatCurrency(originalPaid, currency)}</span>
+                    </div>
+                    {originalDue > 0 && (
+                      <div className="flex justify-between text-slate-600">
+                        <span>Original Outstanding Due:</span>
+                        <span className="font-bold text-rose-600">{formatCurrency(originalDue, currency)}</span>
+                      </div>
+                    )}
+
+                    <div className="border-t border-slate-100 pt-3 flex justify-between text-sm">
+                      <span className="font-bold text-slate-700">Total Return Value:</span>
+                      <span className="font-black text-slate-900">{formatCurrency(totalReturnAmount, currency)}</span>
+                    </div>
+
+                    {/* Breakdown of how return value is applied */}
+                    <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 space-y-2 mt-3">
+                      <div className="flex justify-between font-bold text-emerald-900">
+                        <span>💵 Cash Refund to Customer:</span>
+                        <span>{formatCurrency(cashRefund, currency)}</span>
+                      </div>
+                      <p className="text-[10px] text-emerald-700 leading-relaxed">
+                        (Only actual cash paid that exceeds remaining debt is refunded in cash)
+                      </p>
+                    </div>
+
+                    {dueReduction > 0 && (
+                      <div className="p-3.5 rounded-2xl bg-blue-50/80 border border-blue-200 space-y-1">
+                        <div className="flex justify-between font-bold text-blue-900">
+                          <span>🧾 Customer Debt Reduced:</span>
+                          <span>{formatCurrency(dueReduction, currency)}</span>
+                        </div>
+                        <div className="text-[10px] text-blue-700 flex justify-between">
+                          <span>Remaining debt after return:</span>
+                          <strong>{formatCurrency(remainingDueAfterReturn, currency)}</strong>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="pt-4 border-t border-slate-100">
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    className="w-full font-bold"
-                    disabled={totalReturnAmount <= 0 || submitting}
-                    loading={submitting}
-                    onClick={handleProcessReceiptReturn}
-                  >
-                    Process Return
-                  </Button>
-                </div>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  className="w-full font-black tracking-wide"
+                  disabled={totalReturnAmount <= 0 || submitting}
+                  loading={submitting}
+                  onClick={handleProcessReceiptReturn}
+                >
+                  Confirm & Process Return
+                </Button>
               </div>
             </div>
           )}

@@ -53,20 +53,30 @@ def get_dashboard_stats(db: Session) -> DashboardStatsResponse:
 def get_monthly_sales_chart(db: Session, year: int, month: int) -> MonthlySalesChartResponse:
     num_days = calendar.monthrange(year, month)[1]
     
-    # Fetch all sales in the month
-    start_month = datetime(year, month, 1, 0, 0, 0)
-    end_month = datetime(year, month, num_days, 23, 59, 59)
-
-    sales = db.query(Sale).filter(Sale.created_at >= start_month, Sale.created_at <= end_month).all()
+    sales = db.query(Sale).all()
 
     # Group by day
     day_map = {d: {"revenue": Decimal("0.00"), "count": 0} for d in range(1, num_days + 1)}
     total_revenue = Decimal("0.00")
     for s in sales:
-        d = s.created_at.day
-        day_map[d]["revenue"] += s.total_amount
-        day_map[d]["count"] += 1
-        total_revenue += s.total_amount
+        dt = None
+        if isinstance(s.created_at, str):
+            try:
+                dt = datetime.fromisoformat(s.created_at.replace("Z", "+00:00"))
+            except Exception:
+                try:
+                    dt = datetime.strptime(s.created_at[:10], "%Y-%m-%d")
+                except Exception:
+                    pass
+        elif s.created_at:
+            dt = s.created_at
+
+        if dt and dt.year == year and dt.month == month:
+            d = dt.day
+            if 1 <= d <= num_days:
+                day_map[d]["revenue"] += s.total_amount
+                day_map[d]["count"] += 1
+                total_revenue += s.total_amount
 
     chart_points = []
     for d in range(1, num_days + 1):
@@ -87,18 +97,25 @@ def get_monthly_sales_chart(db: Session, year: int, month: int) -> MonthlySalesC
     )
 
 def get_day_sales_detail(db: Session, target_date: date) -> DaySalesDetailResponse:
-    start_day = datetime.combine(target_date, time.min)
-    end_day = datetime.combine(target_date, time.max)
+    target_str = target_date.strftime("%Y-%m-%d")
+    sales = db.query(Sale).all()
 
-    sales = db.query(Sale).filter(Sale.created_at >= start_day, Sale.created_at <= end_day)\
-        .order_by(Sale.created_at.desc()).all()
+    matching_sales = []
+    for s in sales:
+        dt = None
+        if isinstance(s.created_at, str):
+            if s.created_at.startswith(target_str):
+                matching_sales.append(s)
+        elif s.created_at:
+            if s.created_at.date() == target_date:
+                matching_sales.append(s)
 
-    revenue = sum((s.total_amount for s in sales), Decimal("0.00"))
-    count = len(sales)
+    revenue = sum((s.total_amount for s in matching_sales), Decimal("0.00"))
+    count = len(matching_sales)
 
     return DaySalesDetailResponse(
         date=target_date.isoformat(),
         sales_revenue=revenue,
         transaction_count=count,
-        sales=[_format_sale_response(s) for s in sales]
+        sales=[_format_sale_response(s) for s in matching_sales]
     )

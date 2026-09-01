@@ -46,6 +46,9 @@ def calculate_customer_summary(db: Session, customer_id: int):
         "current_due": current_due
     }
 
+def get_customer_due(db: Session, customer_id: int) -> Decimal:
+    return calculate_customer_summary(db, customer_id)["current_due"]
+
 def list_customers(db: Session, search: Optional[str] = None, is_active: Optional[bool] = True) -> List[CustomerResponse]:
     q = db.query(Customer)
     if is_active is not None:
@@ -152,6 +155,12 @@ def record_customer_payment(db: Session, customer_id: int, data: CustomerPayment
         raise EntityNotFoundException("Customer", str(customer_id))
     if data.amount <= Decimal("0.00"):
         raise BusinessRuleException("Payment amount must be greater than zero.")
+
+    current_due = get_customer_due(db, customer_id)
+    if current_due <= Decimal("0.00"):
+        raise BusinessRuleException(f"Customer {c.name} has no outstanding debt (Balance is 0.00).")
+    if data.amount > current_due:
+        raise BusinessRuleException(f"Payment amount ({data.amount}) cannot exceed current outstanding due ({current_due}).")
 
     p_num = generate_customer_payment_number(db)
     payment = CustomerPayment(

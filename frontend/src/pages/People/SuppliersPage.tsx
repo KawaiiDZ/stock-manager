@@ -364,7 +364,7 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({ settings }) => {
         </form>
       </Modal>
 
-      {/* Pay Supplier Modal */}
+      {/* Record Payment Modal */}
       <Modal
         isOpen={Boolean(paySupplier)}
         onClose={() => setPaySupplier(null)}
@@ -373,17 +373,30 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({ settings }) => {
         maxWidth="sm"
       >
         <form onSubmit={handleSavePayment} className="space-y-4">
-          <Input
-            label="Payment Amount *"
-            type="number"
-            step="0.01"
-            min="0.01"
-            prefix={currency}
-            value={payAmount}
-            onChange={(e) => setPayAmount(Number(e.target.value))}
-            required
-            autoFocus
-          />
+          <div className="space-y-1">
+            <Input
+              label={`Payment Amount (Max: ${formatCurrency(paySupplier?.current_due, currency)}) *`}
+              type="number"
+              step="0.01"
+              min="0.01"
+              max={Number(paySupplier?.current_due || 0)}
+              prefix={currency}
+              value={payAmount}
+              onChange={(e) => setPayAmount(Math.min(Number(paySupplier?.current_due || 0), Math.max(0, Number(e.target.value))))}
+              required
+              autoFocus
+            />
+            <div className="flex justify-between items-center text-[11px] text-slate-500 pt-1">
+              <span>Supplier Balance: <strong>{formatCurrency(paySupplier?.current_due, currency)}</strong></span>
+              <button
+                type="button"
+                onClick={() => setPayAmount(Number(paySupplier?.current_due || 0))}
+                className="text-emerald-700 font-bold hover:underline"
+              >
+                Pay Full Balance
+              </button>
+            </div>
+          </div>
           <Input
             label="Notes (Optional)"
             placeholder="e.g. Cash paid to representative"
@@ -394,7 +407,7 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({ settings }) => {
             <Button type="button" variant="secondary" onClick={() => setPaySupplier(null)}>
               Cancel
             </Button>
-            <Button type="submit" variant="primary" loading={paying}>
+            <Button type="submit" variant="primary" loading={paying} disabled={payAmount <= 0 || payAmount > Number(paySupplier?.current_due || 0)}>
               Make Payment
             </Button>
           </div>

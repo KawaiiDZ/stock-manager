@@ -281,7 +281,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         })),
         discount_amount: Number(saleDiscount || 0),
         tax_rate: Number(taxRate || 0),
-        paid_amount: Number(paidAmount || 0),
+        paid_amount: Math.min(grandTotal, Number(paidAmount || 0)),
         payment_method: paymentMethod,
         notes: notes.trim() || undefined,
       };

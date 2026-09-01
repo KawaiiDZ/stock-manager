@@ -37,6 +37,9 @@ def calculate_supplier_summary(db: Session, supplier_id: int):
         "current_due": current_due
     }
 
+def get_supplier_due(db: Session, supplier_id: int) -> Decimal:
+    return calculate_supplier_summary(db, supplier_id)["current_due"]
+
 def list_suppliers(db: Session, search: Optional[str] = None, is_active: Optional[bool] = True) -> List[SupplierResponse]:
     q = db.query(Supplier)
     if is_active is not None:
@@ -141,6 +144,12 @@ def record_supplier_payment(db: Session, supplier_id: int, data: SupplierPayment
         raise EntityNotFoundException("Supplier", str(supplier_id))
     if data.amount <= Decimal("0.00"):
         raise BusinessRuleException("Payment amount must be greater than zero.")
+
+    current_due = get_supplier_due(db, supplier_id)
+    if current_due <= Decimal("0.00"):
+        raise BusinessRuleException(f"Supplier {s.name} has no outstanding payable balance (Balance is 0.00).")
+    if data.amount > current_due:
+        raise BusinessRuleException(f"Payment amount ({data.amount}) cannot exceed current outstanding payable balance ({current_due}).")
 
     p_num = generate_supplier_payment_number(db)
     payment = SupplierPayment(
