@@ -20,25 +20,31 @@ from backend.app.services.customer_service import list_customers
 from backend.app.services.supplier_service import list_suppliers
 
 def get_sales_report(db: Session, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> List[SalesReportRow]:
-    q = db.query(Sale).options(joinedload(Sale.customer))
+    q = db.query(Sale).options(joinedload(Sale.customer), joinedload(Sale.returns))
     if start_date:
         q = q.filter(Sale.created_at >= start_date)
     if end_date:
         q = q.filter(Sale.created_at <= end_date)
     sales = q.order_by(Sale.created_at.desc()).all()
 
-    return [
-        SalesReportRow(
+    result = []
+    for s in sales:
+        total_balance_credit = sum((r.balance_credit_amount for r in s.returns), Decimal("0.00")) if s.returns else Decimal("0.00")
+        net_due = max(Decimal("0.00"), s.total_amount - s.paid_amount - total_balance_credit)
+        status = s.payment_status
+        if s.returns and net_due == Decimal("0.00") and status != "RETURNED":
+            status = "PARTIALLY_RETURNED" if s.paid_amount > Decimal("0.00") else "RETURNED"
+
+        result.append(SalesReportRow(
             receipt_number=s.receipt_number,
             date=s.created_at,
             customer_name=s.customer.name if s.customer else "Unknown",
             total_amount=s.total_amount,
             paid_amount=s.paid_amount,
-            due_amount=s.due_amount,
-            payment_status=s.payment_status
-        )
-        for s in sales
-    ]
+            due_amount=net_due,
+            payment_status=status
+        ))
+    return result
 
 def get_sales_detail_report(db: Session, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> List[SalesDetailReportRow]:
     q = db.query(SaleItem).join(Sale, Sale.id == SaleItem.sale_id)
@@ -65,25 +71,31 @@ def get_sales_detail_report(db: Session, start_date: Optional[datetime] = None, 
     ]
 
 def get_purchases_report(db: Session, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> List[PurchasesReportRow]:
-    q = db.query(Purchase).options(joinedload(Purchase.supplier))
+    q = db.query(Purchase).options(joinedload(Purchase.supplier), joinedload(Purchase.returns))
     if start_date:
         q = q.filter(Purchase.created_at >= start_date)
     if end_date:
         q = q.filter(Purchase.created_at <= end_date)
     purchases = q.order_by(Purchase.created_at.desc()).all()
 
-    return [
-        PurchasesReportRow(
+    result = []
+    for p in purchases:
+        total_ret = sum((r.total_return_amount for r in p.returns), Decimal("0.00")) if p.returns else Decimal("0.00")
+        net_due = max(Decimal("0.00"), p.total_amount - p.paid_amount - total_ret)
+        status = p.payment_status
+        if p.returns and net_due == Decimal("0.00") and status != "RETURNED":
+            status = "PARTIALLY_RETURNED" if p.paid_amount > Decimal("0.00") else "RETURNED"
+
+        result.append(PurchasesReportRow(
             purchase_number=p.purchase_number,
             date=p.created_at,
             supplier_name=p.supplier.name if p.supplier else "Unknown",
             total_amount=p.total_amount,
             paid_amount=p.paid_amount,
-            due_amount=p.due_amount,
-            payment_status=p.payment_status
-        )
-        for p in purchases
-    ]
+            due_amount=net_due,
+            payment_status=status
+        ))
+    return result
 
 def get_inventory_report(db: Session) -> List[InventoryReportRow]:
     products = db.query(Product).options(joinedload(Product.category))\

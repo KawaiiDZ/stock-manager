@@ -49,6 +49,7 @@ class ApplyPresetRequest(BaseModel):
     business_name: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    logo_path: Optional[str] = None
     currency: Optional[str] = None
     custom_fields: Optional[List[CustomFieldCreate]] = None
 

@@ -259,13 +259,17 @@ def create_sale(db: Session, data: SaleCreate) -> SaleResponse:
         })
 
     # 5. Calculate Sale Totals
-    sale_discount = data.discount_amount or Decimal("0.00")
+    sale_discount = max(Decimal("0.00"), min(data.discount_amount or Decimal("0.00"), subtotal))
     taxable_amount = max(Decimal("0.00"), subtotal - sale_discount)
     tax_amount = ((taxable_amount * effective_tax_rate) / Decimal("100.00")).quantize(Decimal("0.01"))
     total_amount = (taxable_amount + tax_amount).quantize(Decimal("0.01"))
 
     paid_amount = min(data.paid_amount, total_amount) if data.paid_amount > Decimal("0.00") else Decimal("0.00")
     due_amount = max(Decimal("0.00"), total_amount - paid_amount)
+
+    # Prevent credit sales on Walk-in / Counter customer (C-000001)
+    if customer.customer_id == "C-000001" and due_amount > Decimal("0.00"):
+        raise BusinessRuleException("Walk-in / Counter Customer cannot purchase on credit. Please provide or select a customer name for partial or unpaid sales.")
 
     if due_amount == Decimal("0.00"):
         payment_status = "PAID"

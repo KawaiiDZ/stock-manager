@@ -60,7 +60,8 @@ def test_dashboard_stats_and_monthly_sales(client: TestClient):
 
 def test_reset_inventory_and_data(client: TestClient):
     # 1. Add customer, supplier, product, purchase, sale, return, bills
-    client.post("/api/customers", json={"name": "Bob", "phone": "03002222222"})
+    r_cust = client.post("/api/customers", json={"name": "Bob", "phone": "03002222222"})
+    bob_id = r_cust.json()["id"]
     client.post("/api/suppliers", json={"name": "Supplier X", "phone": "03001111111"})
     client.post("/api/products", json={
         "name": "Test iPhone",
@@ -79,7 +80,7 @@ def test_reset_inventory_and_data(client: TestClient):
 
     # Add a sale
     r_sale = client.post("/api/sales", json={
-        "customer_id": 1,
+        "customer_id": bob_id,
         "items": [{"product_id": 1, "quantity": 2, "unit_price": 1000.0}],
         "paid_amount": 1000.0,
         "payment_method": "Cash"
@@ -89,7 +90,7 @@ def test_reset_inventory_and_data(client: TestClient):
     # Add a return
     client.post("/api/returns/sales", json={
         "sale_id": sale_id,
-        "customer_id": 1,
+        "customer_id": bob_id,
         "items": [{"product_id": 1, "quantity": 1, "unit_price": 1000.0}]
     })
 

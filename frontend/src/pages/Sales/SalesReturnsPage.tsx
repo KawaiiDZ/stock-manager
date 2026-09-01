@@ -73,13 +73,32 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
     setReceiptSearch(sale.receipt_number);
     setShowSearchResults(false);
     setErrorMsg(null);
-    // Initialize return quantities to the remaining returnable units
     const initQtys: Record<number, number> = {};
+    const isSingleItem = sale.items.length === 1;
     sale.items.forEach((it) => {
       const maxReturnable = it.remaining_returnable_quantity !== undefined ? it.remaining_returnable_quantity : it.quantity;
-      initQtys[it.product_id] = maxReturnable;
+      initQtys[it.product_id] = isSingleItem ? maxReturnable : 0;
     });
     setReturnQtys(initQtys);
+  };
+
+  const handleSelectAllReturn = () => {
+    if (!foundSale) return;
+    const allQtys: Record<number, number> = {};
+    foundSale.items.forEach((it) => {
+      const maxReturnable = it.remaining_returnable_quantity !== undefined ? it.remaining_returnable_quantity : it.quantity;
+      allQtys[it.product_id] = maxReturnable;
+    });
+    setReturnQtys(allQtys);
+  };
+
+  const handleClearAllReturn = () => {
+    if (!foundSale) return;
+    const clearQtys: Record<number, number> = {};
+    foundSale.items.forEach((it) => {
+      clearQtys[it.product_id] = 0;
+    });
+    setReturnQtys(clearQtys);
   };
 
   useEffect(() => {
@@ -392,8 +411,28 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
 
                 {/* Items List */}
                 <div className="space-y-3">
-                  <div className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-                    Select quantities to return (remaining units on this sale):
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                      Select quantities to return (remaining units on this sale):
+                    </div>
+                    {foundSale.items.length > 1 && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleSelectAllReturn}
+                          className="text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-lg transition"
+                        >
+                          Select All
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleClearAllReturn}
+                          className="text-[11px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    )}
                   </div>
                   {foundSale.items.map((item) => {
                     const maxQty = item.remaining_returnable_quantity !== undefined ? item.remaining_returnable_quantity : item.quantity;

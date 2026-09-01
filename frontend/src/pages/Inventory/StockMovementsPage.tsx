@@ -19,18 +19,26 @@ export const StockMovementsPage: React.FC<StockMovementsPageProps> = ({ settings
 
   const currency = settings?.currency || 'Rs.';
 
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        const prods = await api.getProducts({ is_active: true });
+        setProducts(prods || []);
+      } catch (err) {
+        console.error('Failed to load products:', err);
+      }
+    };
+    loadProducts();
+  }, []);
+
   const loadMovements = async () => {
     setLoading(true);
     try {
-      const [movData, prods] = await Promise.all([
-        api.getMovements({
-          product_id: selectedProductId,
-          movement_type: selectedType === 'all' ? undefined : selectedType,
-        }),
-        api.getProducts({ is_active: true }),
-      ]);
+      const movData = await api.getMovements({
+        product_id: selectedProductId,
+        movement_type: selectedType === 'all' ? undefined : selectedType,
+      });
       setMovements(movData || []);
-      setProducts(prods || []);
     } catch (err) {
       console.error('Failed to load stock movements:', err);
     } finally {

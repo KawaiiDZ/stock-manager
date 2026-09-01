@@ -336,8 +336,10 @@ def apply_preset(db: Session, request: ApplyPresetRequest) -> BusinessSettingsRe
         settings.phone = request.phone.strip()
     if request.address is not None:
         settings.address = request.address.strip()
-    if request.currency:
+    if request.currency and request.currency.strip():
         settings.currency = request.currency.strip()
+    if request.logo_path is not None:
+        settings.logo_path = request.logo_path
 
     settings.industry_preset = request.preset_key
     settings.setup_completed = True
