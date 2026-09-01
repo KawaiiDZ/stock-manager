@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from backend.app.core.database import get_db
@@ -12,13 +12,18 @@ from backend.app.services.returns_service import (
 router = APIRouter(prefix="/returns", tags=["Returns"])
 
 # Customer Returns
+@router.post("", response_model=SalesReturnResponse)
+@router.post("/", response_model=SalesReturnResponse)
 @router.post("/sale", response_model=SalesReturnResponse)
+@router.post("/sales", response_model=SalesReturnResponse)
 def return_customer_sale(data: SalesReturnCreate, db: Session = Depends(get_db)):
     return create_sales_return(db, data)
 
+@router.get("", response_model=List[SalesReturnResponse])
+@router.get("/", response_model=List[SalesReturnResponse])
 @router.get("/sales", response_model=List[SalesReturnResponse])
-def get_all_sales_returns(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return list_sales_returns(db, skip=skip, limit=limit)
+def get_all_sales_returns(customer_id: Optional[int] = None, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return list_sales_returns(db, customer_id=customer_id, skip=skip, limit=limit)
 
 @router.get("/sales/{id}", response_model=SalesReturnResponse)
 def get_single_sales_return(id: int, db: Session = Depends(get_db)):
@@ -26,6 +31,7 @@ def get_single_sales_return(id: int, db: Session = Depends(get_db)):
 
 # Supplier Returns
 @router.post("/purchase", response_model=PurchaseReturnResponse)
+@router.post("/purchases", response_model=PurchaseReturnResponse)
 def return_supplier_purchase(data: PurchaseReturnCreate, db: Session = Depends(get_db)):
     return create_purchase_return(db, data)
 

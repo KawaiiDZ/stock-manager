@@ -129,10 +129,10 @@ def test_complete_section_77_end_to_end_workflow(db_session):
     ))
     record_bill_payment(db_session, bill.id, BillPaymentCreate(amount=Decimal("1500.00")))
 
-    # 14. Verify Dashboard KPIs
+    # 14. Verify Dashboard KPIs (Customer returns must deduct from revenue and gross profit)
     dash = get_dashboard_stats(db_session)
-    assert dash.today_sales_revenue == Decimal("3930.00") # 1250 + 1680 + 1000
-    assert dash.today_gross_profit == Decimal("670.00")   # 250 + 260 + 160
+    assert dash.today_sales_revenue == Decimal("3680.00") # 3930 gross - 250 return = 3680 net
+    assert dash.today_gross_profit == Decimal("640.00")   # 670 gross profit - 30 return profit = 640 net
     assert dash.customer_outstanding == Decimal("400.00")
     assert dash.supplier_outstanding == Decimal("540.00")
     assert dash.bills_needing_attention_count == 1

@@ -141,6 +141,8 @@ export interface SaleItem {
   unit_cost: number;
   total_cost: number;
   gross_profit: number;
+  returned_quantity?: number;
+  remaining_returnable_quantity?: number;
   batches?: SaleItemBatch[];
 }
 
@@ -163,7 +165,8 @@ export interface Sale {
   total_amount: number;
   paid_amount: number;
   due_amount: number;
-  payment_status: 'PAID' | 'PARTIALLY_PAID' | 'UNPAID';
+  payment_status: 'PAID' | 'PARTIALLY_PAID' | 'UNPAID' | 'RETURNED' | 'PARTIALLY_RETURNED';
+  total_returned_amount?: number;
   total_cost: number;
   gross_profit: number;
   notes?: string | null;

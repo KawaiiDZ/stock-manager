@@ -58,8 +58,17 @@ def create_sales_return(db: Session, data: SalesReturnCreate) -> SalesReturnResp
     # 3. Calculate total return value & restore stock
     total_return_amount = Decimal("0.00")
     processed_items = []
-
     ret_num = generate_sales_return_number(db)
+
+    # Pre-calculate already returned quantities per product for this sale
+    already_returned_by_prod = {}
+    if original_sale:
+        prev_returns = db.query(SalesReturn).filter(SalesReturn.sale_id == original_sale.id).all()
+        for pr in prev_returns:
+            for pri in pr.items:
+                already_returned_by_prod[pri.product_id] = (
+                    already_returned_by_prod.get(pri.product_id, Decimal("0.00")) + pri.quantity
+                )
 
     for item_data in data.items:
         product = db.query(Product).filter(Product.id == item_data.product_id).first()
@@ -68,6 +77,20 @@ def create_sales_return(db: Session, data: SalesReturnCreate) -> SalesReturnResp
 
         if item_data.quantity <= Decimal("0.00"):
             raise BusinessRuleException(f"Return quantity for {product.name} must be greater than zero.")
+
+        # If return is tied to a sale, ensure returned quantity does not exceed remaining returnable units
+        if original_sale:
+            sale_item = next((si for si in original_sale.items if si.product_id == item_data.product_id), None)
+            if not sale_item:
+                raise BusinessRuleException(
+                    f"Product '{product.name}' was not found in receipt {original_sale.receipt_number}."
+                )
+            already_ret = already_returned_by_prod.get(item_data.product_id, Decimal("0.00"))
+            max_returnable = max(Decimal("0.00"), sale_item.quantity - already_ret)
+            if item_data.quantity > max_returnable:
+                raise BusinessRuleException(
+                    f"Cannot return {item_data.quantity} units of '{product.name}'. Only {max_returnable} unit(s) remaining returnable on receipt {original_sale.receipt_number}."
+                )
 
         line_return_amount = item_data.quantity * item_data.unit_price
         total_return_amount += line_return_amount
@@ -105,8 +128,7 @@ def create_sales_return(db: Session, data: SalesReturnCreate) -> SalesReturnResp
             "total_amount": line_return_amount
         })
 
-    # 4. Financial Cashback Rule (Section 29)
-    # If customer paid partially, only refund up to the actual cash paid.
+    # 4. Financial Refund & Debt Cancellation Formula (Section 29)
     if original_sale:
         prev_returns = db.query(SalesReturn).filter(SalesReturn.sale_id == original_sale.id).all()
         prev_cash_refunded = sum((pr.cash_refund_amount for pr in prev_returns), Decimal("0.00"))
@@ -116,7 +138,6 @@ def create_sales_return(db: Session, data: SalesReturnCreate) -> SalesReturnResp
         balance_credit = total_return_amount - cash_refund
     else:
         # For manual returns without receipt:
-        # If Walk-in customer -> full cash refund; if named customer -> credit towards their ledger balance
         if customer.customer_id == "C-000001":
             cash_refund = total_return_amount
             balance_credit = Decimal("0.00")
@@ -147,6 +168,26 @@ def create_sales_return(db: Session, data: SalesReturnCreate) -> SalesReturnResp
         )
         db.add(ret_item)
 
+    # 6. Update original sale due amount and status
+    if original_sale:
+        all_sale_returns = db.query(SalesReturn).filter(SalesReturn.sale_id == original_sale.id).all()
+        total_cred = sum((r.balance_credit_amount for r in all_sale_returns), Decimal("0.00"))
+        new_due = max(Decimal("0.00"), original_sale.total_amount - original_sale.paid_amount - total_cred)
+        original_sale.due_amount = new_due
+
+        total_orig_qty = sum((si.quantity for si in original_sale.items), Decimal("0.00"))
+        total_ret_qty = sum((ri.quantity for r in all_sale_returns for ri in r.items), Decimal("0.00"))
+
+        if total_orig_qty > Decimal("0.00") and total_ret_qty >= total_orig_qty:
+            original_sale.payment_status = "RETURNED"
+            original_sale.due_amount = Decimal("0.00")
+        elif total_ret_qty > Decimal("0.00"):
+            if original_sale.due_amount == Decimal("0.00"):
+                original_sale.payment_status = "PARTIALLY_RETURNED"
+            else:
+                original_sale.payment_status = "PARTIALLY_PAID"
+        db.add(original_sale)
+
     db.commit()
     db.refresh(sales_return)
     return get_sales_return(db, sales_return.id)
@@ -161,12 +202,15 @@ def get_sales_return(db: Session, return_id: int) -> SalesReturnResponse:
         raise EntityNotFoundException("Sales Return", str(return_id))
     return _format_sales_return_response(ret)
 
-def list_sales_returns(db: Session, skip: int = 0, limit: int = 100) -> List[SalesReturnResponse]:
-    returns = db.query(SalesReturn).options(
+def list_sales_returns(db: Session, customer_id: Optional[int] = None, skip: int = 0, limit: int = 100) -> List[SalesReturnResponse]:
+    q = db.query(SalesReturn).options(
         joinedload(SalesReturn.customer),
         joinedload(SalesReturn.sale),
         joinedload(SalesReturn.items).joinedload(SalesReturnItem.product)
-    ).order_by(SalesReturn.created_at.desc()).offset(skip).limit(limit).all()
+    )
+    if customer_id is not None:
+        q = q.filter(SalesReturn.customer_id == customer_id)
+    returns = q.order_by(SalesReturn.created_at.desc()).offset(skip).limit(limit).all()
     return [_format_sales_return_response(r) for r in returns]
 
 # ----------------- Supplier Returns -----------------
@@ -215,6 +259,16 @@ def create_purchase_return(db: Session, data: PurchaseReturnCreate) -> PurchaseR
     processed_items = []
     ret_num = generate_purchase_return_number(db)
 
+    # Pre-calculate already returned quantities per product for this purchase
+    already_returned_by_prod = {}
+    if original_purchase:
+        prev_returns = db.query(PurchaseReturn).filter(PurchaseReturn.purchase_id == original_purchase.id).all()
+        for pr in prev_returns:
+            for pri in pr.items:
+                already_returned_by_prod[pri.product_id] = (
+                    already_returned_by_prod.get(pri.product_id, Decimal("0.00")) + pri.quantity
+                )
+
     for item_data in data.items:
         product = db.query(Product).filter(Product.id == item_data.product_id).first()
         if not product:
@@ -222,6 +276,20 @@ def create_purchase_return(db: Session, data: PurchaseReturnCreate) -> PurchaseR
 
         if item_data.quantity <= Decimal("0.00"):
             raise BusinessRuleException(f"Return quantity for {product.name} must be greater than zero.")
+
+        # Check purchase item limit
+        if original_purchase:
+            pur_item = next((pi for pi in original_purchase.items if pi.product_id == item_data.product_id), None)
+            if not pur_item:
+                raise BusinessRuleException(
+                    f"Product '{product.name}' was not found in purchase {original_purchase.purchase_number}."
+                )
+            already_ret = already_returned_by_prod.get(item_data.product_id, Decimal("0.00"))
+            max_returnable = max(Decimal("0.00"), pur_item.quantity - already_ret)
+            if item_data.quantity > max_returnable:
+                raise BusinessRuleException(
+                    f"Cannot return {item_data.quantity} units of '{product.name}'. Only {max_returnable} unit(s) remaining returnable on purchase {original_purchase.purchase_number}."
+                )
 
         # Check stock availability
         if product.current_stock < item_data.quantity:
@@ -290,6 +358,26 @@ def create_purchase_return(db: Session, data: PurchaseReturnCreate) -> PurchaseR
             total_amount=p_item["total_amount"]
         )
         db.add(ret_item)
+
+    # Update original purchase due amount and status
+    if original_purchase:
+        all_pur_returns = db.query(PurchaseReturn).filter(PurchaseReturn.purchase_id == original_purchase.id).all()
+        total_ret_val = sum((r.total_return_amount for r in all_pur_returns), Decimal("0.00"))
+        new_due = max(Decimal("0.00"), original_purchase.total_amount - original_purchase.paid_amount - total_ret_val)
+        original_purchase.due_amount = new_due
+
+        total_orig_qty = sum((pi.quantity for pi in original_purchase.items), Decimal("0.00"))
+        total_ret_qty = sum((ri.quantity for r in all_pur_returns for ri in r.items), Decimal("0.00"))
+
+        if total_orig_qty > Decimal("0.00") and total_ret_qty >= total_orig_qty:
+            original_purchase.payment_status = "RETURNED"
+            original_purchase.due_amount = Decimal("0.00")
+        elif total_ret_qty > Decimal("0.00"):
+            if original_purchase.due_amount == Decimal("0.00"):
+                original_purchase.payment_status = "PARTIALLY_RETURNED"
+            else:
+                original_purchase.payment_status = "PARTIALLY_PAID"
+        db.add(original_purchase)
 
     db.commit()
     db.refresh(purchase_return)

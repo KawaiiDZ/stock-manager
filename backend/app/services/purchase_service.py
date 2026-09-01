@@ -15,8 +15,24 @@ from backend.app.services.id_generator import generate_purchase_number
 from backend.app.core.errors import EntityNotFoundException, BusinessRuleException
 
 def _format_purchase_response(purchase: Purchase) -> PurchaseResponse:
+    # Check returns on this purchase
+    total_ret_val = Decimal("0.00")
+    returned_qty_by_prod = {}
+    if purchase.returns:
+        for ret in purchase.returns:
+            total_ret_val += ret.total_return_amount
+            for ri in ret.items:
+                returned_qty_by_prod[ri.product_id] = (
+                    returned_qty_by_prod.get(ri.product_id, Decimal("0.00")) + ri.quantity
+                )
+
+    total_pur_qty = Decimal("0.00")
+    total_ret_qty = Decimal("0.00")
     items_dto = []
     for it in purchase.items:
+        ret_qty = returned_qty_by_prod.get(it.product_id, Decimal("0.00"))
+        total_pur_qty += it.quantity
+        total_ret_qty += ret_qty
         items_dto.append(PurchaseItemResponse(
             id=it.id,
             product_id=it.product_id,
@@ -35,6 +51,23 @@ def _format_purchase_response(purchase: Purchase) -> PurchaseResponse:
             created_at=p.created_at
         ))
 
+    net_due = max(Decimal("0.00"), purchase.total_amount - purchase.paid_amount - total_ret_val)
+
+    if total_pur_qty > Decimal("0.00") and total_ret_qty >= total_pur_qty:
+        effective_status = "RETURNED"
+        net_due = Decimal("0.00")
+    elif total_ret_qty > Decimal("0.00"):
+        if net_due == Decimal("0.00"):
+            effective_status = "PARTIALLY_RETURNED"
+        else:
+            effective_status = "PARTIALLY_PAID"
+    elif net_due == Decimal("0.00") and purchase.paid_amount >= purchase.total_amount:
+        effective_status = "PAID"
+    elif purchase.paid_amount > Decimal("0.00"):
+        effective_status = "PARTIALLY_PAID"
+    else:
+        effective_status = "UNPAID"
+
     return PurchaseResponse(
         id=purchase.id,
         purchase_number=purchase.purchase_number,
@@ -45,8 +78,8 @@ def _format_purchase_response(purchase: Purchase) -> PurchaseResponse:
         tax_amount=purchase.tax_amount,
         total_amount=purchase.total_amount,
         paid_amount=purchase.paid_amount,
-        due_amount=purchase.due_amount,
-        payment_status=purchase.payment_status,
+        due_amount=net_due,
+        payment_status=effective_status,
         notes=purchase.notes,
         created_at=purchase.created_at,
         items=items_dto,

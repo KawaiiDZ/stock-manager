@@ -20,6 +20,12 @@ export const Badge: React.FC<BadgeProps> = ({ status, className = '' }) => {
   } else if (normalized === 'UNPAID' || normalized === 'TO_PAY') {
     colorClasses = 'bg-rose-50 text-rose-700 border-rose-200';
     label = normalized === 'TO_PAY' ? 'To Pay' : 'Unpaid';
+  } else if (normalized === 'RETURNED') {
+    colorClasses = 'bg-purple-50 text-purple-700 border-purple-200';
+    label = 'Returned';
+  } else if (normalized === 'PARTIALLY_RETURNED') {
+    colorClasses = 'bg-indigo-50 text-indigo-700 border-indigo-200';
+    label = 'Partially Returned';
   } else if (normalized === 'PENDING') {
     colorClasses = 'bg-blue-50 text-blue-700 border-blue-200';
     label = 'Pending';

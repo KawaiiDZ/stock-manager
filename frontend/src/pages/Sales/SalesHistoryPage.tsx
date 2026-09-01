@@ -128,6 +128,8 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
             <option value="PAID">Fully Paid</option>
             <option value="PARTIALLY_PAID">Partially Paid</option>
             <option value="UNPAID">Unpaid (Credit)</option>
+            <option value="RETURNED">Returned</option>
+            <option value="PARTIALLY_RETURNED">Partially Returned</option>
           </select>
         </div>
 
@@ -169,9 +171,19 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
               <tbody className="divide-y divide-slate-100">
                 {sales.map((sale) => {
                   const dueNum = Number(sale.due_amount || 0);
+                  const returnedNum = Number(sale.total_returned_amount || 0);
                   return (
                     <tr key={sale.id} className="hover:bg-slate-50/60 transition">
-                      <td className="py-4 px-6 font-bold text-slate-900">{sale.receipt_number}</td>
+                      <td className="py-4 px-6 font-bold text-slate-900">
+                        <div className="flex flex-col">
+                          <span>{sale.receipt_number}</span>
+                          {returnedNum > 0 && (
+                            <span className="text-[10px] text-purple-600 font-semibold">
+                              ({formatCurrency(returnedNum, currency)} returned)
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="py-4 px-6 text-slate-500 text-xs">
                         {new Date(sale.created_at).toLocaleDateString('en-GB', {
                           day: '2-digit',
@@ -203,7 +215,7 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
                       </td>
                       <td className="py-4 px-6 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          {dueNum > 0 && (
+                          {dueNum > 0 && sale.payment_status !== 'RETURNED' && (
                             <button
                               onClick={() => handleOpenPayment(sale)}
                               className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-semibold text-xs hover:bg-emerald-100 transition"

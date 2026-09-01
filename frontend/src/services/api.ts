@@ -191,14 +191,15 @@ export const api = {
   getSalesReturns: (customerId?: number) => {
     const sp = new URLSearchParams();
     if (customerId) sp.append('customer_id', String(customerId));
-    return request<SalesReturn[]>(`/returns?${sp.toString()}`);
+    const qs = sp.toString();
+    return request<SalesReturn[]>(qs ? `/returns/sales?${qs}` : '/returns/sales');
   },
   createSalesReturn: (data: {
     sale_id?: number;
     customer_id: number;
     items: Array<{ product_id: number; quantity: number; unit_price: number }>;
     reason?: string;
-  }) => request<SalesReturn>('/returns', { method: 'POST', body: JSON.stringify(data) }),
+  }) => request<SalesReturn>('/returns/sale', { method: 'POST', body: JSON.stringify(data) }),
 
   // Suppliers
   getSuppliers: (params?: { search?: string; is_active?: boolean }) => {
@@ -224,6 +225,8 @@ export const api = {
     if (params?.supplier_id) sp.append('supplier_id', String(params.supplier_id));
     return request<Purchase[]>(`/purchases?${sp.toString()}`);
   },
+  createPurchaseReturn: (data: any) => request<any>('/returns/purchase', { method: 'POST', body: JSON.stringify(data) }),
+  getPurchaseReturns: () => request<any[]>('/returns/purchases'),
   createPurchase: (data: any) => request<Purchase>('/purchases', { method: 'POST', body: JSON.stringify(data) }),
 
   // Bills & Expenses

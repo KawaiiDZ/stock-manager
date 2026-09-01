@@ -17,6 +17,21 @@ from backend.app.services.id_generator import generate_receipt_number, generate_
 from backend.app.core.errors import EntityNotFoundException, InsufficientStockException, BusinessRuleException
 
 def _format_sale_response(sale: Sale) -> SaleResponse:
+    # 1. Aggregate return data if returns exist on this sale
+    total_returned_val = Decimal("0.00")
+    total_balance_credit = Decimal("0.00")
+    returned_qty_by_prod = {}
+    if sale.returns:
+        for ret in sale.returns:
+            total_returned_val += ret.total_return_amount
+            total_balance_credit += ret.balance_credit_amount
+            for ri in ret.items:
+                returned_qty_by_prod[ri.product_id] = (
+                    returned_qty_by_prod.get(ri.product_id, Decimal("0.00")) + ri.quantity
+                )
+
+    total_sale_qty = Decimal("0.00")
+    total_ret_qty = Decimal("0.00")
     items_dto = []
     for item in sale.items:
         batch_links = []
@@ -28,6 +43,12 @@ def _format_sale_response(sale: Sale) -> SaleResponse:
                     quantity=bl.quantity,
                     unit_cost=bl.unit_cost
                 ))
+
+        ret_qty = returned_qty_by_prod.get(item.product_id, Decimal("0.00"))
+        rem_ret_qty = max(Decimal("0.00"), item.quantity - ret_qty)
+        total_sale_qty += item.quantity
+        total_ret_qty += ret_qty
+
         items_dto.append(SaleItemResponse(
             id=item.id,
             product_id=item.product_id,
@@ -39,6 +60,8 @@ def _format_sale_response(sale: Sale) -> SaleResponse:
             unit_cost=item.unit_cost,
             total_cost=item.total_cost,
             gross_profit=item.gross_profit,
+            returned_quantity=ret_qty,
+            remaining_returnable_quantity=rem_ret_qty,
             batches=batch_links
         ))
 
@@ -51,6 +74,25 @@ def _format_sale_response(sale: Sale) -> SaleResponse:
             created_at=p.created_at
         ))
 
+    # Net due amount after accounting for debt cancelled by return balance credits
+    net_due_amount = max(Decimal("0.00"), sale.total_amount - sale.paid_amount - total_balance_credit)
+
+    # Determine accurate status
+    if total_sale_qty > Decimal("0.00") and total_ret_qty >= total_sale_qty:
+        effective_status = "RETURNED"
+        net_due_amount = Decimal("0.00")
+    elif total_ret_qty > Decimal("0.00"):
+        if net_due_amount == Decimal("0.00"):
+            effective_status = "PARTIALLY_RETURNED"
+        else:
+            effective_status = "PARTIALLY_PAID"
+    elif net_due_amount == Decimal("0.00") and sale.paid_amount >= sale.total_amount:
+        effective_status = "PAID"
+    elif sale.paid_amount > Decimal("0.00"):
+        effective_status = "PARTIALLY_PAID"
+    else:
+        effective_status = "UNPAID"
+
     return SaleResponse(
         id=sale.id,
         receipt_number=sale.receipt_number,
@@ -62,8 +104,9 @@ def _format_sale_response(sale: Sale) -> SaleResponse:
         tax_amount=sale.tax_amount,
         total_amount=sale.total_amount,
         paid_amount=sale.paid_amount,
-        due_amount=sale.due_amount,
-        payment_status=sale.payment_status,
+        due_amount=net_due_amount,
+        payment_status=effective_status,
+        total_returned_amount=total_returned_val,
         total_cost=sale.total_cost,
         gross_profit=sale.gross_profit,
         notes=sale.notes,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
 import { Sale, Customer, Product, SalesReturn, BusinessSettings } from '../../types';
-import { RotateCcw, Search, AlertCircle, CheckCircle2, ArrowRight } from 'lucide-react';
+import { RotateCcw, Search, AlertCircle, CheckCircle2, ArrowRight, RefreshCw, Package } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Modal } from '../../components/common/Modal';
@@ -66,17 +66,18 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [activeTab]);
 
   const selectSaleForReturn = (sale: Sale) => {
     setFoundSale(sale);
     setReceiptSearch(sale.receipt_number);
     setShowSearchResults(false);
     setErrorMsg(null);
-    // Automatically pick up the full number of units bought (e.g. 2 units)
+    // Initialize return quantities to the remaining returnable units
     const initQtys: Record<number, number> = {};
     sale.items.forEach((it) => {
-      initQtys[it.product_id] = it.quantity;
+      const maxReturnable = it.remaining_returnable_quantity !== undefined ? it.remaining_returnable_quantity : it.quantity;
+      initQtys[it.product_id] = maxReturnable;
     });
     setReturnQtys(initQtys);
   };
@@ -145,14 +146,12 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
   // Financial calculations for partial payments
   const originalTotal = foundSale ? Number(foundSale.total_amount) : 0;
   const originalPaid = foundSale ? Number(foundSale.paid_amount) : 0;
-  const originalDue = foundSale ? Math.max(0, originalTotal - originalPaid) : 0;
+  const currentSaleDue = foundSale ? Number(foundSale.due_amount) : 0;
 
-  // Debt reduction offsets remaining due first
-  const dueReduction = foundSale ? Math.min(totalReturnAmount, originalDue) : 0;
-  // Cash refund is only given for return value exceeding remaining due, capped at actual cash paid
-  const excessReturn = Math.max(0, totalReturnAmount - dueReduction);
-  const cashRefund = foundSale ? Math.min(originalPaid, excessReturn) : 0;
-  const remainingDueAfterReturn = Math.max(0, originalDue - dueReduction);
+  // Section 29: Cash refund up to cash paid, remainder cancels debt
+  const cashRefund = foundSale ? Math.min(totalReturnAmount, originalPaid) : 0;
+  const dueReduction = totalReturnAmount - cashRefund;
+  const remainingDueAfterReturn = Math.max(0, currentSaleDue - dueReduction);
 
   const handleProcessReceiptReturn = async () => {
     if (!foundSale || totalReturnAmount <= 0) {
@@ -394,21 +393,33 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
                 {/* Items List */}
                 <div className="space-y-3">
                   <div className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-                    Select quantities to return (max units bought):
+                    Select quantities to return (remaining units on this sale):
                   </div>
                   {foundSale.items.map((item) => {
-                    const currentQty = returnQtys[item.product_id] ?? item.quantity;
-                    const maxQty = item.quantity;
+                    const maxQty = item.remaining_returnable_quantity !== undefined ? item.remaining_returnable_quantity : item.quantity;
+                    const currentQty = returnQtys[item.product_id] ?? maxQty;
+                    const alreadyRet = item.returned_quantity ?? (item.quantity - maxQty);
+                    const isFullyReturned = maxQty <= 0;
 
                     return (
                       <div
                         key={item.product_id}
-                        className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                        className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition ${
+                          isFullyReturned ? 'bg-slate-100/70 border-slate-200 opacity-60' : 'bg-slate-50 border-slate-200/70'
+                        }`}
                       >
                         <div>
-                          <h4 className="font-bold text-slate-800 text-sm">{item.product_name}</h4>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-slate-800 text-sm">{item.product_name}</h4>
+                            {isFullyReturned && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700">
+                                Fully Returned
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-slate-500 mt-0.5">
-                            Purchased: <strong className="text-slate-700">{maxQty} units</strong> @ {formatCurrency(item.unit_price, currency)} / unit
+                            Purchased: <strong className="text-slate-700">{item.quantity} units</strong> @ {formatCurrency(item.unit_price, currency)} / unit
+                            {alreadyRet > 0 && <span className="text-purple-600 font-semibold ml-1">({alreadyRet} already returned)</span>}
                           </p>
                           <p className="text-[11px] text-slate-400">
                             Line Total: {formatCurrency(item.total_price, currency)}
@@ -421,13 +432,14 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
                           <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-2xl p-1 shadow-sm">
                             <button
                               type="button"
+                              disabled={isFullyReturned || currentQty <= 0}
                               onClick={() =>
                                 setReturnQtys({
                                   ...returnQtys,
                                   [item.product_id]: Math.max(0, currentQty - 1),
                                 })
                               }
-                              className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center transition"
+                              className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-30 text-slate-700 font-black text-sm flex items-center justify-center transition"
                             >
                               -
                             </button>
@@ -435,7 +447,8 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
                               type="number"
                               min="0"
                               max={maxQty}
-                              value={currentQty}
+                              disabled={isFullyReturned}
+                              value={isFullyReturned ? 0 : currentQty}
                               onChange={(e) => {
                                 const val = Number(e.target.value);
                                 setReturnQtys({
@@ -443,17 +456,18 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
                                   [item.product_id]: Math.min(maxQty, Math.max(0, isNaN(val) ? 0 : val)),
                                 });
                               }}
-                              className="w-14 text-center font-black text-sm text-slate-900 focus:outline-none"
+                              className="w-14 text-center font-black text-sm text-slate-900 focus:outline-none disabled:bg-transparent"
                             />
                             <button
                               type="button"
+                              disabled={isFullyReturned || currentQty >= maxQty}
                               onClick={() =>
                                 setReturnQtys({
                                   ...returnQtys,
                                   [item.product_id]: Math.min(maxQty, currentQty + 1),
                                 })
                               }
-                              className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center transition"
+                              className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-30 text-slate-700 font-black text-sm flex items-center justify-center transition"
                             >
                               +
                             </button>
@@ -491,10 +505,10 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
                       <span>Customer Cash Paid:</span>
                       <span className="font-bold text-emerald-700">{formatCurrency(originalPaid, currency)}</span>
                     </div>
-                    {originalDue > 0 && (
+                    {currentSaleDue > 0 && (
                       <div className="flex justify-between text-slate-600">
-                        <span>Original Outstanding Due:</span>
-                        <span className="font-bold text-rose-600">{formatCurrency(originalDue, currency)}</span>
+                        <span>Current Outstanding Due:</span>
+                        <span className="font-bold text-rose-600">{formatCurrency(currentSaleDue, currency)}</span>
                       </div>
                     )}
 
@@ -638,56 +652,90 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
 
       {/* Tab 3: Returns History */}
       {activeTab === 'history' && (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden space-y-4 p-6">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div>
+              <h3 className="font-bold text-slate-800 text-base">Customer Returns Log</h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Total {returnsHistory.length} return records processed
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              icon={<RefreshCw className="h-3.5 w-3.5" />}
+              onClick={loadData}
+            >
+              Refresh Log
+            </Button>
+          </div>
+
           {returnsHistory.length === 0 ? (
             <EmptyState
-              title="No returns yet"
-              description="Customer returns will be logged here."
+              title="No returns logged yet"
+              description="Customer returns will be logged here automatically once processed."
             />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-50 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   <tr>
-                    <th className="py-3.5 px-6">Return #</th>
-                    <th className="py-3.5 px-6">Date</th>
-                    <th className="py-3.5 px-6">Receipt</th>
-                    <th className="py-3.5 px-6">Customer</th>
-                    <th className="py-3.5 px-6 text-right">Items</th>
-                    <th className="py-3.5 px-6 text-right">Total Returned</th>
-                    <th className="py-3.5 px-6 text-right">Cash Refund</th>
-                    <th className="py-3.5 px-6 text-right">Due Credit</th>
-                    <th className="py-3.5 px-6">Reason</th>
+                    <th className="py-3 px-4">Return #</th>
+                    <th className="py-3 px-4">Date</th>
+                    <th className="py-3 px-4">Receipt</th>
+                    <th className="py-3 px-4">Customer</th>
+                    <th className="py-3 px-4">Items Returned</th>
+                    <th className="py-3 px-4 text-right">Total Returned</th>
+                    <th className="py-3 px-4 text-right">Cash Refund</th>
+                    <th className="py-3 px-4 text-right">Due Credit</th>
+                    <th className="py-3 px-4">Reason</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {returnsHistory.map((ret) => (
                     <tr key={ret.id} className="hover:bg-slate-50/60 transition">
-                      <td className="py-4 px-6 font-bold text-slate-900">{ret.return_number}</td>
-                      <td className="py-4 px-6 text-slate-500 text-xs">
-                        {new Date(ret.created_at).toLocaleDateString('en-GB', {
+                      <td className="py-3.5 px-4 font-bold text-slate-900">{ret.return_number}</td>
+                      <td className="py-3.5 px-4 text-slate-500 text-xs whitespace-nowrap">
+                        {new Date(ret.created_at).toLocaleString('en-GB', {
                           day: '2-digit',
                           month: 'short',
                           year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
                         })}
                       </td>
-                      <td className="py-4 px-6 text-slate-700 font-medium">
-                        {ret.sale_receipt_number || 'Manual Return'}
+                      <td className="py-3.5 px-4 text-slate-700 font-semibold text-xs">
+                        {ret.sale_receipt_number ? (
+                          <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-800 font-mono">
+                            {ret.sale_receipt_number}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic">Manual</span>
+                        )}
                       </td>
-                      <td className="py-4 px-6 font-medium text-slate-800">{ret.customer_name}</td>
-                      <td className="py-4 px-6 text-right text-slate-500 text-xs">
-                        {ret.items.length} items
+                      <td className="py-3.5 px-4 font-semibold text-slate-800 text-xs">{ret.customer_name}</td>
+                      <td className="py-3.5 px-4 text-xs text-slate-600">
+                        <div className="space-y-1 max-w-xs">
+                          {ret.items.map((item, i) => (
+                            <div key={i} className="flex items-center gap-1.5">
+                              <span className="font-bold text-slate-800">{Number(item.quantity)}x</span>
+                              <span className="truncate">{item.product_name}</span>
+                              <span className="text-[10px] text-slate-400">(@ {formatCurrency(item.unit_price, currency)})</span>
+                            </div>
+                          ))}
+                        </div>
                       </td>
-                      <td className="py-4 px-6 text-right font-bold text-slate-900">
+                      <td className="py-3.5 px-4 text-right font-black text-slate-900">
                         {formatCurrency(ret.total_return_amount, currency)}
                       </td>
-                      <td className="py-4 px-6 text-right text-emerald-700 font-semibold">
-                        {formatCurrency(ret.cash_refund_amount, currency)}
+                      <td className="py-3.5 px-4 text-right text-emerald-700 font-bold text-xs">
+                        {Number(ret.cash_refund_amount) > 0 ? formatCurrency(ret.cash_refund_amount, currency) : '—'}
                       </td>
-                      <td className="py-4 px-6 text-right text-blue-700 font-semibold">
-                        {formatCurrency(ret.balance_credit_amount, currency)}
+                      <td className="py-3.5 px-4 text-right text-blue-700 font-bold text-xs">
+                        {Number(ret.balance_credit_amount) > 0 ? formatCurrency(ret.balance_credit_amount, currency) : '—'}
                       </td>
-                      <td className="py-4 px-6 text-slate-500 text-xs">{ret.reason || '—'}</td>
+                      <td className="py-3.5 px-4 text-slate-500 text-xs italic">{ret.reason || '—'}</td>
                     </tr>
                   ))}
                 </tbody>
