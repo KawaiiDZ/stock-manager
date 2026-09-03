@@ -219,6 +219,8 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                     <th className="py-3.5 px-6 text-right">Total Amount</th>
                     <th className="py-3.5 px-6 text-right">Paid</th>
                     <th className="py-3.5 px-6 text-right">Due</th>
+                    <th className="py-3.5 px-6 text-right text-slate-700">Invoiced Profit</th>
+                    <th className="py-3.5 px-6 text-right text-emerald-800">Realized Profit</th>
                     <th className="py-3.5 px-6 text-center">Status</th>
                   </tr>
                 </thead>
@@ -241,8 +243,24 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                         <td className="py-3.5 px-6 text-right text-rose-700 font-semibold">
                           {dueNum > 0 ? formatCurrency(dueNum, currency) : '—'}
                         </td>
+                        <td className="py-3.5 px-6 text-right font-medium text-slate-600">
+                          {formatCurrency(row.gross_profit || 0, currency)}
+                        </td>
+                        <td className="py-3.5 px-6 text-right font-bold text-emerald-700">
+                          {formatCurrency(row.realized_profit || 0, currency)}
+                        </td>
                         <td className="py-3.5 px-6 text-center text-xs font-bold text-slate-600">
-                          {row.payment_status}
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] ${
+                            row.payment_status === 'PAID'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : row.payment_status === 'PARTIALLY_PAID'
+                              ? 'bg-amber-100 text-amber-800'
+                              : row.payment_status === 'UNPAID'
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            {row.payment_status}
+                          </span>
                         </td>
                       </tr>
                     );
@@ -263,7 +281,9 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                     <th className="py-3.5 px-6 text-right">Sale Price</th>
                     <th className="py-3.5 px-6 text-right">Revenue</th>
                     <th className="py-3.5 px-6 text-right">FIFO Cost</th>
-                    <th className="py-3.5 px-6 text-right text-emerald-800">Gross Profit</th>
+                    <th className="py-3.5 px-6 text-right text-slate-600">Invoiced Profit</th>
+                    <th className="py-3.5 px-6 text-right text-emerald-800">Realized Profit</th>
+                    <th className="py-3.5 px-6 text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -278,8 +298,24 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                       <td className="py-3.5 px-6 text-right">{formatCurrency(row.unit_price, currency)}</td>
                       <td className="py-3.5 px-6 text-right font-bold">{formatCurrency(row.total_price, currency)}</td>
                       <td className="py-3.5 px-6 text-right text-slate-500">{formatCurrency(row.total_cost, currency)}</td>
-                      <td className="py-3.5 px-6 text-right font-black text-emerald-700">
+                      <td className="py-3.5 px-6 text-right font-medium text-slate-600">
                         {formatCurrency(row.gross_profit, currency)}
+                      </td>
+                      <td className="py-3.5 px-6 text-right font-black text-emerald-700">
+                        {formatCurrency(row.realized_profit || 0, currency)}
+                      </td>
+                      <td className="py-3.5 px-6 text-center text-xs font-semibold text-slate-600">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          row.payment_status === 'PAID'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : row.payment_status === 'PARTIALLY_PAID'
+                            ? 'bg-amber-100 text-amber-800'
+                            : row.payment_status === 'UNPAID'
+                            ? 'bg-rose-100 text-rose-800'
+                            : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {row.payment_status}
+                        </span>
                       </td>
                     </tr>
                   ))}

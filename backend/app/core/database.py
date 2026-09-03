@@ -9,11 +9,13 @@ engine = create_engine(
     echo=False
 )
 
-# Enforce foreign key constraints on SQLite
+# Enforce foreign key constraints, WAL mode, and busy timeout on SQLite
 @event.listens_for(engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=5000")
     cursor.close()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -50,6 +52,8 @@ def auto_upgrade_schema():
             res = conn.execute(text("PRAGMA table_info(product_custom_fields)"))
             cols = [row[1] for row in res.fetchall()]
             if cols:
+                if "category_id" not in cols:
+                    conn.execute(text("ALTER TABLE product_custom_fields ADD COLUMN category_id INTEGER REFERENCES product_categories(id) NULL"))
                 if "options" not in cols:
                     conn.execute(text("ALTER TABLE product_custom_fields ADD COLUMN options TEXT NULL"))
                 if "show_in_table" not in cols:

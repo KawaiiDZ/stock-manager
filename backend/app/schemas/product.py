@@ -16,6 +16,8 @@ class CategoryResponse(BaseModel):
         from_attributes = True
 
 class CustomFieldCreate(BaseModel):
+    category_id: Optional[int] = None
+    category_name: Optional[str] = None
     name: str
     field_type: str = "text"
     options: Optional[str] = None
@@ -26,6 +28,8 @@ class CustomFieldCreate(BaseModel):
     display_order: int = 0
 
 class CustomFieldUpdate(BaseModel):
+    category_id: Optional[int] = None
+    category_name: Optional[str] = None
     name: Optional[str] = None
     field_type: Optional[str] = None
     options: Optional[str] = None
@@ -38,6 +42,8 @@ class CustomFieldUpdate(BaseModel):
 
 class CustomFieldResponse(BaseModel):
     id: int
+    category_id: Optional[int] = None
+    category_name: Optional[str] = None
     name: str
     field_type: str
     options: Optional[str] = None

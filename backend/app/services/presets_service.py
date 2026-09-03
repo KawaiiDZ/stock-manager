@@ -1,11 +1,18 @@
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from backend.app.models.business import BusinessSettings
-from backend.app.models.product import ProductCustomField, ProductCustomValue
+from backend.app.models.product import ProductCategory, ProductCustomField, ProductCustomValue
 from backend.app.schemas.product import CustomFieldCreate
 from backend.app.schemas.business import PresetTemplateResponse, ApplyPresetRequest, BusinessSettingsResponse
 
 PRESETS_DATA: List[Dict[str, Any]] = [
+    {
+        "key": "custom_general",
+        "title": "Custom / Build Your Own",
+        "icon": "Store",
+        "description": "Start fresh with a clean slate. Define your categories and create your own schema per category.",
+        "fields": []
+    },
     {
         "key": "mobile_electronics",
         "title": "Mobile Phones & Electronics",
@@ -14,6 +21,7 @@ PRESETS_DATA: List[Dict[str, Any]] = [
         "fields": [
             {
                 "name": "Brand",
+                "category_name": None,
                 "field_type": "select",
                 "options": "Apple, Samsung, Xiaomi, Vivo, Oppo, Infinix, Realme, Tecno, OnePlus, Google, Huawei, Other",
                 "is_required": True,
@@ -24,6 +32,7 @@ PRESETS_DATA: List[Dict[str, Any]] = [
             },
             {
                 "name": "Model / Specs",
+                "category_name": "Smartphones",
                 "field_type": "text",
                 "options": None,
                 "is_required": True,
@@ -33,19 +42,21 @@ PRESETS_DATA: List[Dict[str, Any]] = [
                 "display_order": 2
             },
             {
-                "name": "Color",
+                "name": "IMEI / Serial",
+                "category_name": "Smartphones",
                 "field_type": "text",
                 "options": None,
                 "is_required": False,
                 "show_in_table": True,
                 "show_in_pos": True,
-                "show_in_receipt": False,
+                "show_in_receipt": True,
                 "display_order": 3
             },
             {
-                "name": "IMEI / Serial",
-                "field_type": "text",
-                "options": None,
+                "name": "Condition / PTA",
+                "category_name": "Smartphones",
+                "field_type": "select",
+                "options": "PTA Approved, Non-PTA, JV Sim Locked, Box Pack New, Used 10/10, Used Refurbished",
                 "is_required": False,
                 "show_in_table": True,
                 "show_in_pos": True,
@@ -53,17 +64,19 @@ PRESETS_DATA: List[Dict[str, Any]] = [
                 "display_order": 4
             },
             {
-                "name": "Condition / PTA",
-                "field_type": "select",
-                "options": "PTA Approved, Non-PTA, JV Sim Locked, Box Pack New, Used 10/10, Used Refurbished",
+                "name": "Compatibility",
+                "category_name": "Accessories",
+                "field_type": "text",
+                "options": None,
                 "is_required": False,
                 "show_in_table": True,
                 "show_in_pos": True,
-                "show_in_receipt": True,
+                "show_in_receipt": False,
                 "display_order": 5
             },
             {
                 "name": "Warranty",
+                "category_name": None,
                 "field_type": "select",
                 "options": "Official 1 Year, 1 Month Shop Warranty, 7 Days Checking, No Warranty",
                 "is_required": False,
@@ -285,24 +298,6 @@ PRESETS_DATA: List[Dict[str, Any]] = [
                 "display_order": 4
             }
         ]
-    },
-    {
-        "key": "custom_general",
-        "title": "Custom / General Retail",
-        "icon": "Store",
-        "description": "Start with a clean slate and configure custom columns that precisely match your business requirements.",
-        "fields": [
-            {
-                "name": "Brand",
-                "field_type": "text",
-                "options": None,
-                "is_required": False,
-                "show_in_table": True,
-                "show_in_pos": True,
-                "show_in_receipt": False,
-                "display_order": 1
-            }
-        ]
     }
 ]
 
@@ -354,39 +349,36 @@ def apply_preset(db: Session, request: ApplyPresetRequest) -> BusinessSettingsRe
         if match:
             fields_to_apply = [CustomFieldCreate(**f) for f in match["fields"]]
 
-    # 3. Synchronize custom fields
-    # Deactivate existing fields or update existing ones by name
-    existing_fields = db.query(ProductCustomField).all()
-    existing_map = {f.name.lower().strip(): f for f in existing_fields}
+    # 3. Clean replacement of custom fields when switching presets
+    db.query(ProductCustomValue).delete(synchronize_session=False)
+    db.query(ProductCustomField).delete(synchronize_session=False)
 
     for order_idx, f_data in enumerate(fields_to_apply):
-        key = f_data.name.lower().strip()
-        if key in existing_map:
-            # Update existing field definition
-            target = existing_map[key]
-            target.name = f_data.name.strip()
-            target.field_type = f_data.field_type
-            target.options = f_data.options
-            target.is_required = f_data.is_required
-            target.show_in_table = f_data.show_in_table
-            target.show_in_pos = f_data.show_in_pos
-            target.show_in_receipt = f_data.show_in_receipt
-            target.display_order = order_idx + 1
-            target.is_active = True
-        else:
-            # Create new custom field
-            new_cf = ProductCustomField(
-                name=f_data.name.strip(),
-                field_type=f_data.field_type,
-                options=f_data.options,
-                is_required=f_data.is_required,
-                show_in_table=f_data.show_in_table,
-                show_in_pos=f_data.show_in_pos,
-                show_in_receipt=f_data.show_in_receipt,
-                display_order=order_idx + 1,
-                is_active=True
-            )
-            db.add(new_cf)
+        target_cat_id = None
+        if f_data.category_name and f_data.category_name.strip() and f_data.category_name.strip() != "All Categories (Global)":
+            cat_name = f_data.category_name.strip()
+            cat = db.query(ProductCategory).filter(ProductCategory.name.ilike(cat_name)).first()
+            if not cat:
+                cat = ProductCategory(name=cat_name, is_active=True)
+                db.add(cat)
+                db.flush()
+            target_cat_id = cat.id
+        elif f_data.category_id and f_data.category_id > 0:
+            target_cat_id = f_data.category_id
+
+        new_cf = ProductCustomField(
+            category_id=target_cat_id,
+            name=f_data.name.strip(),
+            field_type=f_data.field_type,
+            options=f_data.options,
+            is_required=f_data.is_required,
+            show_in_table=f_data.show_in_table,
+            show_in_pos=f_data.show_in_pos,
+            show_in_receipt=f_data.show_in_receipt,
+            display_order=order_idx + 1,
+            is_active=True
+        )
+        db.add(new_cf)
 
     db.commit()
     db.refresh(settings)

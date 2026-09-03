@@ -10,6 +10,8 @@ class SalesReportRow(BaseModel):
     total_amount: Decimal
     paid_amount: Decimal
     due_amount: Decimal
+    gross_profit: Decimal = Decimal("0.00")
+    realized_profit: Decimal = Decimal("0.00")
     payment_status: str
 
 class SalesDetailReportRow(BaseModel):
@@ -23,6 +25,8 @@ class SalesDetailReportRow(BaseModel):
     unit_cost: Decimal
     total_cost: Decimal
     gross_profit: Decimal
+    realized_profit: Decimal = Decimal("0.00")
+    payment_status: Optional[str] = "PAID"
 
 class PurchasesReportRow(BaseModel):
     purchase_number: str

@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../services/api';
 import { Product, Category, CustomField, CustomValueDto, BusinessSettings } from '../../types';
-import { Plus, Search, Edit2, Archive, RotateCcw, SlidersHorizontal, ShoppingCart, Tag, AlertCircle, Layers } from 'lucide-react';
+import { Plus, Search, Edit2, Archive, RotateCcw, SlidersHorizontal, ShoppingCart, Tag, AlertCircle, Layers, Trash2 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Modal } from '../../components/common/Modal';
@@ -56,6 +56,10 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
   // Deactivate Confirm Dialog
   const [deactivatingProduct, setDeactivatingProduct] = useState<Product | null>(null);
   const [deactivating, setDeactivating] = useState(false);
+
+  // Permanent Delete Confirm Dialog
+  const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const currency = settings?.currency || 'Rs.';
 
@@ -190,6 +194,20 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
     }
   };
 
+  const handleConfirmPermanentDelete = async () => {
+    if (!deletingProduct) return;
+    setDeleting(true);
+    try {
+      await api.deleteProductPermanent(deletingProduct.id);
+      setDeletingProduct(null);
+      loadData();
+    } catch (err: any) {
+      alert(err.detail || 'Failed to permanently delete product');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCatName.trim()) return;
@@ -203,6 +221,47 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
       alert(err.detail || 'Failed to add category');
     }
   };
+
+  // Group products into dedicated category tables
+  const categoryGroups = useMemo(() => {
+    if (selectedCategory) {
+      const cat = categories.find((c) => c.id === selectedCategory);
+      const catProds = products.filter((p) => p.category_id === selectedCategory);
+      return [
+        {
+          id: selectedCategory,
+          name: cat ? cat.name : 'Category',
+          products: catProds,
+        },
+      ];
+    }
+
+    const groups: { id: number | null; name: string; products: Product[] }[] = [];
+
+    // Categories in order
+    categories.forEach((cat) => {
+      const catProds = products.filter((p) => p.category_id === cat.id);
+      if (catProds.length > 0) {
+        groups.push({
+          id: cat.id,
+          name: cat.name,
+          products: catProds,
+        });
+      }
+    });
+
+    // Uncategorized products
+    const uncategorized = products.filter((p) => !p.category_id);
+    if (uncategorized.length > 0) {
+      groups.push({
+        id: null,
+        name: 'General / Uncategorized',
+        products: uncategorized,
+      });
+    }
+
+    return groups;
+  }, [products, categories, selectedCategory]);
 
   return (
     <div className="space-y-6 pb-12">
@@ -284,184 +343,234 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
         </select>
       </div>
 
-      {/* Product Table */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+      {/* Category Tables */}
+      <div className="space-y-8">
         {loading ? (
-          <div className="py-16 text-center text-slate-400">Loading products...</div>
-        ) : products.length === 0 ? (
-          <EmptyState
-            title={activeTab === 'active' ? 'No products in catalog' : 'No deactivated products'}
-            description={
-              activeTab === 'active'
-                ? 'Add products individually or use bulk adding to build your inventory.'
-                : 'Deactivated products will appear here and can be restored anytime.'
-            }
-            actionText={activeTab === 'active' ? '+ Add Product' : undefined}
-            onAction={activeTab === 'active' ? handleOpenAdd : undefined}
-          />
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-16 text-center text-slate-400">
+            Loading products...
+          </div>
+        ) : categoryGroups.length === 0 || products.length === 0 ? (
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <EmptyState
+              title={activeTab === 'active' ? 'No products in catalog' : 'No deactivated products'}
+              description={
+                activeTab === 'active'
+                  ? 'Add products individually or use bulk adding to build your inventory.'
+                  : 'Deactivated products will appear here and can be restored anytime.'
+              }
+              actionText={activeTab === 'active' ? '+ Add Product' : undefined}
+              onAction={activeTab === 'active' ? handleOpenAdd : undefined}
+            />
+          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                <tr>
-                  <th className="py-3.5 px-6">Product ID</th>
-                  <th className="py-3.5 px-6">Product Name</th>
-                  {customFields
-                    .filter((cf) => cf.show_in_table !== false)
-                    .map((cf) => (
-                      <th key={cf.id} className="py-3.5 px-4 text-slate-600">
-                        {cf.name}
-                      </th>
-                    ))}
-                  <th className="py-3.5 px-6">Category</th>
-                  <th className="py-3.5 px-6">SKU / Barcode</th>
-                  <th className="py-3.5 px-6 text-right">Cost Price</th>
-                  <th className="py-3.5 px-6 text-right">Selling Price</th>
-                  <th className="py-3.5 px-6 text-right">Current Stock</th>
-                  <th className="py-3.5 px-6 text-center">Status</th>
-                  <th className="py-3.5 px-6 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {products.map((p) => {
-                  const tableCustomFields = customFields.filter((cf) => cf.show_in_table !== false);
-                  const subTags = (p.custom_fields || []).filter(
-                    (cv) => !tableCustomFields.some((tcf) => tcf.id === cv.field_id)
-                  );
+          categoryGroups.map((group) => {
+            const groupCustomFields = customFields
+              .filter((cf) => !cf.category_id || (group.id !== null && cf.category_id === group.id))
+              .sort((a, b) => a.display_order - b.display_order);
 
-                  return (
-                    <tr key={p.id} className="hover:bg-slate-50/60 transition">
-                      <td className="py-4 px-6 font-bold text-slate-900">{p.product_id}</td>
-                      <td className="py-4 px-6 font-bold text-slate-800">
-                        <div>{p.name}</div>
-                        {subTags.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {subTags.map((cf) => (
-                              <span
-                                key={cf.field_id}
-                                className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded"
-                              >
-                                {cf.field_name}: {cf.value}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                      {tableCustomFields.map((cf) => {
-                        const customVal = p.custom_fields?.find((cv) => cv.field_id === cf.id)?.value;
+            const totalStock = group.products.reduce((acc, p) => acc + Number(p.current_stock || 0), 0);
+            const totalValuation = group.products.reduce(
+              (acc, p) => acc + Number(p.purchase_price || 0) * Number(p.current_stock || 0),
+              0
+            );
+
+            return (
+              <div key={group.id ?? 'uncategorized'} className="space-y-3">
+                {/* Category Section Header Card */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-slate-900 text-white shadow-xs">
+                      <Tag className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-base font-extrabold text-slate-900">{group.name}</h2>
+                        <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200/60">
+                          {group.products.length} {group.products.length === 1 ? 'product' : 'products'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5 font-medium">
+                        {groupCustomFields.length > 0
+                          ? `Attributes: ${groupCustomFields.map((f) => f.name).join(', ')}`
+                          : 'Standard Catalog Attributes'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Quick Category Summary Stats */}
+                  <div className="flex items-center gap-3 text-xs font-semibold text-slate-600 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200/60 self-start sm:self-auto">
+                    <span>
+                      Total Stock:{' '}
+                      <strong className="text-slate-900 font-bold">{totalStock} units</strong>
+                    </span>
+                    <span className="text-slate-300">•</span>
+                    <span>
+                      Valuation:{' '}
+                      <strong className="text-emerald-700 font-bold">
+                        {formatCurrency(totalValuation, currency)}
+                      </strong>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Dedicated Category Table */}
+                <div className="overflow-x-auto rounded-2xl border border-slate-200/80 shadow-sm bg-white">
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                      <tr>
+                        <th className="py-3.5 px-6 whitespace-nowrap">Product ID</th>
+                        <th className="py-3.5 px-6 whitespace-nowrap">Product Name</th>
+                        {groupCustomFields.map((cf) => (
+                          <th
+                            key={cf.id}
+                            className="py-3.5 px-4 text-slate-700 whitespace-nowrap text-[11px] font-bold uppercase tracking-wider"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span>{cf.name}</span>
+                              {!cf.category_id && (
+                                <span className="text-[9px] px-1 py-0.2 rounded bg-slate-200/70 text-slate-500 font-semibold normal-case">
+                                  Global
+                                </span>
+                              )}
+                            </div>
+                          </th>
+                        ))}
+                        <th className="py-3.5 px-6 whitespace-nowrap">SKU / Barcode</th>
+                        <th className="py-3.5 px-6 text-right whitespace-nowrap">Cost Price</th>
+                        <th className="py-3.5 px-6 text-right whitespace-nowrap">Selling Price</th>
+                        <th className="py-3.5 px-6 text-right whitespace-nowrap">Current Stock</th>
+                        <th className="py-3.5 px-6 text-center whitespace-nowrap">Status</th>
+                        <th className="py-3.5 px-6 text-right whitespace-nowrap">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {group.products.map((p) => {
                         return (
-                          <td key={cf.id} className="py-4 px-4 text-xs font-semibold text-slate-700">
-                            {customVal ? (
-                              <span className="inline-block bg-slate-100 text-slate-800 px-2 py-1 rounded-md font-medium">
-                                {customVal}
-                              </span>
-                            ) : (
-                              <span className="text-slate-300">—</span>
-                            )}
-                          </td>
+                          <tr key={p.id} className="hover:bg-slate-50/60 transition">
+                            <td className="py-4 px-6 font-bold text-slate-900 whitespace-nowrap">{p.product_id}</td>
+                            <td className="py-4 px-6 font-bold text-slate-800 whitespace-nowrap">
+                              {p.name}
+                            </td>
+                            {groupCustomFields.map((cf) => {
+                              const customVal = p.custom_fields?.find((cv) => cv.field_id === cf.id)?.value;
+                              return (
+                                <td key={cf.id} className="py-4 px-4 text-xs font-semibold text-slate-700 whitespace-nowrap">
+                                  {customVal ? (
+                                    <span className="inline-block bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg font-semibold text-xs border border-slate-200/60">
+                                      {customVal}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-300 font-bold">—</span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                            <td className="py-4 px-6 text-slate-500 text-xs font-mono whitespace-nowrap">
+                              {p.sku || p.barcode ? (
+                                <div>
+                                  {p.sku && <div>SKU: {p.sku}</div>}
+                                  {p.barcode && <div>BC: {p.barcode}</div>}
+                                </div>
+                              ) : (
+                                '—'
+                              )}
+                            </td>
+                            <td className="py-4 px-6 text-right text-slate-600 whitespace-nowrap">
+                              {formatCurrency(p.purchase_price, currency)}
+                            </td>
+                            <td className="py-4 px-6 text-right font-bold text-slate-900 whitespace-nowrap">
+                              {formatCurrency(p.selling_price, currency)}
+                            </td>
+                            <td className="py-4 px-6 text-right whitespace-nowrap">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <span
+                                  className={`font-black text-sm ${
+                                    p.current_stock > 5
+                                      ? 'text-emerald-700'
+                                      : p.current_stock > 0
+                                      ? 'text-amber-600'
+                                      : 'text-rose-600'
+                                  }`}
+                                >
+                                  {p.current_stock}
+                                </span>
+                                {p.is_active && (
+                                  <button
+                                    onClick={() => setAdjustingProduct(p)}
+                                    className="p-1 text-slate-300 hover:text-slate-600"
+                                    title="Adjust Physical Stock Count"
+                                  >
+                                    <SlidersHorizontal className="h-3 w-3" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-4 px-6 text-center whitespace-nowrap">
+                              <Badge status={p.is_active ? 'ACTIVE' : 'INACTIVE'} />
+                            </td>
+                            <td className="py-4 px-6 text-right whitespace-nowrap">
+                              {p.is_active ? (
+                                <div className="flex items-center justify-end gap-2">
+                                  {/* Direct SELL Button (Section 59 requirement) */}
+                                  {onSellProduct && p.current_stock > 0 && (
+                                    <Button
+                                      variant="primary"
+                                      size="sm"
+                                      icon={<ShoppingCart className="h-3 w-3" />}
+                                      onClick={() => onSellProduct(p)}
+                                      className="text-xs py-1 px-2.5 font-bold shadow-sm"
+                                    >
+                                      Sell
+                                    </Button>
+                                  )}
+                                  <button
+                                    onClick={() => handleOpenEdit(p)}
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+                                    title="Edit Product"
+                                  >
+                                    <Edit2 className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => setDeactivatingProduct(p)}
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                                    title="Deactivate Product"
+                                  >
+                                    <Archive className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-end gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    icon={<RotateCcw className="h-3.5 w-3.5" />}
+                                    onClick={() => handleRestore(p.id)}
+                                    className="text-xs py-1 px-2.5 font-semibold text-emerald-700 hover:bg-emerald-50"
+                                  >
+                                    Restore
+                                  </Button>
+                                  <Button
+                                    variant="danger"
+                                    size="sm"
+                                    icon={<Trash2 className="h-3.5 w-3.5" />}
+                                    onClick={() => setDeletingProduct(p)}
+                                    className="text-xs py-1 px-2.5 font-bold shadow-sm"
+                                    title="Delete Permanently"
+                                  >
+                                    Delete
+                                  </Button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
                         );
                       })}
-                    <td className="py-4 px-6 text-slate-600 text-xs">
-                      {p.category_name ? (
-                        <span className="inline-flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-md font-medium">
-                          <Tag className="h-3 w-3" />
-                          {p.category_name}
-                        </span>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="py-4 px-6 text-slate-500 text-xs font-mono">
-                      {p.sku || p.barcode ? (
-                        <div>
-                          {p.sku && <div>SKU: {p.sku}</div>}
-                          {p.barcode && <div>BC: {p.barcode}</div>}
-                        </div>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="py-4 px-6 text-right text-slate-600">
-                      {formatCurrency(p.purchase_price, currency)}
-                    </td>
-                    <td className="py-4 px-6 text-right font-bold text-slate-900">
-                      {formatCurrency(p.selling_price, currency)}
-                    </td>
-                    <td className="py-4 px-6 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <span
-                          className={`font-black text-sm ${
-                            p.current_stock > 5
-                              ? 'text-emerald-700'
-                              : p.current_stock > 0
-                              ? 'text-amber-600'
-                              : 'text-rose-600'
-                          }`}
-                        >
-                          {p.current_stock}
-                        </span>
-                        {p.is_active && (
-                          <button
-                            onClick={() => setAdjustingProduct(p)}
-                            className="p-1 text-slate-300 hover:text-slate-600"
-                            title="Adjust Physical Stock Count"
-                          >
-                            <SlidersHorizontal className="h-3 w-3" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-4 px-6 text-center">
-                      <Badge status={p.is_active ? 'ACTIVE' : 'INACTIVE'} />
-                    </td>
-                    <td className="py-4 px-6 text-right">
-                      {p.is_active ? (
-                        <div className="flex items-center justify-end gap-2">
-                          {/* Direct SELL Button (Section 59 requirement) */}
-                          {onSellProduct && p.current_stock > 0 && (
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              icon={<ShoppingCart className="h-3 w-3" />}
-                              onClick={() => onSellProduct(p)}
-                              className="text-xs py-1 px-2.5 font-bold shadow-sm"
-                            >
-                              Sell
-                            </Button>
-                          )}
-                          <button
-                            onClick={() => handleOpenEdit(p)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
-                            title="Edit Product"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => setDeactivatingProduct(p)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
-                            title="Deactivate Product"
-                          >
-                            <Archive className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          icon={<RotateCcw className="h-3.5 w-3.5" />}
-                          onClick={() => handleRestore(p.id)}
-                          className="text-xs py-1 px-2.5 font-semibold text-emerald-700 hover:bg-emerald-50"
-                        >
-                          Restore
-                        </Button>
-                      )}
-                    </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })
         )}
       </div>
 
@@ -483,7 +592,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
 
           <Input
             label="Product Name *"
-            placeholder="e.g. Basmati Rice 5kg"
+            placeholder="e.g. Standard Product Name / Model"
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             required
@@ -522,7 +631,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
 
             <Input
               label="SKU (Optional)"
-              placeholder="e.g. RICE-005"
+              placeholder="e.g. SKU-001"
               value={formData.sku}
               onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
             />
@@ -576,22 +685,90 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
             )}
           </div>
 
-          {/* Dynamic Custom Fields */}
-          {customFields.length > 0 && (
-            <div className="border-t border-slate-100 pt-3 space-y-3">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                Custom Specifications & Attributes
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {customFields.map((cf) => {
-                  if (cf.field_type === 'select' && cf.options) {
-                    const opts = cf.options.split(',').map((o) => o.trim()).filter(Boolean);
+          {/* Dynamic Category-Specific & Global Custom Fields */}
+          {(() => {
+            const activeCategory = categories.find((c) => c.id === Number(formData.category_id));
+            const relevantFields = customFields.filter(
+              (cf) => !cf.category_id || cf.category_id === Number(formData.category_id)
+            );
+
+            if (relevantFields.length === 0) {
+              return (
+                <div className="border-t border-slate-100 pt-3">
+                  <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-500">
+                    ℹ️ <strong>Category Specifications:</strong> No custom attributes defined yet for{' '}
+                    <span className="font-bold text-slate-700">{activeCategory?.name || 'this category'}</span>.
+                    You can add category-specific fields in <strong className="text-slate-700">Settings → Custom Attributes</strong>.
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div className="border-t border-slate-100 pt-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                    <span>Specifications & Attributes</span>
+                    {activeCategory && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        {activeCategory.name}
+                      </span>
+                    )}
+                  </h4>
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    {relevantFields.length} field{relevantFields.length !== 1 ? 's' : ''} available
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {relevantFields.map((cf) => {
+                    const isGlobal = !cf.category_id;
+                    if (cf.field_type === 'select' && cf.options) {
+                      const opts = cf.options.split(',').map((o) => o.trim()).filter(Boolean);
+                      return (
+                        <div key={cf.id}>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
+                              {cf.name} {cf.is_required && '*'}
+                            </label>
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-500">
+                              {isGlobal ? 'Global' : activeCategory?.name || 'Category'}
+                            </span>
+                          </div>
+                          <select
+                            value={customFieldValues[cf.id] || ''}
+                            onChange={(e) =>
+                              setCustomFieldValues({
+                                ...customFieldValues,
+                                [cf.id]: e.target.value,
+                              })
+                            }
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-emerald-500 shadow-sm"
+                            required={cf.is_required}
+                          >
+                            <option value="">Select {cf.name}...</option>
+                            {opts.map((opt, i) => (
+                              <option key={i} value={opt}>
+                                {opt}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    }
                     return (
                       <div key={cf.id}>
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
-                          {cf.name} {cf.is_required && '*'}
-                        </label>
-                        <select
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
+                            {cf.name} {cf.is_required && '*'}
+                          </label>
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-500">
+                            {isGlobal ? 'Global' : activeCategory?.name || 'Category'}
+                          </span>
+                        </div>
+                        <input
+                          type={cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date' : 'text'}
+                          placeholder={`Enter ${cf.name}`}
                           value={customFieldValues[cf.id] || ''}
                           onChange={(e) =>
                             setCustomFieldValues({
@@ -599,39 +776,16 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
                               [cf.id]: e.target.value,
                             })
                           }
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-emerald-500 shadow-sm"
                           required={cf.is_required}
-                        >
-                          <option value="">Select {cf.name}...</option>
-                          {opts.map((opt, i) => (
-                            <option key={i} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 shadow-sm"
+                        />
                       </div>
                     );
-                  }
-                  return (
-                    <Input
-                      key={cf.id}
-                      label={cf.name + (cf.is_required ? ' *' : '')}
-                      type={cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date' : 'text'}
-                      placeholder={`Enter ${cf.name}`}
-                      value={customFieldValues[cf.id] || ''}
-                      onChange={(e) =>
-                        setCustomFieldValues({
-                          ...customFieldValues,
-                          [cf.id]: e.target.value,
-                        })
-                      }
-                      required={cf.is_required}
-                    />
-                  );
-                })}
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
             <Button
@@ -655,6 +809,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
         categories={categories}
         customFields={customFields}
         settings={settings}
+        initialCategoryId={selectedCategory}
         onProductsAdded={loadData}
       />
 
@@ -667,35 +822,75 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
         onStockAdjusted={loadData}
       />
 
-      {/* Quick Add Category Modal */}
+      {/* Quick Add / Manage Category Modal */}
       <Modal
         isOpen={showAddCatModal}
         onClose={() => setShowAddCatModal(false)}
-        title="Add Product Category"
-        maxWidth="sm"
+        title="Manage Product Categories"
+        subtitle="Add new categories or delete existing categories (and their products)"
+        maxWidth="md"
       >
-        <form onSubmit={handleCreateCategory} className="space-y-4">
-          <Input
-            label="Category Name *"
-            placeholder="e.g. Beverages, Spices, Dairy"
-            value={newCatName}
-            onChange={(e) => setNewCatName(e.target.value)}
-            required
-            autoFocus
-          />
-          <div className="flex justify-end gap-3 pt-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setShowAddCatModal(false)}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary">
-              Save Category
-            </Button>
-          </div>
-        </form>
+        <div className="space-y-4">
+          <form onSubmit={handleCreateCategory} className="space-y-3">
+            <Input
+              label="New Category Name *"
+              placeholder="e.g. Category Name"
+              value={newCatName}
+              onChange={(e) => setNewCatName(e.target.value)}
+              required
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowAddCatModal(false)}
+              >
+                Close
+              </Button>
+              <Button type="submit" variant="primary" size="sm" disabled={!newCatName.trim()}>
+                + Add Category
+              </Button>
+            </div>
+          </form>
+
+          {categories.length > 0 && (
+            <div className="border-t border-slate-100 pt-3 space-y-2">
+              <span className="text-xs font-bold uppercase text-slate-500 block">
+                Existing Categories ({categories.length})
+              </span>
+              <div className="max-h-48 overflow-y-auto divide-y divide-slate-100 rounded-xl border border-slate-200">
+                {categories.map((c) => (
+                  <div key={c.id} className="p-2.5 flex items-center justify-between hover:bg-slate-50 text-xs">
+                    <span className="font-bold text-slate-800">{c.name}</span>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (
+                          window.confirm(
+                            `⚠️ WARNING: Delete category "${c.name}"?\nALL products belonging to this category will be permanently deleted.`
+                          )
+                        ) {
+                          try {
+                            await api.deleteCategory(c.id);
+                            loadData();
+                          } catch (err: any) {
+                            alert(err.detail || 'Failed to delete category');
+                          }
+                        }
+                      }}
+                      className="text-rose-600 hover:text-rose-800 p-1 rounded hover:bg-rose-50 flex items-center gap-1 font-semibold"
+                      title="Delete Category & Products"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Delete
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </Modal>
 
       {/* Deactivate Friendly Confirm Dialog */}
@@ -708,6 +903,18 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
         confirmText="Deactivate"
         variant="danger"
         loading={deactivating}
+      />
+
+      {/* Permanent Delete Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={Boolean(deletingProduct)}
+        onClose={() => setDeletingProduct(null)}
+        onConfirm={handleConfirmPermanentDelete}
+        title={`Permanently Delete ${deletingProduct?.name}?`}
+        message={`Are you sure you want to permanently delete "${deletingProduct?.name}" (${deletingProduct?.product_id})? This action cannot be undone and will completely remove the product from your database.`}
+        confirmText="Delete Permanently"
+        variant="danger"
+        loading={deleting}
       />
     </div>
   );

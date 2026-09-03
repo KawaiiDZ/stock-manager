@@ -6,7 +6,9 @@ from backend.app.schemas.sales import SaleResponse
 
 class DashboardStatsResponse(BaseModel):
     today_sales_revenue: Decimal
+    today_collected_cash: Decimal = Decimal("0.00")
     today_gross_profit: Decimal
+    today_realized_profit: Decimal = Decimal("0.00")
     customer_outstanding: Decimal
     supplier_outstanding: Decimal
     bills_needing_attention_count: int

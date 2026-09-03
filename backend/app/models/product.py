@@ -44,7 +44,8 @@ class ProductCustomField(Base):
     __tablename__ = "product_custom_fields"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    name = Column(String(50), nullable=False)  # e.g., Brand, Size, IMEI, Expiry Date
+    category_id = Column(Integer, ForeignKey("product_categories.id", ondelete="CASCADE"), nullable=True, index=True)
+    name = Column(String(50), nullable=False)  # e.g., Brand, Size, IMEI, Expiry Date, Wattage
     field_type = Column(String(20), nullable=False, default="text")  # text, select, number, date, boolean
     options = Column(Text, nullable=True)  # Comma-separated list for select/dropdown (e.g. S, M, L, XL)
     is_required = Column(Boolean, nullable=False, default=False)
@@ -53,6 +54,8 @@ class ProductCustomField(Base):
     show_in_receipt = Column(Boolean, nullable=False, default=False)
     display_order = Column(Integer, nullable=False, default=0)
     is_active = Column(Boolean, nullable=False, default=True)
+
+    category = relationship("ProductCategory")
 
 class ProductCustomValue(Base):
     __tablename__ = "product_custom_values"

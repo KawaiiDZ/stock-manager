@@ -343,7 +343,7 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({ settings }) => {
         <form onSubmit={handleSaveCustomer} className="space-y-4">
           <Input
             label="Customer Name *"
-            placeholder="e.g. Ahmed Khan"
+            placeholder="e.g. Customer Name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
@@ -351,13 +351,13 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({ settings }) => {
           />
           <Input
             label="Phone Number"
-            placeholder="e.g. 0300-1234567"
+            placeholder="e.g. Phone Number"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
           />
           <Input
             label="Address"
-            placeholder="e.g. Street 4, House 12"
+            placeholder="e.g. Address / City"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
           />

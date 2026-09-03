@@ -5,9 +5,11 @@ from sqlalchemy import or_
 
 from backend.app.models.product import ProductCategory, Product, ProductCustomField, ProductCustomValue
 from backend.app.models.inventory import InventoryBatch, InventoryMovement
+from backend.app.models.sales import SaleItem, SalesReturnItem
+from backend.app.models.purchase import PurchaseItem, PurchaseReturnItem
 from backend.app.schemas.product import (
-    ProductCreate, ProductUpdate, CategoryCreate, CustomFieldCreate, CustomValueDto,
-    StockAdjustmentRequest, BulkProductsResponse
+    ProductCreate, ProductUpdate, CategoryCreate, CustomFieldCreate, CustomFieldUpdate,
+    CustomFieldResponse, CustomValueDto, StockAdjustmentRequest, BulkProductsResponse
 )
 from backend.app.services.id_generator import generate_product_id
 from backend.app.core.errors import DuplicateBarcodeException, EntityNotFoundException, BusinessRuleException
@@ -25,7 +27,6 @@ def create_category(db: Session, data: CategoryCreate) -> ProductCategory:
         if not existing.is_active:
             existing.is_active = True
             db.commit()
-            db.refresh(existing)
             return existing
         raise BusinessRuleException(f"Category '{data.name}' already exists.")
     cat = ProductCategory(name=data.name.strip(), is_active=True)
@@ -45,15 +46,86 @@ def update_category(db: Session, cat_id: int, name: str, is_active: Optional[boo
     db.refresh(cat)
     return cat
 
+def delete_category(db: Session, cat_id: int) -> None:
+    cat = db.query(ProductCategory).filter(ProductCategory.id == cat_id).first()
+    if not cat:
+        raise EntityNotFoundException("Category", str(cat_id))
+
+    # 1. Find all products belonging to this category
+    products = db.query(Product).filter(Product.category_id == cat_id).all()
+
+    for p in products:
+        has_sales = db.query(SaleItem).filter(SaleItem.product_id == p.id).first() is not None
+        has_purchases = db.query(PurchaseItem).filter(PurchaseItem.product_id == p.id).first() is not None
+
+        if has_sales or has_purchases:
+            # Products with transaction history cannot be hard-deleted due to foreign keys and invoice integrity.
+            # Deactivate them, zero their stock, unlink from category, and delete custom values.
+            p.is_active = False
+            p.current_stock = Decimal("0.00")
+            p.category_id = None
+            db.query(ProductCustomValue).filter(ProductCustomValue.product_id == p.id).delete(synchronize_session=False)
+        else:
+            # Safe to hard-delete completely
+            db.query(ProductCustomValue).filter(ProductCustomValue.product_id == p.id).delete(synchronize_session=False)
+            db.query(InventoryMovement).filter(InventoryMovement.product_id == p.id).delete(synchronize_session=False)
+            db.query(InventoryBatch).filter(InventoryBatch.product_id == p.id).delete(synchronize_session=False)
+            db.delete(p)
+
+    # 2. Find and delete custom fields tied specifically to this category
+    category_fields = db.query(ProductCustomField).filter(ProductCustomField.category_id == cat_id).all()
+    cat_field_ids = [f.id for f in category_fields]
+    if cat_field_ids:
+        db.query(ProductCustomValue).filter(ProductCustomValue.field_id.in_(cat_field_ids)).delete(synchronize_session=False)
+        db.query(ProductCustomField).filter(ProductCustomField.id.in_(cat_field_ids)).delete(synchronize_session=False)
+
+    # 3. Delete the category record
+    db.delete(cat)
+    db.commit()
+
 # Custom Fields
-def list_custom_fields(db: Session, active_only: bool = True) -> List[ProductCustomField]:
-    q = db.query(ProductCustomField)
+def _format_custom_field_response(field: ProductCustomField) -> CustomFieldResponse:
+    return CustomFieldResponse(
+        id=field.id,
+        category_id=field.category_id,
+        category_name=field.category.name if field.category else "All Categories (Global)",
+        name=field.name,
+        field_type=field.field_type,
+        options=field.options,
+        is_required=field.is_required,
+        show_in_table=field.show_in_table,
+        show_in_pos=field.show_in_pos,
+        show_in_receipt=field.show_in_receipt,
+        display_order=field.display_order,
+        is_active=field.is_active
+    )
+
+def list_custom_fields(
+    db: Session,
+    category_id: Optional[int] = None,
+    active_only: bool = True
+) -> List[CustomFieldResponse]:
+    q = db.query(ProductCustomField).options(joinedload(ProductCustomField.category))
     if active_only:
         q = q.filter(ProductCustomField.is_active == True)
-    return q.order_by(ProductCustomField.display_order.asc(), ProductCustomField.id.asc()).all()
+    if category_id is not None:
+        q = q.filter(or_(ProductCustomField.category_id == None, ProductCustomField.category_id == category_id))
+    fields = q.order_by(
+        ProductCustomField.category_id.asc().nullsfirst(),
+        ProductCustomField.display_order.asc(),
+        ProductCustomField.id.asc()
+    ).all()
+    return [_format_custom_field_response(f) for f in fields]
 
-def create_custom_field(db: Session, data: CustomFieldCreate) -> ProductCustomField:
+def create_custom_field(db: Session, data: CustomFieldCreate) -> CustomFieldResponse:
+    cat_id = data.category_id if data.category_id and data.category_id > 0 else None
+    if cat_id:
+        cat = db.query(ProductCategory).filter(ProductCategory.id == cat_id).first()
+        if not cat:
+            raise EntityNotFoundException("Category", str(cat_id))
+
     field = ProductCustomField(
+        category_id=cat_id,
         name=data.name.strip(),
         field_type=data.field_type,
         options=data.options.strip() if data.options else None,
@@ -67,16 +139,23 @@ def create_custom_field(db: Session, data: CustomFieldCreate) -> ProductCustomFi
     db.add(field)
     db.commit()
     db.refresh(field)
-    return field
+    return _format_custom_field_response(field)
 
 def update_custom_field(
     db: Session,
     field_id: int,
     data: CustomFieldUpdate
-) -> ProductCustomField:
+) -> CustomFieldResponse:
     field = db.query(ProductCustomField).filter(ProductCustomField.id == field_id).first()
     if not field:
         raise EntityNotFoundException("Custom Field", str(field_id))
+    if data.category_id is not None:
+        cat_id = data.category_id if data.category_id > 0 else None
+        if cat_id:
+            cat = db.query(ProductCategory).filter(ProductCategory.id == cat_id).first()
+            if not cat:
+                raise EntityNotFoundException("Category", str(cat_id))
+        field.category_id = cat_id
     if data.name is not None:
         field.name = data.name.strip()
     if data.field_type is not None:
@@ -97,7 +176,7 @@ def update_custom_field(
         field.is_active = data.is_active
     db.commit()
     db.refresh(field)
-    return field
+    return _format_custom_field_response(field)
 
 def delete_custom_field(db: Session, field_id: int) -> bool:
     field = db.query(ProductCustomField).filter(ProductCustomField.id == field_id).first()
@@ -426,3 +505,29 @@ def restore_product(db: Session, product_id: int) -> dict:
     product.is_active = True
     db.commit()
     return get_product(db, product.id)
+
+def delete_product_permanent(db: Session, product_id: int) -> None:
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise EntityNotFoundException("Product", str(product_id))
+
+    # Check for historical transactions (sales, purchases, returns)
+    has_sales = db.query(SaleItem).filter(SaleItem.product_id == product_id).first() is not None
+    has_sales_returns = db.query(SalesReturnItem).filter(SalesReturnItem.product_id == product_id).first() is not None
+    has_purchases = db.query(PurchaseItem).filter(PurchaseItem.product_id == product_id).first() is not None
+    has_purchase_returns = db.query(PurchaseReturnItem).filter(PurchaseReturnItem.product_id == product_id).first() is not None
+
+    if has_sales or has_sales_returns or has_purchases or has_purchase_returns:
+        raise BusinessRuleException(
+            f"Cannot permanently delete '{product.name}' because it has existing transaction history "
+            f"(invoices, purchases, or returns). It must remain deactivated to preserve historical accounting records."
+        )
+
+    # Clean up custom field values, inventory movements, and inventory batches
+    db.query(ProductCustomValue).filter(ProductCustomValue.product_id == product_id).delete(synchronize_session=False)
+    db.query(InventoryMovement).filter(InventoryMovement.product_id == product_id).delete(synchronize_session=False)
+    db.query(InventoryBatch).filter(InventoryBatch.product_id == product_id).delete(synchronize_session=False)
+
+    db.delete(product)
+    db.commit()
+

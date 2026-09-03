@@ -289,7 +289,7 @@ export const BillsPage: React.FC<BillsPageProps> = ({ settings }) => {
         <form onSubmit={handleSaveBill} className="space-y-4">
           <Input
             label="Bill Name *"
-            placeholder="e.g. Shop Electricity Bill"
+            placeholder="e.g. Monthly Bill / Account"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
@@ -299,7 +299,7 @@ export const BillsPage: React.FC<BillsPageProps> = ({ settings }) => {
           <div className="grid grid-cols-2 gap-3">
             <Input
               label="Bill / Invoice Number (Optional)"
-              placeholder="e.g. B-000001 or meter #"
+              placeholder="e.g. Reference / Invoice #"
               value={billNumber}
               onChange={(e) => setBillNumber(e.target.value)}
             />
@@ -354,7 +354,7 @@ export const BillsPage: React.FC<BillsPageProps> = ({ settings }) => {
 
           <Input
             label="Notes (Optional)"
-            placeholder="e.g. Consumer number 12345678"
+            placeholder="e.g. Consumer / Reference details"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
@@ -380,7 +380,7 @@ export const BillsPage: React.FC<BillsPageProps> = ({ settings }) => {
         <form onSubmit={handleCreateCategory} className="space-y-4">
           <Input
             label="Category Name *"
-            placeholder="e.g. Utilities, Rent, Internet, Government"
+            placeholder="e.g. Category Name"
             value={newCatName}
             onChange={(e) => setNewCatName(e.target.value)}
             required

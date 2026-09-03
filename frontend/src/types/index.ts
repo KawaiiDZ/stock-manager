@@ -17,6 +17,8 @@ export interface BusinessSettings {
 
 export interface CustomField {
   id: number;
+  category_id?: number | null;
+  category_name?: string | null;
   name: string;
   field_type: 'text' | 'select' | 'number' | 'date' | 'boolean' | string;
   options?: string | null;
@@ -170,6 +172,8 @@ export interface Sale {
   total_returned_amount?: number;
   total_cost: number;
   gross_profit: number;
+  realized_profit?: number;
+  unrealized_profit?: number;
   notes?: string | null;
   created_at: string;
   items: SaleItem[];
@@ -332,7 +336,9 @@ export interface Expense {
 
 export interface DashboardKPIs {
   today_sales_revenue: number;
+  today_collected_cash?: number;
   today_gross_profit: number;
+  today_realized_profit?: number;
   customer_outstanding: number;
   supplier_outstanding: number;
   bills_needing_attention_count: number;

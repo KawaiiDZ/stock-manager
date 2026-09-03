@@ -253,7 +253,7 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ settings }) => {
         <form onSubmit={handleSaveExpense} className="space-y-4">
           <Input
             label="Expense Title *"
-            placeholder="e.g. Delivery Fuel, Refreshments, Packing tape"
+            placeholder="e.g. Expense description / purpose"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
@@ -335,7 +335,7 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ settings }) => {
         <form onSubmit={handleCreateCategory} className="space-y-4">
           <Input
             label="Category Name *"
-            placeholder="e.g. Transport, Food, Maintenance"
+            placeholder="e.g. Category Name"
             value={newCatName}
             onChange={(e) => setNewCatName(e.target.value)}
             required

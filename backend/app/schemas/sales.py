@@ -40,6 +40,7 @@ class SaleItemResponse(BaseModel):
     unit_cost: Decimal
     total_cost: Decimal
     gross_profit: Decimal
+    realized_profit: Decimal = Decimal("0.00")
     returned_quantity: Decimal = Decimal("0.00")
     remaining_returnable_quantity: Decimal = Decimal("0.00")
     batches: Optional[List[SaleItemBatchResponse]] = None
@@ -72,6 +73,8 @@ class SaleResponse(BaseModel):
     total_returned_amount: Decimal = Decimal("0.00")
     total_cost: Decimal
     gross_profit: Decimal
+    realized_profit: Decimal = Decimal("0.00")
+    unrealized_profit: Decimal = Decimal("0.00")
     notes: Optional[str] = None
     created_at: datetime
     items: List[SaleItemResponse] = []

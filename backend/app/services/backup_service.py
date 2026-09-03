@@ -80,12 +80,16 @@ def list_backups() -> List[BackupFileResponse]:
     return backups
 
 def restore_backup(backup_filename: str) -> BackupRestoreResponse:
-    backup_path = settings.BACKUP_DIR / backup_filename
-    if not backup_path.exists():
-        raise BusinessRuleException(f"Backup file '{backup_filename}' was not found.")
+    safe_filename = os.path.basename(backup_filename.strip())
+    if not safe_filename.endswith(".db"):
+        raise BusinessRuleException("Invalid backup file extension. Only .db files can be restored.")
+
+    backup_path = (settings.BACKUP_DIR / safe_filename).resolve()
+    if backup_path.parent != settings.BACKUP_DIR.resolve() or not backup_path.exists():
+        raise BusinessRuleException(f"Backup file '{safe_filename}' was not found in backups directory.")
 
     if not validate_sqlite_file(backup_path):
-        raise BusinessRuleException(f"Backup file '{backup_filename}' is corrupted or not a valid database.")
+        raise BusinessRuleException(f"Backup file '{safe_filename}' is corrupted or not a valid database.")
 
     db_path = settings.SQLITE_DB_PATH
 

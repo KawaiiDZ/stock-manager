@@ -114,8 +114,9 @@ def test_return_partial_units_and_overpayment_prevention(db_session):
         )]
     ))
     assert ret.total_return_amount == Decimal("500.00")
-    assert ret.cash_refund_amount == Decimal("400.00") # Paid 400 originally, so max cash refund is 400
-    assert ret.balance_credit_amount == Decimal("100.00")
+    # Customer paid Rs. 400 originally + Rs. 100 payment allocated to sale = Rs. 500 total paid, so full return amount is refunded in cash
+    assert ret.cash_refund_amount == Decimal("500.00")
+    assert ret.balance_credit_amount == Decimal("0.00")
 
     # 5. Verify stock restored (10 - 2 + 1 = 9)
     from backend.app.services.product_service import get_product

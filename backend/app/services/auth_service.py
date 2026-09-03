@@ -71,11 +71,16 @@ def change_user_password(db: Session, user_id: int, current_pass: str, new_pass:
     return True
 
 def change_settings_pin(db: Session, current_pin: str, new_pin: str) -> bool:
+    clean_pin = (new_pin or "").strip()
+    if len(clean_pin) < 4 or not clean_pin.isdigit():
+        raise BusinessRuleException("New PIN must be at least 4 numeric digits.")
+
     settings = db.query(BusinessSettings).filter(BusinessSettings.id == 1).first()
     if not settings:
         raise BusinessRuleException("Settings not found.")
     if not verify_password(settings.config_pin_hash, current_pin):
         raise BusinessRuleException("Current PIN is incorrect.")
-    settings.config_pin_hash = hash_password(new_pin)
+    settings.config_pin_hash = hash_password(clean_pin)
     db.commit()
     return True
+

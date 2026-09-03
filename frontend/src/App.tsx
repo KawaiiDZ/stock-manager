@@ -55,6 +55,11 @@ export const App: React.FC = () => {
   };
 
   useEffect(() => {
+    // Always fetch business settings on initial mount so login page has brand logo and name
+    api.getSettings().then(setSettings).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (currentUser) {
       loadSettingsAndBadges();
     }

@@ -134,7 +134,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
             <div className="text-2xl font-black text-slate-900">
               {formatCurrency(stats?.today_sales_revenue, currency)}
             </div>
-            <p className="text-xs text-emerald-600 font-semibold mt-1">Revenue from today's sales</p>
+            <div className="flex items-center justify-between text-xs mt-1 font-semibold">
+              <span className="text-slate-400">Cash Collected:</span>
+              <span className="text-emerald-700 font-bold">{formatCurrency(stats?.today_collected_cash || 0, currency)}</span>
+            </div>
           </div>
         </div>
 
@@ -149,10 +152,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
             </div>
           </div>
           <div>
-            <div className="text-2xl font-black text-slate-900">
-              {formatCurrency(stats?.today_gross_profit, currency)}
+            <div className="text-2xl font-black text-emerald-700">
+              {formatCurrency(stats?.today_realized_profit !== undefined ? stats.today_realized_profit : stats?.today_gross_profit, currency)}
             </div>
-            <p className="text-xs text-slate-400 mt-1">Product margins (Sales - Cost)</p>
+            <div className="flex items-center justify-between text-xs mt-1 font-semibold">
+              <span className="text-slate-400">Invoiced Profit:</span>
+              <span className="text-slate-700 font-bold">{formatCurrency(stats?.today_gross_profit || 0, currency)}</span>
+            </div>
           </div>
         </div>
 

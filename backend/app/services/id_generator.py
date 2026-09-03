@@ -8,46 +8,49 @@ from backend.app.models.purchase import Purchase, PurchaseReturn
 from backend.app.models.bills import Bill
 from backend.app.models.expenses import Expense
 
+def _generate_unique_code(db: Session, model, id_column, prefix: str) -> str:
+    """
+    Safely generates a prefixed sequential code (e.g. P-000001).
+    Uses MAX(id) to never collide after record deletions and includes a collision check.
+    """
+    max_id = db.query(func.coalesce(func.max(model.id), 0)).scalar() or 0
+    candidate_num = max_id + 1
+    candidate = f"{prefix}-{candidate_num:06d}"
+    while db.query(model).filter(id_column == candidate).first() is not None:
+        candidate_num += 1
+        candidate = f"{prefix}-{candidate_num:06d}"
+    return candidate
+
 def generate_product_id(db: Session) -> str:
-    count = db.query(func.count(Product.id)).scalar() or 0
-    return f"P-{(count + 1):06d}"
+    return _generate_unique_code(db, Product, Product.product_id, "P")
 
 def generate_customer_id(db: Session) -> str:
-    count = db.query(func.count(Customer.id)).scalar() or 0
-    return f"C-{(count + 1):06d}"
+    return _generate_unique_code(db, Customer, Customer.customer_id, "C")
 
 def generate_supplier_id(db: Session) -> str:
-    count = db.query(func.count(Supplier.id)).scalar() or 0
-    return f"S-{(count + 1):06d}"
+    return _generate_unique_code(db, Supplier, Supplier.supplier_id, "S")
 
 def generate_receipt_number(db: Session) -> str:
-    count = db.query(func.count(Sale.id)).scalar() or 0
-    return f"R-{(count + 1):06d}"
+    return _generate_unique_code(db, Sale, Sale.receipt_number, "R")
 
 def generate_purchase_number(db: Session) -> str:
-    count = db.query(func.count(Purchase.id)).scalar() or 0
-    return f"PO-{(count + 1):06d}"
+    return _generate_unique_code(db, Purchase, Purchase.purchase_number, "PO")
 
 def generate_sales_return_number(db: Session) -> str:
-    count = db.query(func.count(SalesReturn.id)).scalar() or 0
-    return f"RET-{(count + 1):06d}"
+    return _generate_unique_code(db, SalesReturn, SalesReturn.return_number, "RET")
 
 def generate_purchase_return_number(db: Session) -> str:
-    count = db.query(func.count(PurchaseReturn.id)).scalar() or 0
-    return f"PRET-{(count + 1):06d}"
+    return _generate_unique_code(db, PurchaseReturn, PurchaseReturn.return_number, "PRET")
 
 def generate_customer_payment_number(db: Session) -> str:
-    count = db.query(func.count(CustomerPayment.id)).scalar() or 0
-    return f"CP-{(count + 1):06d}"
+    return _generate_unique_code(db, CustomerPayment, CustomerPayment.payment_number, "CP")
 
 def generate_supplier_payment_number(db: Session) -> str:
-    count = db.query(func.count(SupplierPayment.id)).scalar() or 0
-    return f"SP-{(count + 1):06d}"
+    return _generate_unique_code(db, SupplierPayment, SupplierPayment.payment_number, "SP")
 
 def generate_expense_number(db: Session) -> str:
-    count = db.query(func.count(Expense.id)).scalar() or 0
-    return f"EXP-{(count + 1):06d}"
+    return _generate_unique_code(db, Expense, Expense.expense_number, "EXP")
 
 def generate_bill_number(db: Session) -> str:
-    count = db.query(func.count(Bill.id)).scalar() or 0
-    return f"B-{(count + 1):06d}"
+    return _generate_unique_code(db, Bill, Bill.bill_number, "B")
+

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
-import { CustomField, IndustryPreset } from '../../types';
+import { CustomField, Category, IndustryPreset } from '../../types';
 import {
   Plus,
   Trash2,
@@ -18,6 +18,8 @@ import {
   ShoppingCart,
   Wrench,
   Store,
+  Tag,
+  Zap,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -33,13 +35,26 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
   onOpenWizard,
 }) => {
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [presets, setPresets] = useState<IndustryPreset[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // Active Category Tab for viewing schema
+  const [activeCategoryTab, setActiveCategoryTab] = useState<number | 'all' | 'global'>('all');
+
+  // Quick Add Category Modal
+  const [showAddCatModal, setShowAddCatModal] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+
+  // Edit / Rename Category Modal
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editCatName, setEditCatName] = useState('');
+
   // New field addition
   const [name, setName] = useState('');
+  const [targetCategoryId, setTargetCategoryId] = useState<number | ''>('');
   const [fieldType, setFieldType] = useState('text');
   const [options, setOptions] = useState('');
   const [showInTable, setShowInTable] = useState(true);
@@ -57,16 +72,81 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
   const loadData = async () => {
     try {
       setLoading(true);
-      const [cfs, prs] = await Promise.all([
+      const [cfs, cats, prs] = await Promise.all([
         api.getCustomFields(true),
+        api.getCategories(true),
         api.getPresets(),
       ]);
       setCustomFields(cfs || []);
+      setCategories(cats || []);
       setPresets(prs || []);
     } catch (err) {
       console.error('Failed to load schema builder data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCatName.trim()) return;
+    try {
+      const newCat = await api.createCategory({ name: newCatName.trim() });
+      setCategories((prev) => [...prev, newCat]);
+      setActiveCategoryTab(newCat.id);
+      setTargetCategoryId(newCat.id);
+      setShowAddCatModal(false);
+      setNewCatName('');
+      setSuccessMsg(`Category "${newCat.name}" created! You can now add its custom schema below.`);
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to create category.');
+    }
+  };
+
+  const handleRenameCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCategory || !editCatName.trim()) return;
+    try {
+      await api.updateCategory(editingCategory.id, { name: editCatName.trim() });
+      setSuccessMsg(`Category renamed to "${editCatName.trim()}" successfully.`);
+      setEditingCategory(null);
+      setEditCatName('');
+      loadData();
+      if (onSchemaUpdated) onSchemaUpdated();
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to rename category.');
+    }
+  };
+
+  const handleDeleteCategory = async (cat: Category) => {
+    const confirmed = window.confirm(
+      `⚠️ WARNING: Are you sure you want to permanently delete the category "${cat.name}"?\n\n` +
+      `• ALL products belonging to "${cat.name}" will be deleted immediately.\n` +
+      `• All custom schema attributes tied specifically to "${cat.name}" will be deleted.\n\n` +
+      `This action cannot be undone. Proceed?`
+    );
+    if (!confirmed) return;
+
+    try {
+      await api.deleteCategory(cat.id);
+      setSuccessMsg(`Category "${cat.name}" and all its products were successfully deleted.`);
+      if (activeCategoryTab === cat.id) {
+        setActiveCategoryTab('all');
+        setTargetCategoryId('');
+      }
+      loadData();
+      if (onSchemaUpdated) onSchemaUpdated();
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to delete category.');
+    }
+  };
+
+  const handleSelectTab = (tab: number | 'all' | 'global') => {
+    setActiveCategoryTab(tab);
+    if (typeof tab === 'number') {
+      setTargetCategoryId(tab);
+    } else if (tab === 'global') {
+      setTargetCategoryId('');
     }
   };
 
@@ -77,6 +157,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
     setErrorMsg(null);
     try {
       await api.createCustomField({
+        category_id: targetCategoryId ? Number(targetCategoryId) : undefined,
         name: name.trim(),
         field_type: fieldType,
         options: fieldType === 'select' ? options.trim() || undefined : undefined,
@@ -103,6 +184,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
     if (!editingField) return;
     try {
       await api.updateCustomField(editingField.id, {
+        category_id: editingField.category_id ? Number(editingField.category_id) : undefined,
         name: editingField.name,
         field_type: editingField.field_type,
         options: editingField.field_type === 'select' ? editingField.options : undefined,
@@ -136,52 +218,75 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
   };
 
   const handleApplyPreset = async (presetKey: string) => {
-    if (
-      !window.confirm(
-        'Applying a preset will configure your table columns and attributes for this industry. Existing product data will remain safe. Proceed?'
-      )
-    ) {
-      return;
+    if (presetKey === 'custom_general') {
+      if (
+        !window.confirm(
+          'Start fresh with a clean slate? This will clear all custom attributes so you can define your own from scratch.'
+        )
+      ) {
+        return;
+      }
+    } else {
+      if (
+        !window.confirm(
+          'Applying this industry preset will configure standard columns for this category. Existing product data will remain safe. Proceed?'
+        )
+      ) {
+        return;
+      }
     }
 
     try {
       await api.applyPreset({ preset_key: presetKey });
-      setSuccessMsg('Industry preset applied successfully!');
+      setSuccessMsg(presetKey === 'custom_general' ? 'Reset to clean slate (0 attributes)!' : 'Industry preset applied successfully!');
       loadData();
       if (onSchemaUpdated) onSchemaUpdated();
     } catch (err: any) {
-      setErrorMsg(err.detail || 'Failed to apply industry preset.');
+      setErrorMsg(err.detail || 'Failed to apply preset.');
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* Top Banner with Quick Actions */}
+      {/* Top Banner */}
       <div className="p-6 bg-gradient-to-r from-slate-900 to-slate-800 rounded-3xl text-white flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-emerald-500/20 rounded-2xl border border-emerald-400/30">
             <Sliders className="h-6 w-6 text-emerald-400" />
           </div>
           <div>
-            <h2 className="text-xl font-black tracking-tight">Product Schema & Table Customizer</h2>
+            <h2 className="text-xl font-black tracking-tight">Category Schemas & Custom Attributes</h2>
             <p className="text-xs text-slate-300">
-              Customize product columns, dropdown options, POS search indexing, and receipt items.
+              Define custom specification fields per category or globally. Form schemas adapt dynamically.
             </p>
           </div>
         </div>
 
-        {onOpenWizard && (
+        <div className="flex items-center gap-2">
           <Button
             type="button"
-            variant="primary"
+            variant="outline"
             size="sm"
-            onClick={onOpenWizard}
-            className="font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-600/30"
+            icon={<Plus className="h-4 w-4" />}
+            onClick={() => setShowAddCatModal(true)}
+            className="font-bold border-white/20 text-white bg-white/10 hover:bg-white/20"
           >
-            <Sparkles className="h-4 w-4 text-emerald-200" />
-            Launch Setup Wizard
+            + New Category
           </Button>
-        )}
+
+          {onOpenWizard && (
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={onOpenWizard}
+              className="font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-600/30"
+            >
+              <Sparkles className="h-4 w-4 text-emerald-200" />
+              Setup Wizard
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Notifications */}
@@ -203,128 +308,268 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
       )}
 
       {/* 1-Click Industry Presets Bar */}
-      <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-emerald-600" />
-            Quick Switch Industry Presets
-          </h3>
-          <span className="text-xs text-slate-400">Click any preset to apply its columns</span>
-        </div>
+      {presets.length > 0 && (
+        <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-emerald-600" />
+              Quick Switch Industry Presets
+            </h3>
+            <span className="text-xs text-slate-400">Click any template to apply its columns</span>
+          </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-          {presets.map((p) => (
-            <button
-              key={p.key}
-              type="button"
-              onClick={() => handleApplyPreset(p.key)}
-              className="p-3 rounded-2xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/40 text-left transition group"
-            >
-              <div className="font-bold text-slate-800 text-xs group-hover:text-emerald-900 truncate">
-                {p.title}
-              </div>
-              <div className="text-[10px] text-slate-400 mt-0.5">{p.fields.length} columns</div>
-            </button>
-          ))}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+            {presets.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => handleApplyPreset(p.key)}
+                className="p-3 rounded-2xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/40 text-left transition group"
+              >
+                <div className="font-bold text-slate-800 text-xs group-hover:text-emerald-900 truncate">
+                  {p.title}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">{p.fields.length} columns</div>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Main Grid: Active Attributes Table + Add Form */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Active Attributes Table */}
         <div className="lg:col-span-8 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-          <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
-              Active Table Attributes ({customFields.length})
-            </span>
+          <div className="p-4 bg-slate-50 border-b border-slate-100 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                <Sliders className="h-4 w-4 text-emerald-600" />
+                Configured Attributes ({customFields.length})
+              </span>
+              <span className="text-[11px] text-slate-400">
+                Schemas adapt dynamically per category
+              </span>
+            </div>
+
+            {/* Category Schema Filter Tabs */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+              <button
+                type="button"
+                onClick={() => handleSelectTab('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+                  activeCategoryTab === 'all'
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                All ({customFields.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectTab('global')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+                  activeCategoryTab === 'global'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Global ({customFields.filter((f) => !f.category_id).length})
+              </button>
+              {categories.map((cat) => {
+                const count = customFields.filter((f) => f.category_id === cat.id).length;
+                const isActive = activeCategoryTab === cat.id;
+                return (
+                  <div
+                    key={cat.id}
+                    className={`inline-flex items-center rounded-xl overflow-hidden border transition text-xs font-bold whitespace-nowrap shadow-sm ${
+                      isActive
+                        ? 'bg-emerald-600 border-emerald-600 text-white'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleSelectTab(cat.id)}
+                      className="px-3 py-1.5 focus:outline-none"
+                    >
+                      {cat.name} ({count})
+                    </button>
+                    <button
+                      type="button"
+                      title={`Delete "${cat.name}" category & all its products`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteCategory(cat);
+                      }}
+                      className={`px-1.5 py-1.5 border-l transition ${
+                        isActive
+                          ? 'border-emerald-500/60 hover:bg-rose-600 text-white'
+                          : 'border-slate-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                      }`}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setShowAddCatModal(true)}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-300 flex items-center gap-1"
+              >
+                <Plus className="h-3.5 w-3.5" /> New Category
+              </button>
+            </div>
           </div>
 
-          <div className="divide-y divide-slate-100 overflow-y-auto flex-1">
-            {customFields.length === 0 ? (
-              <div className="p-12 text-center text-slate-400 text-xs">
-                No custom attributes configured yet. Pick an industry preset above or add one on the right.
+          {/* Category Management Bar when a category tab is selected */}
+          {typeof activeCategoryTab === 'number' && (() => {
+            const currentCat = categories.find((c) => c.id === activeCategoryTab);
+            if (!currentCat) return null;
+            const count = customFields.filter((f) => f.category_id === currentCat.id).length;
+            return (
+              <div className="px-4 py-2.5 bg-emerald-50/70 border-b border-emerald-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+                <div className="flex items-center gap-2">
+                  <Tag className="h-4 w-4 text-emerald-700 shrink-0" />
+                  <span className="font-bold text-slate-800">
+                    Category: <span className="text-emerald-900 font-extrabold">{currentCat.name}</span>
+                  </span>
+                  <span className="text-emerald-600 text-[11px] bg-emerald-100/80 px-2 py-0.5 rounded-full font-semibold">
+                    {count} {count === 1 ? 'custom attribute' : 'custom attributes'}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingCategory(currentCat);
+                      setEditCatName(currentCat.name);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold flex items-center gap-1 transition text-[11px] shadow-sm"
+                  >
+                    <Edit2 className="h-3 w-3 text-slate-500" /> Rename Category
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteCategory(currentCat)}
+                    className="px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-600 hover:text-white font-bold flex items-center gap-1 transition text-[11px] shadow-sm"
+                  >
+                    <Trash2 className="h-3 w-3" /> Delete Category & All Products
+                  </button>
+                </div>
               </div>
-            ) : (
-              customFields.map((cf) => (
-                <div
-                  key={cf.id}
-                  className="p-4 hover:bg-slate-50/60 transition flex items-center justify-between gap-3 text-xs"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900 text-sm">{cf.name}</span>
-                      <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-mono uppercase font-semibold">
-                        {cf.field_type}
-                      </span>
-                      {cf.is_required && (
-                        <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[10px] font-bold">
-                          Required
+            );
+          })()}
+
+          <div className="divide-y divide-slate-100 overflow-y-auto flex-1">
+            {(() => {
+              const filteredFields = customFields.filter((cf) => {
+                if (activeCategoryTab === 'all') return true;
+                if (activeCategoryTab === 'global') return !cf.category_id;
+                return cf.category_id === activeCategoryTab;
+              });
+
+              if (filteredFields.length === 0) {
+                return (
+                  <div className="p-12 text-center text-slate-400 text-xs">
+                    No custom attributes configured for this category yet. Add one using the form on the right.
+                  </div>
+                );
+              }
+
+              return filteredFields.map((cf) => {
+                const isGlobal = !cf.category_id;
+                return (
+                  <div
+                    key={cf.id}
+                    className="p-4 hover:bg-slate-50/60 transition flex items-center justify-between gap-3 text-xs"
+                  >
+                    <div className="space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-bold text-slate-900 text-sm">{cf.name}</span>
+                        <span
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                            isGlobal
+                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          }`}
+                        >
+                          {isGlobal ? '🌐 Global' : `🏷️ ${cf.category_name || 'Category'}`}
                         </span>
+                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-mono uppercase font-semibold">
+                          {cf.field_type}
+                        </span>
+                        {cf.is_required && (
+                          <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[10px] font-bold">
+                            Required
+                          </span>
+                        )}
+                      </div>
+                      {cf.options && (
+                        <div className="text-[11px] text-slate-500 font-mono truncate max-w-md">
+                          Options: {cf.options}
+                        </div>
                       )}
                     </div>
-                    {cf.options && (
-                      <div className="text-[11px] text-slate-500 font-mono truncate max-w-md">
-                        Options: {cf.options}
+
+                    <div className="flex items-center gap-2">
+                      {/* Badges */}
+                      <div className="hidden sm:flex items-center gap-1">
+                        <span
+                          className={`p-1 px-2 rounded-lg text-[10px] font-bold flex items-center gap-1 ${
+                            cf.show_in_table
+                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                              : 'bg-slate-50 text-slate-300'
+                          }`}
+                          title="Main Table Column"
+                        >
+                          <Eye className="h-3 w-3" /> Table
+                        </span>
+                        <span
+                          className={`p-1 px-2 rounded-lg text-[10px] font-bold flex items-center gap-1 ${
+                            cf.show_in_pos
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-slate-50 text-slate-300'
+                          }`}
+                          title="POS Searchable"
+                        >
+                          <Search className="h-3 w-3" /> POS
+                        </span>
+                        <span
+                          className={`p-1 px-2 rounded-lg text-[10px] font-bold flex items-center gap-1 ${
+                            cf.show_in_receipt
+                              ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                              : 'bg-slate-50 text-slate-300'
+                          }`}
+                          title="Thermal Receipt Item"
+                        >
+                          <Printer className="h-3 w-3" /> Receipt
+                        </span>
                       </div>
-                    )}
-                  </div>
 
-                  <div className="flex items-center gap-2">
-                    {/* Badges */}
-                    <div className="flex items-center gap-1">
-                      <span
-                        className={`p-1 px-2 rounded-lg text-[10px] font-bold flex items-center gap-1 ${
-                          cf.show_in_table
-                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                            : 'bg-slate-50 text-slate-300'
-                        }`}
-                        title="Main Table Column"
+                      {/* Actions */}
+                      <button
+                        type="button"
+                        onClick={() => setEditingField(cf)}
+                        className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
+                        title="Edit Attribute"
                       >
-                        <Eye className="h-3 w-3" /> Table
-                      </span>
-                      <span
-                        className={`p-1 px-2 rounded-lg text-[10px] font-bold flex items-center gap-1 ${
-                          cf.show_in_pos
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-slate-50 text-slate-300'
-                        }`}
-                        title="POS Searchable"
+                        <Edit2 className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteField(cf.id, cf.name)}
+                        className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                        title="Delete Attribute"
                       >
-                        <Search className="h-3 w-3" /> POS
-                      </span>
-                      <span
-                        className={`p-1 px-2 rounded-lg text-[10px] font-bold flex items-center gap-1 ${
-                          cf.show_in_receipt
-                            ? 'bg-purple-50 text-purple-700 border border-purple-200'
-                            : 'bg-slate-50 text-slate-300'
-                        }`}
-                        title="Thermal Receipt Item"
-                      >
-                        <Printer className="h-3 w-3" /> Receipt
-                      </span>
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
-
-                    {/* Actions */}
-                    <button
-                      type="button"
-                      onClick={() => setEditingField(cf)}
-                      className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
-                      title="Edit Attribute"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteField(cf.id, cf.name)}
-                      className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                      title="Delete Attribute"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
                   </div>
-                </div>
-              ))
-            )}
+                );
+              });
+            })()}
           </div>
         </div>
 
@@ -336,9 +581,30 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
           </h3>
 
           <form onSubmit={handleCreateField} className="space-y-3.5">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                Target Category Schema *
+              </label>
+              <select
+                value={targetCategoryId}
+                onChange={(e) => setTargetCategoryId(e.target.value ? Number(e.target.value) : '')}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
+              >
+                <option value="">All Categories (Global Attribute)</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-slate-400 mt-1">
+                Assign to a category (e.g. specific department) or make it global across all items.
+              </p>
+            </div>
+
             <Input
               label="Attribute Name *"
-              placeholder="e.g. Size, Warranty, IMEI, Fabric"
+              placeholder="e.g. Model, Size, Color, Specifications"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
@@ -363,7 +629,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
             {fieldType === 'select' && (
               <Input
                 label="Dropdown Options (Comma-separated) *"
-                placeholder="e.g. S, M, L, XL, XXL or PTA Approved, Non-PTA"
+                placeholder="e.g. Option A, Option B, Option C"
                 value={options}
                 onChange={(e) => setOptions(e.target.value)}
                 required
@@ -434,6 +700,29 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
           maxWidth="md"
         >
           <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                Target Category Schema
+              </label>
+              <select
+                value={editingField.category_id || ''}
+                onChange={(e) =>
+                  setEditingField({
+                    ...editingField,
+                    category_id: e.target.value ? Number(e.target.value) : null,
+                  })
+                }
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
+              >
+                <option value="">All Categories (Global Attribute)</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <Input
               label="Attribute Name *"
               value={editingField.name}
@@ -521,6 +810,83 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
               </Button>
             </div>
           </div>
+        </Modal>
+      )}
+
+      {/* Quick Add Category Modal */}
+      <Modal
+        isOpen={showAddCatModal}
+        onClose={() => {
+          setShowAddCatModal(false);
+          setNewCatName('');
+        }}
+        title="Create New Category"
+        subtitle="Add a category (e.g. Category A, Hardware, Apparel) to define its custom schema."
+        maxWidth="sm"
+      >
+        <form onSubmit={handleCreateCategory} className="space-y-4">
+          <Input
+            label="Category Name *"
+            placeholder="e.g. Category Name"
+            value={newCatName}
+            onChange={(e) => setNewCatName(e.target.value)}
+            required
+            autoFocus
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setShowAddCatModal(false);
+                setNewCatName('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" disabled={!newCatName.trim()}>
+              Create Category
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Rename Category Modal */}
+      {editingCategory && (
+        <Modal
+          isOpen={Boolean(editingCategory)}
+          onClose={() => {
+            setEditingCategory(null);
+            setEditCatName('');
+          }}
+          title="Rename Category"
+          subtitle={`Update the name of "${editingCategory.name}" category.`}
+          maxWidth="sm"
+        >
+          <form onSubmit={handleRenameCategory} className="space-y-4">
+            <Input
+              label="Category Name *"
+              value={editCatName}
+              onChange={(e) => setEditCatName(e.target.value)}
+              required
+              autoFocus
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setEditingCategory(null);
+                  setEditCatName('');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" disabled={!editCatName.trim()}>
+                Save Name
+              </Button>
+            </div>
+          </form>
         </Modal>
       )}
     </div>

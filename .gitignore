@@ -32,12 +32,13 @@ env.bak/
 venv.bak/
 
 # SQLite Databases & Backups
-data/*.db
-data/*.sqlite
-Backups/*.db
+data/
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
+Backups/
 
 # Node & Frontend Build
 frontend/node_modules/

@@ -35,6 +35,9 @@ def get_sales_report(db: Session, start_date: Optional[datetime] = None, end_dat
         if s.returns and net_due == Decimal("0.00") and status != "RETURNED":
             status = "PARTIALLY_RETURNED" if s.paid_amount > Decimal("0.00") else "RETURNED"
 
+        paid_ratio = min(Decimal("1.00"), max(Decimal("0.00"), s.paid_amount / s.total_amount)) if s.total_amount > Decimal("0.00") else Decimal("1.00")
+        realized_profit = (s.gross_profit * paid_ratio).quantize(Decimal("0.01"))
+
         result.append(SalesReportRow(
             receipt_number=s.receipt_number,
             date=s.created_at,
@@ -42,6 +45,8 @@ def get_sales_report(db: Session, start_date: Optional[datetime] = None, end_dat
             total_amount=s.total_amount,
             paid_amount=s.paid_amount,
             due_amount=net_due,
+            gross_profit=s.gross_profit,
+            realized_profit=realized_profit,
             payment_status=status
         ))
     return result
@@ -54,8 +59,11 @@ def get_sales_detail_report(db: Session, start_date: Optional[datetime] = None, 
         q = q.filter(Sale.created_at <= end_date)
     items = q.order_by(Sale.created_at.desc(), SaleItem.id.desc()).all()
 
-    return [
-        SalesDetailReportRow(
+    rows = []
+    for it in items:
+        paid_ratio = min(Decimal("1.00"), max(Decimal("0.00"), it.sale.paid_amount / it.sale.total_amount)) if it.sale and it.sale.total_amount > Decimal("0.00") else Decimal("1.00")
+        realized_profit = (it.gross_profit * paid_ratio).quantize(Decimal("0.01"))
+        rows.append(SalesDetailReportRow(
             receipt_number=it.sale.receipt_number,
             date=it.sale.created_at,
             product_name=it.product_name,
@@ -65,10 +73,11 @@ def get_sales_detail_report(db: Session, start_date: Optional[datetime] = None, 
             total_price=it.total_price,
             unit_cost=it.unit_cost,
             total_cost=it.total_cost,
-            gross_profit=it.gross_profit
-        )
-        for it in items
-    ]
+            gross_profit=it.gross_profit,
+            realized_profit=realized_profit,
+            payment_status=it.sale.payment_status if it.sale else "PAID"
+        ))
+    return rows
 
 def get_purchases_report(db: Session, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> List[PurchasesReportRow]:
     q = db.query(Purchase).options(joinedload(Purchase.supplier), joinedload(Purchase.returns))

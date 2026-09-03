@@ -335,7 +335,7 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({ settings }) => {
         <form onSubmit={handleSaveSupplier} className="space-y-4">
           <Input
             label="Supplier Name *"
-            placeholder="e.g. ABC Wholesale"
+            placeholder="e.g. Supplier / Vendor Name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
@@ -343,13 +343,13 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({ settings }) => {
           />
           <Input
             label="Phone Number"
-            placeholder="e.g. 0321-1234567"
+            placeholder="e.g. Phone Number"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
           />
           <Input
             label="Address"
-            placeholder="e.g. Grain Market, Shop #22"
+            placeholder="e.g. Address / City"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
           />

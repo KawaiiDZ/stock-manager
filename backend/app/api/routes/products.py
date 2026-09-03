@@ -26,10 +26,19 @@ def create_category(data: CategoryCreate, db: Session = Depends(get_db)):
 def update_category(category_id: int, data: CategoryCreate, db: Session = Depends(get_db)):
     return product_service.update_category(db, category_id, data.name)
 
+@router.delete("/categories/{category_id}")
+def delete_category(category_id: int, db: Session = Depends(get_db)):
+    product_service.delete_category(db, category_id)
+    return {"message": "Category and all its associated products were permanently deleted"}
+
 # Custom Fields
 @router.get("/custom-fields", response_model=List[CustomFieldResponse])
-def get_custom_fields(active_only: bool = Query(True), db: Session = Depends(get_db)):
-    return product_service.list_custom_fields(db, active_only=active_only)
+def get_custom_fields(
+    category_id: Optional[int] = Query(None),
+    active_only: bool = Query(True),
+    db: Session = Depends(get_db)
+):
+    return product_service.list_custom_fields(db, category_id=category_id, active_only=active_only)
 
 @router.post("/custom-fields", response_model=CustomFieldResponse, status_code=status.HTTP_201_CREATED)
 def create_custom_field(data: CustomFieldCreate, db: Session = Depends(get_db)):
@@ -86,6 +95,12 @@ def adjust_stock(product_id: int, data: StockAdjustmentRequest, db: Session = De
 def deactivate_product(product_id: int, db: Session = Depends(get_db)):
     return product_service.deactivate_product(db, product_id)
 
+@router.delete("/products/{product_id}/permanent")
+def delete_product_permanent(product_id: int, db: Session = Depends(get_db)):
+    product_service.delete_product_permanent(db, product_id)
+    return {"message": "Product permanently deleted successfully"}
+
 @router.post("/products/{product_id}/restore", response_model=ProductResponse)
 def restore_product(product_id: int, db: Session = Depends(get_db)):
     return product_service.restore_product(db, product_id)
+

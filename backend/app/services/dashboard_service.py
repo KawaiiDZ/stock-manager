@@ -34,23 +34,45 @@ def get_dashboard_stats(db: Session) -> DashboardStatsResponse:
     # Net Sales Revenue (Returns deducted)
     today_sales_revenue = max(Decimal("0.00"), gross_sales_revenue - returns_revenue)
 
-    # 2. Today's Gross Profit from Sales
+    # 1c. Today's Cash Collected (Direct sale payments + debt collections today)
+    today_payments = db.query(SalePayment).filter(
+        SalePayment.created_at >= start_of_today, SalePayment.created_at <= end_of_today
+    ).all()
+    today_gross_cash = sum((p.amount for p in today_payments), Decimal("0.00"))
+
+    # 2. Today's Invoiced Gross Profit from Sales
     sales_gross_profit = db.query(func.coalesce(func.sum(Sale.gross_profit), Decimal("0.00")))\
         .filter(Sale.created_at >= start_of_today, Sale.created_at <= end_of_today).scalar()
 
-    # 2b. Calculate Profit Reversed on Returns today
+    # 2b. Calculate Profit Reversed on Returns today and Cash Refunds
     today_returns = db.query(SalesReturn).filter(
         SalesReturn.created_at >= start_of_today, SalesReturn.created_at <= end_of_today
     ).all()
     reversed_profit = Decimal("0.00")
+    cash_refunds_today = Decimal("0.00")
     for ret in today_returns:
+        cash_refunds_today += ret.cash_refund_amount
         for it in ret.items:
             prod_cost = it.product.purchase_price if it.product else Decimal("0.00")
             item_profit = max(Decimal("0.00"), it.unit_price - prod_cost) * it.quantity
             reversed_profit += item_profit
 
-    # Net Gross Profit (Profit from returns is reversed)
+    # Net Cash Collected Today
+    today_collected_cash = max(Decimal("0.00"), today_gross_cash - cash_refunds_today)
+
+    # Net Invoiced Gross Profit (Profit from returns is reversed)
     today_gross_profit = max(Decimal("0.00"), sales_gross_profit - reversed_profit)
+
+    # 2c. Realized Gross Profit on Cash Collected Today
+    today_realized_profit_raw = Decimal("0.00")
+    for p in today_payments:
+        if p.sale and p.sale.total_amount > Decimal("0.00"):
+            margin_ratio = max(Decimal("0.00"), p.sale.gross_profit / p.sale.total_amount)
+            today_realized_profit_raw += (p.amount * margin_ratio)
+        elif p.sale:
+            today_realized_profit_raw += p.sale.gross_profit
+
+    today_realized_profit = max(Decimal("0.00"), today_realized_profit_raw - reversed_profit).quantize(Decimal("0.01"))
 
     # 3. Total Customer Outstanding
     all_customers = list_customers(db, is_active=True)
@@ -66,7 +88,9 @@ def get_dashboard_stats(db: Session) -> DashboardStatsResponse:
 
     return DashboardStatsResponse(
         today_sales_revenue=today_sales_revenue,
+        today_collected_cash=today_collected_cash,
         today_gross_profit=today_gross_profit,
+        today_realized_profit=today_realized_profit,
         customer_outstanding=customer_outstanding,
         supplier_outstanding=supplier_outstanding,
         bills_needing_attention_count=bills_count

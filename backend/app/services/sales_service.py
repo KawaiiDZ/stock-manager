@@ -49,6 +49,10 @@ def _format_sale_response(sale: Sale) -> SaleResponse:
         total_sale_qty += item.quantity
         total_ret_qty += ret_qty
 
+        # Calculate realized profit based on cash collected ratio
+        paid_ratio = min(Decimal("1.00"), max(Decimal("0.00"), sale.paid_amount / sale.total_amount)) if sale.total_amount > Decimal("0.00") else Decimal("1.00")
+        item_realized_profit = (item.gross_profit * paid_ratio).quantize(Decimal("0.01"))
+
         items_dto.append(SaleItemResponse(
             id=item.id,
             product_id=item.product_id,
@@ -60,6 +64,7 @@ def _format_sale_response(sale: Sale) -> SaleResponse:
             unit_cost=item.unit_cost,
             total_cost=item.total_cost,
             gross_profit=item.gross_profit,
+            realized_profit=item_realized_profit,
             returned_quantity=ret_qty,
             remaining_returnable_quantity=rem_ret_qty,
             batches=batch_links
@@ -93,6 +98,11 @@ def _format_sale_response(sale: Sale) -> SaleResponse:
     else:
         effective_status = "UNPAID"
 
+    # Overall sale realized and unrealized profit
+    sale_paid_ratio = min(Decimal("1.00"), max(Decimal("0.00"), sale.paid_amount / sale.total_amount)) if sale.total_amount > Decimal("0.00") else Decimal("1.00")
+    realized_sale_profit = (sale.gross_profit * sale_paid_ratio).quantize(Decimal("0.01"))
+    unrealized_sale_profit = max(Decimal("0.00"), sale.gross_profit - realized_sale_profit)
+
     return SaleResponse(
         id=sale.id,
         receipt_number=sale.receipt_number,
@@ -109,6 +119,8 @@ def _format_sale_response(sale: Sale) -> SaleResponse:
         total_returned_amount=total_returned_val,
         total_cost=sale.total_cost,
         gross_profit=sale.gross_profit,
+        realized_profit=realized_sale_profit,
+        unrealized_profit=unrealized_sale_profit,
         notes=sale.notes,
         created_at=sale.created_at,
         items=items_dto,
@@ -182,6 +194,9 @@ def create_sale(db: Session, data: SaleCreate) -> SaleResponse:
 
         if item_data.quantity <= Decimal("0.00"):
             raise BusinessRuleException(f"Quantity for {product.name} must be greater than zero.")
+
+        if item_data.unit_price < Decimal("0.00"):
+            raise BusinessRuleException(f"Unit price for {product.name} cannot be negative.")
 
         # Stock check
         if product.current_stock < item_data.quantity:

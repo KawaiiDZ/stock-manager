@@ -121,13 +121,25 @@ export const api = {
     request<Product>(`/products/${id}/adjust-stock`, { method: 'POST', body: JSON.stringify(data) }),
   deactivateProduct: (id: number) => request<Product>(`/products/${id}`, { method: 'DELETE' }),
   restoreProduct: (id: number) => request<Product>(`/products/${id}/restore`, { method: 'POST' }),
+  deleteProductPermanent: (id: number) =>
+    request<{ message: string }>(`/products/${id}/permanent`, { method: 'DELETE' }),
 
   // Categories
   getCategories: (activeOnly = true) => request<Category[]>(`/categories?active_only=${activeOnly}`),
   createCategory: (data: { name: string }) => request<Category>('/categories', { method: 'POST', body: JSON.stringify(data) }),
+  updateCategory: (id: number, data: { name: string }) => request<Category>(`/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCategory: (id: number) => request<{ message: string }>(`/categories/${id}`, { method: 'DELETE' }),
 
   // Custom Fields
-  getCustomFields: (activeOnly = true) => request<CustomField[]>(`/custom-fields?active_only=${activeOnly}`),
+  getCustomFields: (params?: { category_id?: number; active_only?: boolean } | boolean) => {
+    const activeOnly = typeof params === 'boolean' ? params : (params?.active_only !== undefined ? params.active_only : true);
+    const catId = typeof params === 'object' && params?.category_id !== undefined ? params.category_id : undefined;
+    let url = `/custom-fields?active_only=${activeOnly}`;
+    if (catId !== undefined) {
+      url += `&category_id=${catId}`;
+    }
+    return request<CustomField[]>(url);
+  },
   createCustomField: (data: Partial<CustomField>) =>
     request<CustomField>('/custom-fields', { method: 'POST', body: JSON.stringify(data) }),
   updateCustomField: (id: number, data: Partial<CustomField>) =>

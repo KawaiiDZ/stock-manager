@@ -16,14 +16,8 @@ def calculate_supplier_summary(db: Session, supplier_id: int):
     total_purchases = db.query(func.coalesce(func.sum(Purchase.total_amount), Decimal("0.00")))\
         .filter(Purchase.supplier_id == supplier_id).scalar()
 
-    purchase_payments = db.query(func.coalesce(func.sum(PurchasePayment.amount), Decimal("0.00")))\
-        .join(Purchase, Purchase.id == PurchasePayment.purchase_id)\
+    total_paid = db.query(func.coalesce(func.sum(Purchase.paid_amount), Decimal("0.00")))\
         .filter(Purchase.supplier_id == supplier_id).scalar()
-
-    standalone_payments = db.query(func.coalesce(func.sum(SupplierPayment.amount), Decimal("0.00")))\
-        .filter(SupplierPayment.supplier_id == supplier_id).scalar()
-
-    total_paid = purchase_payments + standalone_payments
 
     total_returns = db.query(func.coalesce(func.sum(PurchaseReturn.total_return_amount), Decimal("0.00")))\
         .filter(PurchaseReturn.supplier_id == supplier_id).scalar()
@@ -160,6 +154,34 @@ def record_supplier_payment(db: Session, supplier_id: int, data: SupplierPayment
         notes=data.notes
     )
     db.add(payment)
+
+    # Allocate payment to unpaid/partially paid purchases FIFO
+    unallocated = data.amount
+    unpaid_purchases = db.query(Purchase).filter(
+        Purchase.supplier_id == supplier_id,
+        Purchase.due_amount > Decimal("0.00")
+    ).order_by(Purchase.created_at.asc()).all()
+
+    for pur in unpaid_purchases:
+        if unallocated <= Decimal("0.00"):
+            break
+        alloc = min(unallocated, pur.due_amount)
+        pur.paid_amount += alloc
+        pur.due_amount = max(Decimal("0.00"), pur.due_amount - alloc)
+        if pur.due_amount == Decimal("0.00"):
+            pur.payment_status = "PAID"
+        else:
+            pur.payment_status = "PARTIALLY_PAID"
+
+        pp = PurchasePayment(
+            purchase_id=pur.id,
+            amount=alloc,
+            payment_method=data.payment_method or "Cash",
+            created_at=payment.created_at
+        )
+        db.add(pp)
+        unallocated -= alloc
+
     db.commit()
     db.refresh(payment)
     return SupplierPaymentResponse.model_validate(payment)
@@ -175,12 +197,15 @@ def get_supplier_ledger(db: Session, supplier_id: int) -> List[SupplierLedgerEnt
 
     timeline = []
     for p in purchases:
+        initial_payments = [pm for pm in p.payments if pm.created_at <= p.created_at] if p.payments else []
+        initial_paid = sum((pm.amount for pm in initial_payments), Decimal("0.00")) if initial_payments else (p.payments[0].amount if p.payments else Decimal("0.00"))
+
         timeline.append({
             "date": p.created_at,
             "type": "Purchase",
             "reference": p.purchase_number,
             "description": f"Purchase ({p.payment_status.replace('_', ' ')})",
-            "debit": p.paid_amount,
+            "debit": initial_paid,
             "credit": p.total_amount,
         })
 

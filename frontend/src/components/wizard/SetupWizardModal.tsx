@@ -21,6 +21,7 @@ import {
   Settings2,
   Building,
   Upload,
+  Zap,
 } from 'lucide-react';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
@@ -194,6 +195,8 @@ export const SetupWizardModal: React.FC<SetupWizardModalProps> = ({
 
   const getPresetIcon = (iconName: string) => {
     switch (iconName) {
+      case 'Zap':
+        return <Zap className="h-6 w-6 text-amber-500" />;
       case 'Smartphone':
         return <Smartphone className="h-6 w-6 text-blue-600" />;
       case 'Shirt':
@@ -288,7 +291,7 @@ export const SetupWizardModal: React.FC<SetupWizardModalProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
                   label="Business / Shop Name *"
-                  placeholder="e.g. Apex Mobile Store, Al-Madina Garments"
+                  placeholder="e.g. My Business, Retail Store"
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
                   required
@@ -303,7 +306,7 @@ export const SetupWizardModal: React.FC<SetupWizardModalProps> = ({
                     onChange={(e) => setCurrency(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
                   >
-                    <option value="Rs.">Rs. (Pakistani / Indian Rupee)</option>
+                    <option value="Rs.">Rs. (Rupee)</option>
                     <option value="$">$ (USD / Dollar)</option>
                     <option value="AED">AED (UAE Dirham)</option>
                     <option value="SAR">SAR (Saudi Riyal)</option>
@@ -317,14 +320,14 @@ export const SetupWizardModal: React.FC<SetupWizardModalProps> = ({
 
                 <Input
                   label="Phone Number (Optional)"
-                  placeholder="e.g. 0300-1234567"
+                  placeholder="e.g. +1 555-0199 or 0300-1234567"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                 />
 
                 <Input
                   label="Shop Address / City (Optional)"
-                  placeholder="e.g. Shop #12, Hafeez Center, Lahore"
+                  placeholder="e.g. 123 Commercial Ave, Suite 100, City"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                 />
@@ -476,9 +479,14 @@ export const SetupWizardModal: React.FC<SetupWizardModalProps> = ({
                       key={idx}
                       className="grid grid-cols-12 gap-2 p-3 bg-white hover:bg-slate-50/70 items-center text-xs"
                     >
-                      {/* Name & Type */}
-                      <div className="col-span-4">
-                        <div className="font-bold text-slate-900">{field.name}</div>
+                      {/* Name & Type & Category */}
+                      <div className="col-span-4 space-y-0.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-slate-900">{field.name}</span>
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
+                            {field.category_name ? `🏷️ ${field.category_name}` : '🌐 Global'}
+                          </span>
+                        </div>
                         <span className="text-[10px] text-slate-400 uppercase font-semibold">
                           Type: {field.field_type}
                         </span>
@@ -572,7 +580,7 @@ export const SetupWizardModal: React.FC<SetupWizardModalProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
                   <div className="md:col-span-4">
                     <Input
-                      placeholder="e.g. Warranty, Fabric, Rack, Origin"
+                      placeholder="e.g. Specification, Color, Model"
                       value={newFieldName}
                       onChange={(e) => setNewFieldName(e.target.value)}
                       className="bg-white text-xs py-2"
@@ -595,7 +603,7 @@ export const SetupWizardModal: React.FC<SetupWizardModalProps> = ({
                   {newFieldType === 'select' ? (
                     <div className="md:col-span-3">
                       <Input
-                        placeholder="Comma-separated: S, M, L, XL"
+                        placeholder="Comma-separated: Option 1, Option 2"
                         value={newFieldOptions}
                         onChange={(e) => setNewFieldOptions(e.target.value)}
                         className="bg-white text-xs py-2"

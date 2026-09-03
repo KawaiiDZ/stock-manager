@@ -17,16 +17,9 @@ def calculate_customer_summary(db: Session, customer_id: int):
     total_sales = db.query(func.coalesce(func.sum(Sale.total_amount), Decimal("0.00")))\
         .filter(Sale.customer_id == customer_id).scalar()
 
-    # Total paid via direct sale payments
-    sale_payments = db.query(func.coalesce(func.sum(SalePayment.amount), Decimal("0.00")))\
-        .join(Sale, Sale.id == SalePayment.sale_id)\
+    # Total paid on sales
+    total_paid = db.query(func.coalesce(func.sum(Sale.paid_amount), Decimal("0.00")))\
         .filter(Sale.customer_id == customer_id).scalar()
-
-    # Total paid via standalone customer payments
-    standalone_payments = db.query(func.coalesce(func.sum(CustomerPayment.amount), Decimal("0.00")))\
-        .filter(CustomerPayment.customer_id == customer_id).scalar()
-
-    total_paid = sale_payments + standalone_payments
 
     # Total returns (total return amount and return balance credit amount)
     total_returns = db.query(func.coalesce(func.sum(SalesReturn.total_return_amount), Decimal("0.00")))\
@@ -36,7 +29,7 @@ def calculate_customer_summary(db: Session, customer_id: int):
     return_balance_credits = db.query(func.coalesce(func.sum(SalesReturn.balance_credit_amount), Decimal("0.00")))\
         .filter(SalesReturn.customer_id == customer_id).scalar()
 
-    # Current Due = Total Sales - Sale Payments - Standalone Payments - Return Credits
+    # Current Due = Total Sales - Total Paid - Return Credits
     current_due = max(Decimal("0.00"), total_sales - total_paid - return_balance_credits)
 
     return {
@@ -171,6 +164,34 @@ def record_customer_payment(db: Session, customer_id: int, data: CustomerPayment
         notes=data.notes
     )
     db.add(payment)
+
+    # Allocate payment to unpaid/partially paid sales FIFO
+    unallocated = data.amount
+    unpaid_sales = db.query(Sale).filter(
+        Sale.customer_id == customer_id,
+        Sale.due_amount > Decimal("0.00")
+    ).order_by(Sale.created_at.asc()).all()
+
+    for s in unpaid_sales:
+        if unallocated <= Decimal("0.00"):
+            break
+        alloc = min(unallocated, s.due_amount)
+        s.paid_amount += alloc
+        s.due_amount = max(Decimal("0.00"), s.due_amount - alloc)
+        if s.due_amount == Decimal("0.00"):
+            s.payment_status = "PAID"
+        else:
+            s.payment_status = "PARTIALLY_PAID"
+
+        sp = SalePayment(
+            sale_id=s.id,
+            amount=alloc,
+            payment_method=data.payment_method or "Cash",
+            created_at=payment.created_at
+        )
+        db.add(sp)
+        unallocated -= alloc
+
     db.commit()
     db.refresh(payment)
     return CustomerPaymentResponse.model_validate(payment)
@@ -187,13 +208,18 @@ def get_customer_ledger(db: Session, customer_id: int) -> List[CustomerLedgerEnt
 
     timeline = []
     for s in sales:
+        # Credit only the initial down payment paid at checkout
+        # Any subsequent debt payments appear as their own standalone Payment lines
+        initial_payments = [pm for pm in s.payments if pm.created_at <= s.created_at] if s.payments else []
+        initial_credit = sum((pm.amount for pm in initial_payments), Decimal("0.00")) if initial_payments else (s.payments[0].amount if s.payments else Decimal("0.00"))
+
         timeline.append({
             "date": s.created_at,
             "type": "Sale",
             "reference": s.receipt_number,
             "description": f"Sale ({s.payment_status.replace('_', ' ')})",
             "debit": s.total_amount,
-            "credit": s.paid_amount,
+            "credit": initial_credit,
         })
 
     for p in standalone_payments:

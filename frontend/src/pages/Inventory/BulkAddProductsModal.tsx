@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../services/api';
 import { Category, BusinessSettings, CustomField } from '../../types';
-import { Plus, Trash2, Layers, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Plus, Trash2, Layers, AlertCircle, Sparkles } from 'lucide-react';
 import { Modal } from '../../components/common/Modal';
 import { Button } from '../../components/common/Button';
-import { formatCurrency, formatMoney } from '../../utils/format';
+import { formatCurrency } from '../../utils/format';
 
 interface BulkAddProductsModalProps {
   isOpen: boolean;
@@ -12,40 +12,39 @@ interface BulkAddProductsModalProps {
   categories: Category[];
   customFields?: CustomField[];
   settings: BusinessSettings | null;
+  initialCategoryId?: number;
   onProductsAdded: () => void;
 }
 
 interface ProductRow {
   name: string;
-  category_id: number;
+  sku: string;
+  barcode: string;
   purchase_price: number;
   selling_price: number;
   opening_stock: number;
-  barcode: string;
-  sku: string;
   custom_values: Record<number, string>;
 }
 
-const emptyRow = (categoryId: number): ProductRow => ({
+const emptyRow = (): ProductRow => ({
   name: '',
-  category_id: categoryId,
+  sku: '',
+  barcode: '',
   purchase_price: 0,
   selling_price: 0,
   opening_stock: 0,
-  barcode: '',
-  sku: '',
   custom_values: {},
 });
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-  index: 50,
-  name: 240,
-  category: 160,
-  purchase_price: 140,
-  selling_price: 140,
+  index: 45,
+  name: 220,
+  sku: 130,
+  barcode: 140,
+  purchase_price: 130,
+  selling_price: 130,
   opening_stock: 110,
-  barcode: 160,
-  action: 50,
+  action: 45,
 };
 
 export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
@@ -54,21 +53,47 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
   categories,
   customFields = [],
   settings,
+  initialCategoryId,
   onProductsAdded,
 }) => {
-  const defaultCatId = categories.length > 0 ? categories[0].id : 0;
+  // Category selection at the top for the entire batch
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number>(() => {
+    if (initialCategoryId && initialCategoryId > 0) return initialCategoryId;
+    return categories.length > 0 ? categories[0].id : 0;
+  });
+
   const [rows, setRows] = useState<ProductRow[]>([
-    emptyRow(defaultCatId),
-    emptyRow(defaultCatId),
-    emptyRow(defaultCatId),
-    emptyRow(defaultCatId),
-    emptyRow(defaultCatId),
+    emptyRow(),
+    emptyRow(),
+    emptyRow(),
+    emptyRow(),
+    emptyRow(),
   ]);
+
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
-  // Excel-like Column Width State
+  // Sync initial category when opening modal
+  useEffect(() => {
+    if (isOpen) {
+      if (initialCategoryId && initialCategoryId > 0) {
+        setSelectedCategoryId(initialCategoryId);
+      } else if (categories.length > 0 && !categories.some((c) => c.id === selectedCategoryId)) {
+        setSelectedCategoryId(categories[0].id);
+      }
+    }
+  }, [isOpen, initialCategoryId, categories]);
+
+  // Active category object
+  const activeCategory = categories.find((c) => c.id === selectedCategoryId);
+
+  // Dynamic custom fields matching the single Add/Edit Product modal exactly
+  const relevantCustomFields = customFields
+    .filter((cf) => !cf.category_id || cf.category_id === selectedCategoryId)
+    .sort((a, b) => a.display_order - b.display_order);
+
+  // Column widths state
   const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
     const initial = { ...DEFAULT_COL_WIDTHS };
     customFields.forEach((cf) => {
@@ -77,7 +102,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
     return initial;
   });
 
-  // Sync custom field column widths when customFields change
+  // Sync custom field column widths
   useEffect(() => {
     setColWidths((prev) => {
       const next = { ...prev };
@@ -92,8 +117,8 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
 
   // Draggable Column Resizing
   const [resizingCol, setResizingCol] = useState<string | null>(null);
-  const startXRef = React.useRef(0);
-  const startWidthRef = React.useRef(0);
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(0);
 
   const handleStartResize = (colKey: string, e: React.MouseEvent) => {
     e.preventDefault();
@@ -108,7 +133,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
 
     const handleMouseMove = (e: MouseEvent) => {
       const delta = e.clientX - startXRef.current;
-      const minW = resizingCol === 'index' || resizingCol === 'action' ? 40 : 90;
+      const minW = resizingCol === 'index' || resizingCol === 'action' ? 35 : 80;
       const maxW = 500;
       const newW = Math.max(minW, Math.min(maxW, startWidthRef.current + delta));
       setColWidths((prev) => ({ ...prev, [resizingCol]: newW }));
@@ -131,10 +156,11 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
   const hasUnsavedData = rows.some(
     (r) =>
       r.name.trim().length > 0 ||
+      r.sku.trim().length > 0 ||
+      r.barcode.trim().length > 0 ||
       r.purchase_price > 0 ||
       r.selling_price > 0 ||
       r.opening_stock > 0 ||
-      r.barcode.trim().length > 0 ||
       Object.values(r.custom_values).some((v) => v && v.trim().length > 0)
   );
 
@@ -148,19 +174,13 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
 
   const handleConfirmDiscard = () => {
     setShowDiscardConfirm(false);
-    setRows([
-      emptyRow(defaultCatId),
-      emptyRow(defaultCatId),
-      emptyRow(defaultCatId),
-      emptyRow(defaultCatId),
-      emptyRow(defaultCatId),
-    ]);
+    setRows([emptyRow(), emptyRow(), emptyRow(), emptyRow(), emptyRow()]);
     setErrorMsg(null);
     onClose();
   };
 
   const handleAddRows = (count = 5) => {
-    const newRows = Array.from({ length: count }, () => emptyRow(defaultCatId));
+    const newRows = Array.from({ length: count }, () => emptyRow());
     setRows([...rows, ...newRows]);
   };
 
@@ -224,7 +244,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
 
         return {
           name: r.name.trim(),
-          category_id: r.category_id > 0 ? r.category_id : undefined,
+          category_id: selectedCategoryId > 0 ? selectedCategoryId : undefined,
           purchase_price: Number(r.purchase_price || 0),
           selling_price: Number(r.selling_price || 0),
           opening_stock: Number(r.opening_stock || 0),
@@ -238,13 +258,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
       onProductsAdded();
       onClose();
       // Reset rows
-      setRows([
-        emptyRow(defaultCatId),
-        emptyRow(defaultCatId),
-        emptyRow(defaultCatId),
-        emptyRow(defaultCatId),
-        emptyRow(defaultCatId),
-      ]);
+      setRows([emptyRow(), emptyRow(), emptyRow(), emptyRow(), emptyRow()]);
     } catch (err: any) {
       setErrorMsg(err.detail || 'Failed to bulk add products.');
     } finally {
@@ -252,17 +266,17 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
     }
   };
 
-  // Calculate total table width for smooth horizontal scrolling
+  // Calculate total table width for horizontal scrolling
   const totalTableWidth =
-    (colWidths.index || 50) +
-    (colWidths.name || 240) +
-    (colWidths.category || 160) +
-    (colWidths.purchase_price || 140) +
-    (colWidths.selling_price || 140) +
+    (colWidths.index || 45) +
+    (colWidths.name || 220) +
+    (colWidths.sku || 130) +
+    (colWidths.barcode || 140) +
+    (colWidths.purchase_price || 130) +
+    (colWidths.selling_price || 130) +
     (colWidths.opening_stock || 110) +
-    (colWidths.barcode || 160) +
-    customFields.reduce((sum, cf) => sum + (colWidths[`custom_${cf.id}`] || 160), 0) +
-    (colWidths.action || 50);
+    relevantCustomFields.reduce((sum, cf) => sum + (colWidths[`custom_${cf.id}`] || 160), 0) +
+    (colWidths.action || 45);
 
   return (
     <>
@@ -270,7 +284,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
         isOpen={isOpen}
         onClose={handleRequestClose}
         title="Bulk Add Products (Fast Spreadsheet Grid)"
-        subtitle="Quickly enter multiple products. Drag column dividers to adjust column widths as in Excel."
+        subtitle="Select category first at the top. The attribute columns adapt automatically so both single and bulk add stay 100% consistent."
         maxWidth="full"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -281,17 +295,61 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
             </div>
           )}
 
+          {/* Step 1: Category Selector at the Top */}
+          <div className="p-4 bg-gradient-to-r from-slate-50 to-emerald-50/40 rounded-2xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-700 shrink-0">
+                <Layers className="h-5 w-5" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Select Category For Bulk Add *
+                </label>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={selectedCategoryId}
+                    onChange={(e) => setSelectedCategoryId(Number(e.target.value))}
+                    className="bg-white border border-slate-300 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-800 shadow-sm focus:outline-none min-w-[220px]"
+                  >
+                    <option value={0}>General / Uncategorized</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  {activeCategory && (
+                    <span className="text-xs font-extrabold px-2.5 py-1 rounded-lg bg-emerald-100/70 text-emerald-800 border border-emerald-200">
+                      🏷️ {activeCategory.name}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs">
+              <div className="bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-sm flex items-center gap-2">
+                <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                <span className="font-bold text-slate-700">
+                  {relevantCustomFields.length} {relevantCustomFields.length === 1 ? 'attribute column' : 'attribute columns'}
+                </span>
+                <span className="text-slate-400">loaded for {activeCategory?.name || 'General'}</span>
+              </div>
+            </div>
+          </div>
+
           {/* Spreadsheet Table with Horizontal & Vertical Scroll */}
-          <div className="border border-slate-200 rounded-2xl overflow-x-auto overflow-y-auto max-h-[58vh] shadow-sm bg-slate-50/30">
+          <div className="border border-slate-200 rounded-2xl overflow-x-auto overflow-y-auto max-h-[56vh] shadow-sm bg-slate-50/30">
             <table
               className="text-left text-xs border-collapse table-fixed select-none"
               style={{ width: `${totalTableWidth}px`, minWidth: '100%' }}
             >
               <thead className="bg-slate-100 sticky top-0 z-20 border-b border-slate-200 font-bold text-slate-700 uppercase tracking-wider text-[11px]">
                 <tr>
-                  {/* # */}
+                  {/* Index */}
                   <th
-                    style={{ width: `${colWidths.index || 50}px` }}
+                    style={{ width: `${colWidths.index || 45}px` }}
                     className="py-3 px-2 text-center bg-slate-100 sticky left-0 z-30 shadow-[1px_0_0_0_#e2e8f0] relative group"
                   >
                     #
@@ -303,8 +361,8 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
 
                   {/* Product Name * */}
                   <th
-                    style={{ width: `${colWidths.name || 240}px` }}
-                    className="py-3 px-3 bg-slate-100 sticky left-[50px] z-30 shadow-[1px_0_0_0_#e2e8f0] relative group"
+                    style={{ width: `${colWidths.name || 220}px` }}
+                    className="py-3 px-3 bg-slate-100 sticky left-[45px] z-30 shadow-[1px_0_0_0_#e2e8f0] relative group"
                   >
                     <span className="truncate">Product Name *</span>
                     <div
@@ -313,21 +371,33 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                     />
                   </th>
 
-                  {/* Category */}
+                  {/* SKU (Optional) */}
                   <th
-                    style={{ width: `${colWidths.category || 160}px` }}
+                    style={{ width: `${colWidths.sku || 130}px` }}
                     className="py-3 px-2.5 relative group"
                   >
-                    <span className="truncate">Category</span>
+                    <span className="truncate">SKU (Opt)</span>
                     <div
-                      onMouseDown={(e) => handleStartResize('category', e)}
+                      onMouseDown={(e) => handleStartResize('sku', e)}
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-emerald-500 active:bg-emerald-600 transition"
+                    />
+                  </th>
+
+                  {/* Barcode (Optional) */}
+                  <th
+                    style={{ width: `${colWidths.barcode || 140}px` }}
+                    className="py-3 px-2.5 relative group"
+                  >
+                    <span className="truncate">Barcode (Opt)</span>
+                    <div
+                      onMouseDown={(e) => handleStartResize('barcode', e)}
                       className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-emerald-500 active:bg-emerald-600 transition"
                     />
                   </th>
 
                   {/* Cost Price */}
                   <th
-                    style={{ width: `${colWidths.purchase_price || 140}px` }}
+                    style={{ width: `${colWidths.purchase_price || 130}px` }}
                     className="py-3 px-2.5 text-right relative group"
                   >
                     <span className="truncate">Cost ({currency}) *</span>
@@ -339,7 +409,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
 
                   {/* Sale Price */}
                   <th
-                    style={{ width: `${colWidths.selling_price || 140}px` }}
+                    style={{ width: `${colWidths.selling_price || 130}px` }}
                     className="py-3 px-2.5 text-right relative group"
                   >
                     <span className="truncate">Sale ({currency}) *</span>
@@ -361,28 +431,31 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                     />
                   </th>
 
-                  {/* Barcode */}
-                  <th
-                    style={{ width: `${colWidths.barcode || 160}px` }}
-                    className="py-3 px-2.5 relative group"
-                  >
-                    <span className="truncate">Barcode</span>
-                    <div
-                      onMouseDown={(e) => handleStartResize('barcode', e)}
-                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-emerald-500 active:bg-emerald-600 transition"
-                    />
-                  </th>
-
-                  {/* Dynamic Custom Attribute Columns */}
-                  {customFields.map((cf) => {
+                  {/* Dynamic Category & Global Custom Attribute Columns */}
+                  {relevantCustomFields.map((cf) => {
                     const colKey = `custom_${cf.id}`;
+                    const isGlobal = !cf.category_id;
                     return (
                       <th
                         key={cf.id}
                         style={{ width: `${colWidths[colKey] || 160}px` }}
-                        className="py-3 px-2.5 text-emerald-800 font-bold relative group"
+                        className="py-3 px-2.5 relative group"
                       >
-                        <span className="truncate">{cf.name}</span>
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="truncate text-emerald-900 font-extrabold">
+                            {cf.name}
+                            {cf.is_required && <span className="text-rose-500 font-black"> *</span>}
+                          </span>
+                          <span
+                            className={`text-[9px] font-bold px-1.5 py-0.2 rounded shrink-0 ${
+                              isGlobal
+                                ? 'bg-slate-200/80 text-slate-600'
+                                : 'bg-emerald-100 text-emerald-800'
+                            }`}
+                          >
+                            {isGlobal ? 'Global' : activeCategory?.name || 'Cat'}
+                          </span>
+                        </div>
                         <div
                           onMouseDown={(e) => handleStartResize(colKey, e)}
                           className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-emerald-500 active:bg-emerald-600 transition"
@@ -393,7 +466,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
 
                   {/* Action */}
                   <th
-                    style={{ width: `${colWidths.action || 50}px` }}
+                    style={{ width: `${colWidths.action || 45}px` }}
                     className="py-3 px-2 text-center"
                   ></th>
                 </tr>
@@ -403,7 +476,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                   <tr key={idx} className="hover:bg-emerald-50/30 transition">
                     {/* Index */}
                     <td
-                      style={{ width: `${colWidths.index || 50}px` }}
+                      style={{ width: `${colWidths.index || 45}px` }}
                       className="py-2 px-2 text-center font-bold text-slate-400 bg-white sticky left-0 z-10 shadow-[1px_0_0_0_#e2e8f0]"
                     >
                       {idx + 1}
@@ -411,37 +484,43 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
 
                     {/* Product Name */}
                     <td
-                      style={{ width: `${colWidths.name || 240}px` }}
-                      className="py-1 px-1.5 bg-white sticky left-[50px] z-10 shadow-[1px_0_0_0_#e2e8f0]"
+                      style={{ width: `${colWidths.name || 220}px` }}
+                      className="py-1 px-1.5 bg-white sticky left-[45px] z-10 shadow-[1px_0_0_0_#e2e8f0]"
                     >
                       <input
                         type="text"
-                        placeholder="e.g. iPhone 16 Pro, Cotton Shirt"
+                        placeholder="e.g. Product Item Name"
                         value={row.name}
                         onChange={(e) => handleUpdateCell(idx, 'name', e.target.value)}
                         className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2.5 py-1.5 font-bold text-slate-900 text-xs focus:outline-none shadow-sm"
                       />
                     </td>
 
-                    {/* Category */}
-                    <td style={{ width: `${colWidths.category || 160}px` }} className="py-1 px-1">
-                      <select
-                        value={row.category_id}
-                        onChange={(e) => handleUpdateCell(idx, 'category_id', Number(e.target.value))}
+                    {/* SKU */}
+                    <td style={{ width: `${colWidths.sku || 130}px` }} className="py-1 px-1">
+                      <input
+                        type="text"
+                        placeholder="SKU-001"
+                        value={row.sku}
+                        onChange={(e) => handleUpdateCell(idx, 'sku', e.target.value)}
                         className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1.5 text-xs text-slate-700 focus:outline-none"
-                      >
-                        <option value={0}>General</option>
-                        {categories.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
+                      />
+                    </td>
+
+                    {/* Barcode */}
+                    <td style={{ width: `${colWidths.barcode || 140}px` }} className="py-1 px-1">
+                      <input
+                        type="text"
+                        placeholder="Scan / Barcode"
+                        value={row.barcode}
+                        onChange={(e) => handleUpdateCell(idx, 'barcode', e.target.value)}
+                        className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1.5 font-mono text-slate-700 text-xs focus:outline-none"
+                      />
                     </td>
 
                     {/* Cost Price */}
                     <td
-                      style={{ width: `${colWidths.purchase_price || 140}px` }}
+                      style={{ width: `${colWidths.purchase_price || 130}px` }}
                       className="py-1 px-1"
                     >
                       <input
@@ -450,14 +529,16 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                         min="0"
                         value={row.purchase_price || ''}
                         placeholder="0.00"
-                        onChange={(e) => handleUpdateCell(idx, 'purchase_price', Number(e.target.value))}
+                        onChange={(e) =>
+                          handleUpdateCell(idx, 'purchase_price', Number(e.target.value))
+                        }
                         className="w-full text-right bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1.5 font-semibold text-slate-800 text-xs focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </td>
 
                     {/* Sale Price */}
                     <td
-                      style={{ width: `${colWidths.selling_price || 140}px` }}
+                      style={{ width: `${colWidths.selling_price || 130}px` }}
                       className="py-1 px-1"
                     >
                       <input
@@ -466,7 +547,9 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                         min="0"
                         value={row.selling_price || ''}
                         placeholder="0.00"
-                        onChange={(e) => handleUpdateCell(idx, 'selling_price', Number(e.target.value))}
+                        onChange={(e) =>
+                          handleUpdateCell(idx, 'selling_price', Number(e.target.value))
+                        }
                         className="w-full text-right bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1.5 font-black text-slate-900 text-xs focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </td>
@@ -481,24 +564,15 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                         min="0"
                         value={row.opening_stock || ''}
                         placeholder="0"
-                        onChange={(e) => handleUpdateCell(idx, 'opening_stock', Number(e.target.value))}
+                        onChange={(e) =>
+                          handleUpdateCell(idx, 'opening_stock', Number(e.target.value))
+                        }
                         className="w-full text-right bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1.5 font-bold text-emerald-700 text-xs focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </td>
 
-                    {/* Barcode */}
-                    <td style={{ width: `${colWidths.barcode || 160}px` }} className="py-1 px-1">
-                      <input
-                        type="text"
-                        placeholder="Scan / Barcode"
-                        value={row.barcode}
-                        onChange={(e) => handleUpdateCell(idx, 'barcode', e.target.value)}
-                        className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1.5 font-mono text-slate-700 text-xs focus:outline-none"
-                      />
-                    </td>
-
                     {/* Dynamic Custom Field Cells */}
-                    {customFields.map((cf) => {
+                    {relevantCustomFields.map((cf) => {
                       const colKey = `custom_${cf.id}`;
                       if (cf.field_type === 'select' && cf.options) {
                         const opts = cf.options.split(',').map((o) => o.trim()).filter(Boolean);
@@ -515,7 +589,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                               }
                               className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1.5 text-xs text-slate-700 focus:outline-none"
                             >
-                              <option value="">—</option>
+                              <option value="">— Select {cf.name} —</option>
                               {opts.map((opt, i) => (
                                 <option key={i} value={opt}>
                                   {opt}
@@ -532,21 +606,27 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                           className="py-1 px-1"
                         >
                           <input
-                            type={cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date' : 'text'}
+                            type={
+                              cf.field_type === 'number'
+                                ? 'number'
+                                : cf.field_type === 'date'
+                                ? 'date'
+                                : 'text'
+                            }
                             placeholder={cf.name}
                             value={row.custom_values[cf.id] || ''}
                             onChange={(e) =>
                               handleUpdateCustomValue(idx, cf.id, e.target.value)
                             }
-                            className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1.5 text-xs text-slate-700 focus:outline-none"
+                            className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1.5 text-xs text-slate-700 focus:outline-none font-medium"
                           />
                         </td>
                       );
                     })}
 
-                    {/* Delete */}
+                    {/* Delete Row */}
                     <td
-                      style={{ width: `${colWidths.action || 50}px` }}
+                      style={{ width: `${colWidths.action || 45}px` }}
                       className="py-1 px-1 text-center"
                     >
                       <button
