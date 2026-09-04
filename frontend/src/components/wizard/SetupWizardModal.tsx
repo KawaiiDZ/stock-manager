@@ -22,6 +22,7 @@ import {
   Building,
   Upload,
   Zap,
+  Check,
 } from 'lucide-react';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
@@ -256,7 +257,7 @@ export const SetupWizardModal: React.FC<SetupWizardModalProps> = ({
                       : 'bg-slate-200 text-slate-500'
                   }`}
                 >
-                  {isDone ? '✓' : s.num}
+                  {isDone ? <Check className="h-3.5 w-3.5" /> : s.num}
                 </div>
                 <span
                   className={`text-xs font-bold hidden sm:inline ${
@@ -484,7 +485,7 @@ export const SetupWizardModal: React.FC<SetupWizardModalProps> = ({
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-bold text-slate-900">{field.name}</span>
                           <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
-                            {field.category_name ? `🏷️ ${field.category_name}` : '🌐 Global'}
+                            {field.category_name ? field.category_name : 'Global'}
                           </span>
                         </div>
                         <span className="text-[10px] text-slate-400 uppercase font-semibold">

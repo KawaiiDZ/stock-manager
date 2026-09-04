@@ -120,7 +120,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
 
   const handleDeleteCategory = async (cat: Category) => {
     const confirmed = window.confirm(
-      `⚠️ WARNING: Are you sure you want to permanently delete the category "${cat.name}"?\n\n` +
+      `WARNING: Are you sure you want to permanently delete the category "${cat.name}"?\n\n` +
       `• ALL products belonging to "${cat.name}" will be deleted immediately.\n` +
       `• All custom schema attributes tied specifically to "${cat.name}" will be deleted.\n\n` +
       `This action cannot be undone. Proceed?`
@@ -495,7 +495,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                               : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                           }`}
                         >
-                          {isGlobal ? '🌐 Global' : `🏷️ ${cf.category_name || 'Category'}`}
+                          {isGlobal ? 'Global' : (cf.category_name || 'Category')}
                         </span>
                         <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-mono uppercase font-semibold">
                           {cf.field_type}

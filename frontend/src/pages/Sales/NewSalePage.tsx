@@ -53,9 +53,9 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   // Financial inputs
   const [saleDiscount, setSaleDiscount] = useState<number>(0);
   const [taxRate, setTaxRate] = useState<number>(settings?.default_tax_rate || 0);
-  const [paymentMode, setPaymentMode] = useState<'FULL' | 'PARTIAL' | 'UNPAID'>('FULL');
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Card' | 'Bank Transfer' | 'Online'>('Cash');
   const [paidAmount, setPaidAmount] = useState<number>(0);
+  const [isPaidAmountCustomized, setIsPaidAmountCustomized] = useState(false);
   const [notes, setNotes] = useState('');
 
   // Submission state
@@ -138,7 +138,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [products, cart, paymentMode, paidAmount, inlineCustomerName, selectedCustomerId]);
+  }, [products, cart, paidAmount, isPaidAmountCustomized, inlineCustomerName, selectedCustomerId]);
 
   // Add product to cart
   const addToCart = (product: Product) => {
@@ -243,16 +243,24 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   const taxAmount = (taxableAmount * Number(taxRate || 0)) / 100;
   const grandTotal = Math.max(0, taxableAmount + taxAmount);
 
-  // Sync paid amount when full or unpaid mode is active
+  // Sync paid amount with grandTotal unless customized by user
   useEffect(() => {
-    if (paymentMode === 'FULL') {
+    if (!isPaidAmountCustomized) {
       setPaidAmount(grandTotal);
-    } else if (paymentMode === 'UNPAID') {
-      setPaidAmount(0);
     }
-  }, [paymentMode, grandTotal]);
+  }, [grandTotal, isPaidAmountCustomized]);
 
-  const dueAmount = Math.max(0, grandTotal - Number(paidAmount || 0));
+  const currentPaid = Number(paidAmount || 0);
+  const dueAmount = Math.max(0, grandTotal - currentPaid);
+  const changeAmount = Math.max(0, currentPaid - grandTotal);
+  const paymentStatus: 'PAID' | 'PARTIAL' | 'UNPAID' =
+    grandTotal === 0
+      ? 'PAID'
+      : currentPaid >= grandTotal
+      ? 'PAID'
+      : currentPaid > 0
+      ? 'PARTIAL'
+      : 'UNPAID';
 
   // Complete Sale Execution
   const handleCompleteSale = async () => {
@@ -261,9 +269,12 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       return;
     }
 
-    if (paymentMode !== 'FULL' && !selectedCustomerId && !inlineCustomerName.trim()) {
+    const effectivePaid = Math.max(0, Number(paidAmount || 0));
+    const effectiveDue = Math.max(0, grandTotal - effectivePaid);
+
+    if (effectiveDue > 0 && !selectedCustomerId && !inlineCustomerName.trim()) {
       setErrorMsg(
-        'Customer details are required when money is owed (Partially Paid or Unpaid). Please enter the customer name.'
+        'Customer name is required when an amount is due (partial or unpaid sale).'
       );
       return;
     }
@@ -281,7 +292,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         })),
         discount_amount: Number(saleDiscount || 0),
         tax_rate: Number(taxRate || 0),
-        paid_amount: Math.min(grandTotal, Number(paidAmount || 0)),
+        paid_amount: Math.min(grandTotal, effectivePaid),
         payment_method: paymentMethod,
         notes: notes.trim() || undefined,
       };
@@ -306,7 +317,8 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       setInlineCustomerPhone('');
       setSaleDiscount(0);
       setNotes('');
-      setPaymentMode('FULL');
+      setIsPaidAmountCustomized(false);
+      setPaidAmount(0);
 
       // Refresh products & customers cache
       const [prods, custs] = await Promise.all([
@@ -534,123 +546,41 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
 
         {/* Right Column: Checkout & Payment Options */}
         <div className="lg:col-span-5 space-y-4">
-          <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-5">
-            {/* Payment Mode Selector */}
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                Payment Mode
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPaymentMode('FULL')}
-                  className={`p-3 rounded-2xl text-xs font-black transition text-center border ${
-                    paymentMode === 'FULL'
-                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  ✓ Fully Paid
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPaymentMode('PARTIAL')}
-                  className={`p-3 rounded-2xl text-xs font-black transition text-center border ${
-                    paymentMode === 'PARTIAL'
-                      ? 'bg-amber-600 text-white border-amber-600 shadow-md shadow-amber-600/20'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  ⏳ Partial Pay
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPaymentMode('UNPAID')}
-                  className={`p-3 rounded-2xl text-xs font-black transition text-center border ${
-                    paymentMode === 'UNPAID'
-                      ? 'bg-rose-600 text-white border-rose-600 shadow-md shadow-rose-600/20'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  📝 Credit (Due)
-                </button>
-              </div>
+          {/* Box 1: Customer & Payment Details */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Customer & Payment
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowAddCustomerModal(true)}
+                className="text-xs font-bold text-emerald-700 hover:text-emerald-900 underline"
+              >
+                {selectedCustomerId ? 'Change Customer' : 'Select Existing'}
+              </button>
             </div>
 
-            {/* Customer Information (Hidden for cash sales; required when money is owed) */}
-            {paymentMode !== 'FULL' ? (
-              <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs font-black text-amber-900 uppercase tracking-wider">
-                    <UserPlus className="h-4 w-4 text-amber-700" />
-                    Customer Account (Credit)
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowAddCustomerModal(true)}
-                    className="text-xs text-amber-800 font-bold underline hover:text-amber-950"
-                  >
-                    {selectedCustomerId ? 'Change' : 'Pick Existing'}
-                  </button>
-                </div>
-
-                {selectedCustomerObj ? (
-                  <div className="p-3 bg-white rounded-xl border border-amber-200 flex items-center justify-between">
-                    <div>
-                      <div className="font-bold text-slate-900 text-sm">
-                        {selectedCustomerObj.name}
-                      </div>
-                      <div className="text-xs text-slate-400">
-                        {selectedCustomerObj.phone || 'No phone recorded'} • Due:{' '}
-                        {formatCurrency(selectedCustomerObj.current_due, currency)}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedCustomerId(null)}
-                      className="text-xs text-rose-600 font-bold hover:underline"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <p className="text-xs text-amber-800">
-                      Enter customer name & phone to record their outstanding ledger:
-                    </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Input
-                        placeholder="Customer Name *"
-                        value={inlineCustomerName}
-                        onChange={(e) => setInlineCustomerName(e.target.value)}
-                        className="bg-white text-xs py-2"
-                        required
-                      />
-                      <Input
-                        placeholder="Phone (e.g. 0300...)"
-                        value={inlineCustomerPhone}
-                        onChange={(e) => setInlineCustomerPhone(e.target.value)}
-                        className="bg-white text-xs py-2"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="flex items-center justify-between text-xs text-slate-500 px-1">
-                <span>Customer: <strong>Walk-in Counter Sale</strong></span>
-                <button
-                  type="button"
-                  onClick={() => setShowAddCustomerModal(true)}
-                  className="text-emerald-700 font-semibold hover:underline"
-                >
-                  + Assign Customer
-                </button>
-              </div>
-            )}
-
-            {/* Payment Method & Discount */}
             <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Customer Name"
+                placeholder="Walk-in Customer"
+                value={inlineCustomerName}
+                onChange={(e) => {
+                  setInlineCustomerName(e.target.value);
+                  if (selectedCustomerId) setSelectedCustomerId(null);
+                }}
+                className="text-xs py-2"
+              />
+
+              <Input
+                label="Phone Number"
+                placeholder="Optional"
+                value={inlineCustomerPhone}
+                onChange={(e) => setInlineCustomerPhone(e.target.value)}
+                className="text-xs py-2"
+              />
+
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
                   Payment Method
@@ -661,25 +591,53 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800"
                 >
                   <option value="Cash">Cash</option>
-                  <option value="Card">Credit/Debit Card</option>
+                  <option value="Card">Card</option>
                   <option value="Bank Transfer">Bank Transfer</option>
-                  <option value="Online">Online / Mobile Wallet</option>
+                  <option value="Online">Online</option>
                 </select>
               </div>
 
               <Input
-                label="Sale Discount"
+                label="Discount"
                 type="number"
                 min="0"
                 prefix={currency}
+                placeholder="0.00"
                 value={saleDiscount || ''}
                 onChange={(e) => setSaleDiscount(Number(e.target.value))}
                 className="text-xs py-2"
               />
             </div>
 
+            {selectedCustomerObj && (
+              <div className="flex items-center justify-between text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                <span className="text-slate-600 truncate">
+                  Selected: <strong className="text-slate-900">{selectedCustomerObj.name}</strong>
+                  {Number(selectedCustomerObj.current_due || 0) > 0 && (
+                    <span className="text-rose-600 ml-1.5 font-semibold">
+                      (Previous Due: {formatCurrency(selectedCustomerObj.current_due, currency)})
+                    </span>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCustomerId(null);
+                    setInlineCustomerName('');
+                    setInlineCustomerPhone('');
+                  }}
+                  className="text-xs text-rose-600 font-bold hover:underline ml-2"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Box 2: Totals & Settlement */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-4">
             {/* Financial Summary */}
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-2 text-sm">
+            <div className="space-y-2 text-sm">
               <div className="flex justify-between text-slate-600 text-xs">
                 <span>Subtotal:</span>
                 <span className="font-semibold text-slate-800">
@@ -706,30 +664,86 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                   {formatCurrency(grandTotal, currency)}
                 </span>
               </div>
-
-              {/* Partial Payment Amount Input */}
-              {paymentMode === 'PARTIAL' && (
-                <div className="pt-2 border-t border-slate-200/80">
-                  <Input
-                    label="Cash Received Now *"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    max={grandTotal}
-                    prefix={currency}
-                    value={paidAmount}
-                    onChange={(e) => setPaidAmount(Number(e.target.value))}
-                    required
-                  />
-                  <div className="flex justify-between text-xs text-rose-700 font-bold mt-2">
-                    <span>Remaining Due:</span>
-                    <span>{formatCurrency(dueAmount, currency)}</span>
-                  </div>
-                </div>
-              )}
             </div>
 
-            {/* BIG COMPLETE SALE BUTTON */}
+            {/* Amount Paid Input & Live Settlement */}
+            <div className="pt-3 border-t border-slate-200 space-y-2.5">
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                    Amount Paid
+                  </label>
+                  {currentPaid !== grandTotal && grandTotal > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaidAmount(grandTotal);
+                        setIsPaidAmountCustomized(false);
+                      }}
+                      className="text-xs font-bold text-emerald-700 hover:underline"
+                    >
+                      Paid in Full
+                    </button>
+                  )}
+                </div>
+                <Input
+                  type="number"
+                  step="any"
+                  min="0"
+                  prefix={currency}
+                  placeholder={grandTotal > 0 ? formatMoney(grandTotal) : '0.00'}
+                  value={paidAmount === 0 && isPaidAmountCustomized ? '' : paidAmount || ''}
+                  onChange={(e) => {
+                    const val = e.target.value === '' ? 0 : Number(e.target.value);
+                    setPaidAmount(val);
+                    setIsPaidAmountCustomized(true);
+                  }}
+                  className="text-sm font-bold py-2"
+                />
+              </div>
+
+              {/* Settlement Status Indicator */}
+              <div className="flex items-center justify-between text-xs px-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500 font-medium">Status:</span>
+                  {paymentStatus === 'PAID' && (
+                    <span className="px-2 py-0.5 rounded-md font-bold text-emerald-700 bg-emerald-50 border border-emerald-200">
+                      Fully Paid
+                    </span>
+                  )}
+                  {paymentStatus === 'PARTIAL' && (
+                    <span className="px-2 py-0.5 rounded-md font-bold text-amber-700 bg-amber-50 border border-amber-200">
+                      Partial Pay
+                    </span>
+                  )}
+                  {paymentStatus === 'UNPAID' && (
+                    <span className="px-2 py-0.5 rounded-md font-bold text-rose-700 bg-rose-50 border border-rose-200">
+                      Unpaid (Credit)
+                    </span>
+                  )}
+                </div>
+
+                {dueAmount > 0 ? (
+                  <div className="text-right">
+                    <span className="text-slate-500 mr-1">Remaining Due:</span>
+                    <span className="font-bold text-rose-600 text-sm">
+                      {formatCurrency(dueAmount, currency)}
+                    </span>
+                  </div>
+                ) : changeAmount > 0 ? (
+                  <div className="text-right">
+                    <span className="text-slate-500 mr-1">Change:</span>
+                    <span className="font-bold text-emerald-600 text-sm">
+                      {formatCurrency(changeAmount, currency)}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-slate-400 font-medium">Settled</span>
+                )}
+              </div>
+            </div>
+
+            {/* Complete Sale Button */}
             <Button
               type="button"
               variant="primary"
@@ -737,9 +751,9 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
               onClick={handleCompleteSale}
               disabled={cart.length === 0 || completing}
               loading={completing}
-              className="w-full py-4 text-base font-black tracking-wide shadow-xl shadow-emerald-600/30 rounded-2xl"
+              className="w-full py-3.5 text-base font-bold tracking-wide rounded-2xl shadow-lg shadow-emerald-600/20"
             >
-              ⚡ COMPLETE SALE ({formatCurrency(grandTotal, currency)})
+              Complete Sale ({formatCurrency(grandTotal, currency)})
             </Button>
           </div>
         </div>
@@ -760,6 +774,8 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                 type="button"
                 onClick={() => {
                   setSelectedCustomerId(c.id);
+                  setInlineCustomerName(c.name);
+                  setInlineCustomerPhone(c.phone || '');
                   setShowAddCustomerModal(false);
                 }}
                 className="w-full p-3 text-left hover:bg-slate-50 flex items-center justify-between"

@@ -40,7 +40,7 @@ export const Topbar: React.FC<TopbarProps> = ({
           onClick={onNewSaleClick}
           className="font-black px-5 py-2 rounded-xl shadow-md shadow-emerald-600/20 bg-gradient-to-r from-emerald-600 to-teal-700 text-white hover:opacity-95"
         >
-          ⚡ SELL NOW (F2)
+          SELL NOW (F2)
         </Button>
 
         <div className="h-6 w-px bg-slate-200 mx-1"></div>

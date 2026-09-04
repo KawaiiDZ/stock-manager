@@ -55,7 +55,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         {
           id: 'new_sale',
-          label: '⚡ SELL NOW (F2)',
+          label: 'SELL NOW (F2)',
           icon: <Zap className="h-5 w-5 text-amber-300" />,
           isSellButton: true,
         },

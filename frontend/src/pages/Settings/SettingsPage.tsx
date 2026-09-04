@@ -411,7 +411,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             onClick={onOpenWizard}
             className="font-bold flex items-center gap-1.5 self-start sm:self-auto border-emerald-300 text-emerald-800 hover:bg-emerald-50"
           >
-            ⚡ Launch Setup Wizard
+            Launch Setup Wizard
           </Button>
         )}
       </div>
@@ -904,9 +904,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   Resets customer/supplier dues to zero.
                 </p>
                 <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 font-semibold space-y-1">
-                  <div>✅ Keeps your Business Profile & Currency</div>
-                  <div>✅ Keeps Custom Table Columns & Attributes</div>
-                  <div>✅ Keeps Product Categories</div>
+                  <div>• Keeps your Business Profile & Currency</div>
+                  <div>• Keeps Custom Table Columns & Attributes</div>
+                  <div>• Keeps Product Categories</div>
                 </div>
               </div>
 
@@ -917,7 +917,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 onClick={() => handleOpenResetModal('inventory_only')}
                 className="w-full font-bold border-amber-400 text-amber-900 hover:bg-amber-100/70"
               >
-                🧹 Wipe Inventory & Test Data
+                Wipe Inventory & Test Data
               </Button>
             </div>
 
@@ -933,7 +933,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   Returns the database to a blank slate.
                 </p>
                 <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-[11px] text-rose-900 font-semibold">
-                  ⚠️ This action is permanent and cannot be undone. Create a backup first if needed.
+                  This action is permanent and cannot be undone. Create a backup first if needed.
                 </div>
               </div>
 
@@ -944,7 +944,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 onClick={() => handleOpenResetModal('all_data')}
                 className="w-full font-bold shadow-md shadow-rose-600/20"
               >
-                💣 Factory Reset Entire System
+                Factory Reset Entire System
               </Button>
             </div>
           </div>

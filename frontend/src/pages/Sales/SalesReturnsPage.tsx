@@ -405,7 +405,7 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
                     }}
                     className="text-xs text-slate-400 hover:text-slate-600 font-semibold"
                   >
-                    ✕ Close
+                    Close
                   </button>
                 </div>
 
@@ -559,7 +559,7 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
                     {/* Breakdown of how return value is applied */}
                     <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 space-y-2 mt-3">
                       <div className="flex justify-between font-bold text-emerald-900">
-                        <span>💵 Cash Refund to Customer:</span>
+                        <span>Cash Refund to Customer:</span>
                         <span>{formatCurrency(cashRefund, currency)}</span>
                       </div>
                       <p className="text-[10px] text-emerald-700 leading-relaxed">
@@ -570,7 +570,7 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
                     {dueReduction > 0 && (
                       <div className="p-3.5 rounded-2xl bg-blue-50/80 border border-blue-200 space-y-1">
                         <div className="flex justify-between font-bold text-blue-900">
-                          <span>🧾 Customer Debt Reduced:</span>
+                          <span>Customer Debt Reduced:</span>
                           <span>{formatCurrency(dueReduction, currency)}</span>
                         </div>
                         <div className="text-[10px] text-blue-700 flex justify-between">

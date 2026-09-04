@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../services/api';
 import { Product, Category, CustomField, CustomValueDto, BusinessSettings } from '../../types';
-import { Plus, Search, Edit2, Archive, RotateCcw, SlidersHorizontal, ShoppingCart, Tag, AlertCircle, Layers, Trash2 } from 'lucide-react';
+import { Plus, Search, Edit2, Archive, RotateCcw, SlidersHorizontal, ShoppingCart, AlertCircle, Layers, Trash2 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Modal } from '../../components/common/Modal';
@@ -375,30 +375,21 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
             );
 
             return (
-              <div key={group.id ?? 'uncategorized'} className="space-y-3">
-                {/* Category Section Header Card */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-xl bg-slate-900 text-white shadow-xs">
-                      <Tag className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-base font-extrabold text-slate-900">{group.name}</h2>
-                        <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200/60">
-                          {group.products.length} {group.products.length === 1 ? 'product' : 'products'}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-400 mt-0.5 font-medium">
-                        {groupCustomFields.length > 0
-                          ? `Attributes: ${groupCustomFields.map((f) => f.name).join(', ')}`
-                          : 'Standard Catalog Attributes'}
-                      </p>
-                    </div>
-                  </div>
+              <div
+                key={group.id ?? 'uncategorized'}
+                className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden"
+              >
+                {/* Unified Category Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-4 border-b border-slate-200/80 bg-white">
+                  <h2 className="text-base font-extrabold text-slate-900">{group.name}</h2>
 
                   {/* Quick Category Summary Stats */}
-                  <div className="flex items-center gap-3 text-xs font-semibold text-slate-600 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200/60 self-start sm:self-auto">
+                  <div className="flex items-center gap-3 text-xs font-semibold text-slate-600 bg-slate-50 px-3.5 py-1.5 rounded-xl border border-slate-200/60 self-start sm:self-auto">
+                    <span>
+                      Products:{' '}
+                      <strong className="text-slate-900 font-bold">{group.products.length}</strong>
+                    </span>
+                    <span className="text-slate-300">•</span>
                     <span>
                       Total Stock:{' '}
                       <strong className="text-slate-900 font-bold">{totalStock} units</strong>
@@ -414,7 +405,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
                 </div>
 
                 {/* Dedicated Category Table */}
-                <div className="overflow-x-auto rounded-2xl border border-slate-200/80 shadow-sm bg-white">
+                <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm border-collapse">
                     <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                       <tr>
@@ -696,7 +687,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
               return (
                 <div className="border-t border-slate-100 pt-3">
                   <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-500">
-                    ℹ️ <strong>Category Specifications:</strong> No custom attributes defined yet for{' '}
+                    <strong>Category Specifications:</strong> No custom attributes defined yet for{' '}
                     <span className="font-bold text-slate-700">{activeCategory?.name || 'this category'}</span>.
                     You can add category-specific fields in <strong className="text-slate-700">Settings → Custom Attributes</strong>.
                   </div>
@@ -869,7 +860,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
                       onClick={async () => {
                         if (
                           window.confirm(
-                            `⚠️ WARNING: Delete category "${c.name}"?\nALL products belonging to this category will be permanently deleted.`
+                            `WARNING: Delete category "${c.name}"?\nALL products belonging to this category will be permanently deleted.`
                           )
                         ) {
                           try {

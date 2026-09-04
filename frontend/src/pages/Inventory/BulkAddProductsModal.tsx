@@ -321,7 +321,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
 
                   {activeCategory && (
                     <span className="text-xs font-extrabold px-2.5 py-1 rounded-lg bg-emerald-100/70 text-emerald-800 border border-emerald-200">
-                      🏷️ {activeCategory.name}
+                      {activeCategory.name}
                     </span>
                   )}
                 </div>

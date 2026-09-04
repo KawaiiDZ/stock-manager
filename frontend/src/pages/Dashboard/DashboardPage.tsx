@@ -379,7 +379,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
 
             {billsAttention.length === 0 ? (
               <div className="py-12 text-center text-slate-400 text-xs">
-                🎉 No overdue or immediate upcoming bills!
+                No overdue or immediate upcoming bills
               </div>
             ) : (
               <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
