@@ -195,7 +195,8 @@ def create_purchase(db: Session, data: PurchaseCreate) -> PurchaseResponse:
         payment = PurchasePayment(
             purchase_id=purchase.id,
             amount=paid,
-            payment_method=data.payment_method or "Cash"
+            payment_method=data.payment_method or "Cash",
+            created_at=purchase.created_at
         )
         db.add(payment)
 

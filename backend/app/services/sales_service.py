@@ -345,7 +345,8 @@ def create_sale(db: Session, data: SaleCreate) -> SaleResponse:
         payment = SalePayment(
             sale_id=sale.id,
             amount=paid_amount,
-            payment_method=data.payment_method or "Cash"
+            payment_method=data.payment_method or "Cash",
+            created_at=sale.created_at
         )
         db.add(payment)
 

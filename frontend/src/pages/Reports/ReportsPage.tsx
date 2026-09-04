@@ -355,7 +355,17 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                           {dueNum > 0 ? formatCurrency(dueNum, currency) : '—'}
                         </td>
                         <td className="py-3.5 px-6 text-center text-xs font-bold text-slate-600">
-                          {row.payment_status}
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            row.payment_status === 'PAID'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : row.payment_status === 'PARTIALLY_PAID'
+                              ? 'bg-amber-100 text-amber-800'
+                              : row.payment_status === 'UNPAID'
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            {row.payment_status}
+                          </span>
                         </td>
                       </tr>
                     );

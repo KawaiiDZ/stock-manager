@@ -62,13 +62,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
     return categories.length > 0 ? categories[0].id : 0;
   });
 
-  const [rows, setRows] = useState<ProductRow[]>([
-    emptyRow(),
-    emptyRow(),
-    emptyRow(),
-    emptyRow(),
-    emptyRow(),
-  ]);
+  const [rows, setRows] = useState<ProductRow[]>([emptyRow()]);
 
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -174,12 +168,12 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
 
   const handleConfirmDiscard = () => {
     setShowDiscardConfirm(false);
-    setRows([emptyRow(), emptyRow(), emptyRow(), emptyRow(), emptyRow()]);
+    setRows([emptyRow()]);
     setErrorMsg(null);
     onClose();
   };
 
-  const handleAddRows = (count = 5) => {
+  const handleAddRows = (count = 1) => {
     const newRows = Array.from({ length: count }, () => emptyRow());
     setRows([...rows, ...newRows]);
   };
@@ -231,6 +225,37 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
       return;
     }
 
+    // Row-by-row validation for edge cases
+    const seenBarcodes = new Map<string, number>();
+    for (let i = 0; i < validRows.length; i++) {
+      const r = validRows[i];
+      const rowNum = i + 1;
+
+      if (Number(r.purchase_price) < 0) {
+        setErrorMsg(`Row ${rowNum} ("${r.name}"): Cost price cannot be negative.`);
+        return;
+      }
+      if (Number(r.selling_price) < 0) {
+        setErrorMsg(`Row ${rowNum} ("${r.name}"): Selling price cannot be negative.`);
+        return;
+      }
+      if (Number(r.opening_stock) < 0) {
+        setErrorMsg(`Row ${rowNum} ("${r.name}"): Opening stock cannot be negative.`);
+        return;
+      }
+
+      const bc = r.barcode.trim();
+      if (bc) {
+        if (seenBarcodes.has(bc)) {
+          setErrorMsg(
+            `Duplicate barcode "${bc}" found in Row ${seenBarcodes.get(bc)} and Row ${rowNum}. Barcodes must be unique.`
+          );
+          return;
+        }
+        seenBarcodes.set(bc, rowNum);
+      }
+    }
+
     setLoading(true);
     setErrorMsg(null);
     try {
@@ -258,9 +283,9 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
       onProductsAdded();
       onClose();
       // Reset rows
-      setRows([emptyRow(), emptyRow(), emptyRow(), emptyRow(), emptyRow()]);
+      setRows([emptyRow()]);
     } catch (err: any) {
-      setErrorMsg(err.detail || 'Failed to bulk add products.');
+      setErrorMsg(err.detail || 'Failed to add products.');
     } finally {
       setLoading(false);
     }
@@ -283,8 +308,8 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
       <Modal
         isOpen={isOpen}
         onClose={handleRequestClose}
-        title="Bulk Add Products (Fast Spreadsheet Grid)"
-        subtitle="Select category first at the top. The attribute columns adapt automatically so both single and bulk add stay 100% consistent."
+        title="Add Products"
+        subtitle="Select category to adapt custom attributes. Enter product details below."
         maxWidth="full"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -303,7 +328,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Select Category For Bulk Add *
+                  Select Category *
                 </label>
                 <div className="flex items-center gap-2">
                   <select
@@ -641,25 +666,45 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                     </td>
                   </tr>
                 ))}
+
+                {/* Single small plus icon row directly below the product row */}
+                <tr className="border-t border-slate-200/70 bg-slate-50/50 hover:bg-slate-100/60 transition">
+                  <td
+                    style={{ width: `${colWidths.index || 45}px` }}
+                    className="py-1.5 px-1 text-center sticky left-0 z-20 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleAddRows(1)}
+                      className="inline-flex items-center justify-center h-6 w-6 rounded-md bg-white hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border border-slate-300 hover:border-emerald-400 shadow-2xs transition"
+                      title="Add a row"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                  </td>
+                  <td
+                    colSpan={100}
+                    className="py-1.5 px-3 text-xs select-none"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleAddRows(1)}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-800 transition"
+                    >
+                      <Plus className="h-3 w-3" />
+                      <span>Add another product row</span>
+                    </button>
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
 
-          {/* Toolbar & Live Summary */}
+          {/* Live Summary */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-1">
             <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                icon={<Plus className="h-3.5 w-3.5" />}
-                onClick={() => handleAddRows(5)}
-                className="text-xs font-semibold"
-              >
-                + Add 5 Rows
-              </Button>
-              <span className="text-xs text-slate-400 font-semibold">
-                {validRows.length} valid product(s) ready
+              <span className="text-xs text-slate-500 font-semibold">
+                {validRows.length} {validRows.length === 1 ? 'product' : 'products'} ready to save
               </span>
             </div>
 
@@ -690,7 +735,9 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
               disabled={validRows.length === 0}
               className="font-bold px-6 shadow-md shadow-emerald-600/20"
             >
-              Save {validRows.length} Products to Inventory
+              {validRows.length <= 1
+                ? 'Save Product to Inventory'
+                : `Save ${validRows.length} Products to Inventory`}
             </Button>
           </div>
         </form>

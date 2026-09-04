@@ -65,3 +65,24 @@ def auto_upgrade_schema():
                 conn.commit()
         except Exception as e:
             print("Auto-upgrade error (product_custom_fields):", e)
+
+        # Check sale_payments table
+        try:
+            res = conn.execute(text("PRAGMA table_info(sale_payments)"))
+            cols = [row[1] for row in res.fetchall()]
+            if cols and "customer_payment_id" not in cols:
+                conn.execute(text("ALTER TABLE sale_payments ADD COLUMN customer_payment_id INTEGER REFERENCES customer_payments(id) NULL"))
+                conn.commit()
+        except Exception as e:
+            print("Auto-upgrade error (sale_payments):", e)
+
+        # Check purchase_payments table
+        try:
+            res = conn.execute(text("PRAGMA table_info(purchase_payments)"))
+            cols = [row[1] for row in res.fetchall()]
+            if cols and "supplier_payment_id" not in cols:
+                conn.execute(text("ALTER TABLE purchase_payments ADD COLUMN supplier_payment_id INTEGER REFERENCES supplier_payments(id) NULL"))
+                conn.commit()
+        except Exception as e:
+            print("Auto-upgrade error (purchase_payments):", e)
+

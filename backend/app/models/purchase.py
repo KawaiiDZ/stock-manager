@@ -50,6 +50,7 @@ class PurchasePayment(Base):
     purchase_id = Column(Integer, ForeignKey("purchases.id", ondelete="CASCADE"), nullable=False, index=True)
     amount = Column(Numeric(12, 2), nullable=False)
     payment_method = Column(String(30), nullable=False, default="Cash")
+    supplier_payment_id = Column(Integer, ForeignKey("supplier_payments.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
@@ -57,6 +58,7 @@ class PurchasePayment(Base):
     )
 
     purchase = relationship("Purchase", back_populates="payments")
+    supplier_payment = relationship("SupplierPayment")
 
 class PurchaseReturn(Base):
     __tablename__ = "purchase_returns"

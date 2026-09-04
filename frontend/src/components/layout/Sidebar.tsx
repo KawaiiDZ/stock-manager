@@ -1,8 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BusinessSettings } from '../../types';
 import {
   LayoutDashboard,
-  ShoppingCart,
   History,
   RotateCcw,
   Package,
@@ -15,6 +14,7 @@ import {
   BarChart3,
   Settings,
   Zap,
+  Pin,
 } from 'lucide-react';
 
 interface NavItem {
@@ -43,6 +43,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   urgentBillsCount = 0,
   settings,
 }) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const [isPinned, setIsPinned] = useState(false);
+
+  const isExpanded = isPinned || isHovered;
+
   const navSections: NavSection[] = [
     {
       title: null,
@@ -100,90 +105,171 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   return (
-    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col h-screen select-none shrink-0">
-      {/* Brand Header */}
-      <div className="h-16 flex items-center px-5 border-b border-slate-100 justify-between">
-        <div className="flex items-center gap-2.5">
-          <img
-            src={settings?.logo_path || '/stokflow-logo.png'}
-            alt={settings?.business_name || 'StokFlow'}
-            className="h-8 w-auto max-w-[145px] object-contain"
-          />
+    <div
+      className={`shrink-0 transition-all duration-300 ease-in-out relative z-40 ${
+        isPinned ? 'w-64' : 'w-20'
+      }`}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <aside
+        className={`h-screen bg-white border-r border-slate-200 flex flex-col select-none transition-all duration-300 ease-in-out ${
+          isExpanded
+            ? 'w-64 shadow-2xl shadow-slate-900/15'
+            : 'w-20 shadow-none'
+        } ${!isPinned ? 'absolute inset-y-0 left-0' : 'w-64'}`}
+      >
+        {/* Brand Header */}
+        <div className="h-16 flex items-center px-4 border-b border-slate-100 justify-between overflow-hidden">
+          {isExpanded ? (
+            <>
+              <div className="flex items-center gap-2 min-w-0">
+                <img
+                  src={settings?.logo_path || '/stokflow-logo.png'}
+                  alt={settings?.business_name || 'StokFlow'}
+                  className="h-8 w-auto max-w-[125px] object-contain"
+                />
+                <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 tracking-wider shrink-0">
+                  v1.0
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsPinned(!isPinned);
+                }}
+                className={`p-1.5 rounded-lg text-xs transition ${
+                  isPinned
+                    ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                    : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                }`}
+                title={isPinned ? 'Unpin sidebar (collapse to icons)' : 'Pin sidebar expanded'}
+              >
+                <Pin className={`h-4 w-4 transition-transform ${isPinned ? 'rotate-45 text-emerald-700' : ''}`} />
+              </button>
+            </>
+          ) : (
+            <div className="w-full flex justify-center">
+              {settings?.logo_path ? (
+                <img
+                  src={settings.logo_path}
+                  alt={settings.business_name || 'Logo'}
+                  className="h-9 w-9 object-contain rounded-xl"
+                />
+              ) : (
+                <div className="h-9 w-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black text-sm shadow-sm shadow-emerald-600/30">
+                  {(settings?.business_name || 'SF').substring(0, 2).toUpperCase()}
+                </div>
+              )}
+            </div>
+          )}
         </div>
-        <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 tracking-wider">
-          v1.0
-        </span>
-      </div>
 
-      {/* Navigation List */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-4">
-        {navSections.map((section, idx) => (
-          <div key={idx}>
-            {section.title && (
-              <p className="px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                {section.title}
-              </p>
-            )}
-            <div className="space-y-1">
-              {section.items.map((item) => {
-                const isActive = currentTab === item.id;
-                if (item.isSellButton) {
+        {/* Navigation List */}
+        <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-3 overflow-x-hidden">
+          {navSections.map((section, idx) => (
+            <div key={idx}>
+              {section.title && (
+                isExpanded ? (
+                  <p className="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 whitespace-nowrap">
+                    {section.title}
+                  </p>
+                ) : (
+                  <div className="my-2 border-t border-slate-100 mx-1.5" />
+                )
+              )}
+              <div className="space-y-1">
+                {section.items.map((item) => {
+                  const isActive = currentTab === item.id;
+                  if (item.isSellButton) {
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => onTabChange(item.id)}
+                        title={!isExpanded ? item.label : undefined}
+                        className={`flex items-center transition-all mb-2 ${
+                          isExpanded
+                            ? 'w-full justify-between px-3.5 py-2.5 rounded-2xl text-sm font-black'
+                            : 'w-11 h-11 mx-auto justify-center rounded-xl'
+                        } ${
+                          isActive
+                            ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-500'
+                            : 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white hover:opacity-95 shadow-md shadow-emerald-600/20'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span className="shrink-0">{item.icon}</span>
+                          {isExpanded && (
+                            <span className="whitespace-nowrap text-xs font-black">{item.label}</span>
+                          )}
+                        </div>
+                        {isExpanded && (
+                          <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full font-mono shrink-0">
+                            POS
+                          </span>
+                        )}
+                      </button>
+                    );
+                  }
+
                   return (
                     <button
                       key={item.id}
                       onClick={() => onTabChange(item.id)}
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-black transition-all mb-2 ${
+                      title={!isExpanded ? item.label : undefined}
+                      className={`flex items-center transition-all relative ${
+                        isExpanded
+                          ? 'w-full justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium'
+                          : 'w-11 h-11 mx-auto justify-center rounded-xl'
+                      } ${
                         isActive
-                          ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-500'
-                          : 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white hover:opacity-95 shadow-md shadow-emerald-600/20'
+                          ? 'bg-slate-900 text-white shadow-sm font-bold'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                       }`}
                     >
-                      <div className="flex items-center gap-2.5">
-                        {item.icon}
-                        <span>{item.label}</span>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="shrink-0">{item.icon}</span>
+                        {isExpanded && (
+                          <span className="whitespace-nowrap text-xs font-semibold truncate">
+                            {item.label}
+                          </span>
+                        )}
                       </div>
-                      <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-mono">
-                        POS
-                      </span>
+                      {item.badge !== undefined && (
+                        isExpanded ? (
+                          <span className="bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0">
+                            {item.badge}
+                          </span>
+                        ) : (
+                          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white" />
+                        )
+                      )}
                     </button>
                   );
-                }
-
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => onTabChange(item.id)}
-                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                      isActive
-                        ? 'bg-slate-900 text-white shadow-sm font-bold'
-                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span>{item.icon}</span>
-                      <span>{item.label}</span>
-                    </div>
-                    {item.badge !== undefined && (
-                      <span className="bg-rose-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">
-                        {item.badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+                })}
+              </div>
             </div>
-          </div>
-        ))}
-      </nav>
+          ))}
+        </nav>
 
-      {/* Footer info */}
-      <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between text-xs text-slate-400">
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          Ready & Offline
-        </span>
-        <span>v1.0.0</span>
-      </div>
-    </aside>
+        {/* Footer info */}
+        <div className="p-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between text-xs text-slate-400 overflow-hidden">
+          {isExpanded ? (
+            <>
+              <span className="flex items-center gap-1.5 whitespace-nowrap text-[11px]">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                Ready & Offline
+              </span>
+              <span className="text-[10px] whitespace-nowrap">v1.0.0</span>
+            </>
+          ) : (
+            <div className="w-full flex justify-center py-0.5" title="Ready & Offline (v1.0.0)">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            </div>
+          )}
+        </div>
+      </aside>
+    </div>
   );
 };

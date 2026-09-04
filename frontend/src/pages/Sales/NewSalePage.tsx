@@ -673,17 +673,21 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                   <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
                     Amount Paid
                   </label>
-                  {currentPaid !== grandTotal && grandTotal > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPaidAmount(grandTotal);
-                        setIsPaidAmountCustomized(false);
-                      }}
-                      className="text-xs font-bold text-emerald-700 hover:underline"
-                    >
-                      Paid in Full
-                    </button>
+                  {grandTotal > 0 && (
+                    <div className="flex items-center gap-2">
+                      {currentPaid !== grandTotal && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPaidAmount(grandTotal);
+                            setIsPaidAmountCustomized(false);
+                          }}
+                          className="text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:underline"
+                        >
+                          Exact Cash
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
                 <Input
@@ -701,6 +705,21 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                   className="text-sm font-bold py-2"
                 />
               </div>
+
+              {/* High-visibility Change Due Banner */}
+              {changeAmount > 0 && (
+                <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 shadow-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                    <span className="text-xs font-extrabold uppercase tracking-wide text-emerald-800">
+                      Change to Return
+                    </span>
+                  </div>
+                  <span className="text-base font-black text-emerald-800">
+                    {formatCurrency(changeAmount, currency)}
+                  </span>
+                </div>
+              )}
 
               {/* Settlement Status Indicator */}
               <div className="flex items-center justify-between text-xs px-1">
@@ -733,7 +752,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                 ) : changeAmount > 0 ? (
                   <div className="text-right">
                     <span className="text-slate-500 mr-1">Change:</span>
-                    <span className="font-bold text-emerald-600 text-sm">
+                    <span className="font-bold text-emerald-700 text-sm">
                       {formatCurrency(changeAmount, currency)}
                     </span>
                   </div>

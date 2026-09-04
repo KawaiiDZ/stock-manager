@@ -19,7 +19,14 @@ from backend.app.schemas.reports import (
 from backend.app.services.customer_service import list_customers
 from backend.app.services.supplier_service import list_suppliers
 
+def _normalize_datetime_range(start_date: Optional[datetime], end_date: Optional[datetime]):
+    if end_date is not None and isinstance(end_date, datetime):
+        if end_date.time() == time.min:
+            end_date = datetime.combine(end_date.date(), time.max)
+    return start_date, end_date
+
 def get_sales_report(db: Session, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> List[SalesReportRow]:
+    start_date, end_date = _normalize_datetime_range(start_date, end_date)
     q = db.query(Sale).options(joinedload(Sale.customer), joinedload(Sale.returns))
     if start_date:
         q = q.filter(Sale.created_at >= start_date)
@@ -52,6 +59,7 @@ def get_sales_report(db: Session, start_date: Optional[datetime] = None, end_dat
     return result
 
 def get_sales_detail_report(db: Session, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> List[SalesDetailReportRow]:
+    start_date, end_date = _normalize_datetime_range(start_date, end_date)
     q = db.query(SaleItem).join(Sale, Sale.id == SaleItem.sale_id)
     if start_date:
         q = q.filter(Sale.created_at >= start_date)
@@ -80,6 +88,7 @@ def get_sales_detail_report(db: Session, start_date: Optional[datetime] = None, 
     return rows
 
 def get_purchases_report(db: Session, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> List[PurchasesReportRow]:
+    start_date, end_date = _normalize_datetime_range(start_date, end_date)
     q = db.query(Purchase).options(joinedload(Purchase.supplier), joinedload(Purchase.returns))
     if start_date:
         q = q.filter(Purchase.created_at >= start_date)
@@ -130,6 +139,7 @@ def get_stock_movements_report(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None
 ) -> List[StockMovementReportRow]:
+    start_date, end_date = _normalize_datetime_range(start_date, end_date)
     q = db.query(InventoryMovement).options(joinedload(InventoryMovement.product))
     if product_id:
         q = q.filter(InventoryMovement.product_id == product_id)

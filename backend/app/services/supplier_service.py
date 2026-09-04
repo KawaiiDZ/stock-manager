@@ -154,6 +154,7 @@ def record_supplier_payment(db: Session, supplier_id: int, data: SupplierPayment
         notes=data.notes
     )
     db.add(payment)
+    db.flush()
 
     # Allocate payment to unpaid/partially paid purchases FIFO
     unallocated = data.amount
@@ -177,6 +178,7 @@ def record_supplier_payment(db: Session, supplier_id: int, data: SupplierPayment
             purchase_id=pur.id,
             amount=alloc,
             payment_method=data.payment_method or "Cash",
+            supplier_payment_id=payment.id,
             created_at=payment.created_at
         )
         db.add(pp)
@@ -197,17 +199,31 @@ def get_supplier_ledger(db: Session, supplier_id: int) -> List[SupplierLedgerEnt
 
     timeline = []
     for p in purchases:
-        initial_payments = [pm for pm in p.payments if pm.created_at <= p.created_at] if p.payments else []
-        initial_paid = sum((pm.amount for pm in initial_payments), Decimal("0.00")) if initial_payments else (p.payments[0].amount if p.payments else Decimal("0.00"))
-
         timeline.append({
             "date": p.created_at,
             "type": "Purchase",
             "reference": p.purchase_number,
-            "description": f"Purchase ({p.payment_status.replace('_', ' ')})",
-            "debit": initial_paid,
+            "description": f"Purchase Invoice ({p.payment_status.replace('_', ' ')})",
+            "debit": Decimal("0.00"),
             "credit": p.total_amount,
         })
+
+        # Checkout down payment (if any paid at time of purchase, not linked to a SupplierPayment)
+        initial_payments = [
+            pm for pm in (p.payments or [])
+            if pm.supplier_payment_id is None and pm.amount > Decimal("0.00")
+        ]
+        initial_paid = sum((pm.amount for pm in initial_payments), Decimal("0.00"))
+        if initial_paid > Decimal("0.00"):
+            method = initial_payments[0].payment_method if initial_payments else "Cash"
+            timeline.append({
+                "date": p.created_at,
+                "type": "Payment",
+                "reference": p.purchase_number,
+                "description": f"Down payment on purchase ({method})",
+                "debit": initial_paid,
+                "credit": Decimal("0.00"),
+            })
 
     for pay in standalone_payments:
         timeline.append({

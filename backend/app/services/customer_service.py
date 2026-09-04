@@ -164,6 +164,7 @@ def record_customer_payment(db: Session, customer_id: int, data: CustomerPayment
         notes=data.notes
     )
     db.add(payment)
+    db.flush()
 
     # Allocate payment to unpaid/partially paid sales FIFO
     unallocated = data.amount
@@ -187,6 +188,7 @@ def record_customer_payment(db: Session, customer_id: int, data: CustomerPayment
             sale_id=s.id,
             amount=alloc,
             payment_method=data.payment_method or "Cash",
+            customer_payment_id=payment.id,
             created_at=payment.created_at
         )
         db.add(sp)
@@ -208,19 +210,31 @@ def get_customer_ledger(db: Session, customer_id: int) -> List[CustomerLedgerEnt
 
     timeline = []
     for s in sales:
-        # Credit only the initial down payment paid at checkout
-        # Any subsequent debt payments appear as their own standalone Payment lines
-        initial_payments = [pm for pm in s.payments if pm.created_at <= s.created_at] if s.payments else []
-        initial_credit = sum((pm.amount for pm in initial_payments), Decimal("0.00")) if initial_payments else (s.payments[0].amount if s.payments else Decimal("0.00"))
-
         timeline.append({
             "date": s.created_at,
             "type": "Sale",
             "reference": s.receipt_number,
-            "description": f"Sale ({s.payment_status.replace('_', ' ')})",
+            "description": f"Invoice ({s.payment_status.replace('_', ' ')})",
             "debit": s.total_amount,
-            "credit": initial_credit,
+            "credit": Decimal("0.00"),
         })
+
+        # Checkout down payment (if any paid at time of sale, not linked to a CustomerPayment)
+        initial_payments = [
+            pm for pm in (s.payments or [])
+            if pm.customer_payment_id is None and pm.amount > Decimal("0.00")
+        ]
+        initial_credit = sum((pm.amount for pm in initial_payments), Decimal("0.00"))
+        if initial_credit > Decimal("0.00"):
+            method = initial_payments[0].payment_method if initial_payments else "Cash"
+            timeline.append({
+                "date": s.created_at,
+                "type": "Payment",
+                "reference": s.receipt_number,
+                "description": f"Down payment at checkout ({method})",
+                "debit": Decimal("0.00"),
+                "credit": initial_credit,
+            })
 
     for p in standalone_payments:
         timeline.append({
@@ -233,14 +247,15 @@ def get_customer_ledger(db: Session, customer_id: int) -> List[CustomerLedgerEnt
         })
 
     for r in returns:
-        timeline.append({
-            "date": r.created_at,
-            "type": "Return",
-            "reference": r.return_number,
-            "description": f"Return Refund/Credit (Refunded Rs.{r.cash_refund_amount}, Credit Rs.{r.balance_credit_amount})",
-            "debit": Decimal("0.00"),
-            "credit": r.balance_credit_amount,
-        })
+        if r.balance_credit_amount > Decimal("0.00"):
+            timeline.append({
+                "date": r.created_at,
+                "type": "Return",
+                "reference": r.return_number,
+                "description": f"Return Credit (Balance reduced)",
+                "debit": Decimal("0.00"),
+                "credit": r.balance_credit_amount,
+            })
 
     timeline.sort(key=lambda x: x["date"])
 

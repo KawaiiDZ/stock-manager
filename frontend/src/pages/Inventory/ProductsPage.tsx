@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../services/api';
 import { Product, Category, CustomField, CustomValueDto, BusinessSettings } from '../../types';
-import { Plus, Search, Edit2, Archive, RotateCcw, SlidersHorizontal, ShoppingCart, AlertCircle, Layers, Trash2 } from 'lucide-react';
+import { Plus, Search, Edit2, ShoppingCart, AlertCircle, Trash2, Truck, RotateCcw } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Modal } from '../../components/common/Modal';
@@ -10,6 +10,7 @@ import { Badge } from '../../components/common/Badge';
 import { EmptyState } from '../../components/common/EmptyState';
 import { BulkAddProductsModal } from './BulkAddProductsModal';
 import { StockAdjustmentModal } from './StockAdjustmentModal';
+import { NewPurchaseModal } from './NewPurchaseModal';
 import { formatCurrency, formatMoney } from '../../utils/format';
 
 interface ProductsPageProps {
@@ -32,6 +33,8 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
   // Modals
   const [showProductModal, setShowProductModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [showStockUpdateModal, setShowStockUpdateModal] = useState(false);
+  const [stockUpdateProduct, setStockUpdateProduct] = useState<Product | null>(null);
   const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(null);
 
   // Edit / Add Product Form State
@@ -53,11 +56,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
   const [showAddCatModal, setShowAddCatModal] = useState(false);
   const [newCatName, setNewCatName] = useState('');
 
-  // Deactivate Confirm Dialog
-  const [deactivatingProduct, setDeactivatingProduct] = useState<Product | null>(null);
-  const [deactivating, setDeactivating] = useState(false);
-
-  // Permanent Delete Confirm Dialog
+  // Delete Confirm Dialog
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -89,13 +88,15 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
     loadData();
   }, [search, selectedCategory, activeTab]);
 
+
+
   const handleOpenAdd = () => {
     setEditingProduct(null);
     setFormData({
       name: '',
       sku: '',
       barcode: '',
-      category_id: categories.length > 0 ? categories[0].id : 0,
+      category_id: selectedCategory || 0,
       purchase_price: 0,
       selling_price: 0,
       opening_stock: 0,
@@ -103,6 +104,15 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
     setCustomFieldValues({});
     setModalError(null);
     setShowProductModal(true);
+  };
+
+  const handleRestore = async (productId: number) => {
+    try {
+      await api.restoreProduct(productId);
+      loadData();
+    } catch (err: any) {
+      alert(err.detail || 'Failed to restore product');
+    }
   };
 
   const handleOpenEdit = (p: Product) => {
@@ -171,38 +181,20 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
     }
   };
 
-  const handleConfirmDeactivate = async () => {
-    if (!deactivatingProduct) return;
-    setDeactivating(true);
-    try {
-      await api.deactivateProduct(deactivatingProduct.id);
-      setDeactivatingProduct(null);
-      loadData();
-    } catch (err: any) {
-      alert(err.detail || 'Failed to deactivate product');
-    } finally {
-      setDeactivating(false);
-    }
-  };
-
-  const handleRestore = async (productId: number) => {
-    try {
-      await api.restoreProduct(productId);
-      loadData();
-    } catch (err: any) {
-      alert(err.detail || 'Failed to restore product');
-    }
-  };
-
-  const handleConfirmPermanentDelete = async () => {
+  const handleConfirmDelete = async () => {
     if (!deletingProduct) return;
     setDeleting(true);
     try {
-      await api.deleteProductPermanent(deletingProduct.id);
+      try {
+        await api.deleteProductPermanent(deletingProduct.id);
+      } catch (err: any) {
+        // If permanent deletion is restricted by accounting history, deactivate so it disappears from the active catalog
+        await api.deactivateProduct(deletingProduct.id);
+      }
       setDeletingProduct(null);
       loadData();
     } catch (err: any) {
-      alert(err.detail || 'Failed to permanently delete product');
+      alert(err.detail || 'Failed to delete product');
     } finally {
       setDeleting(false);
     }
@@ -275,9 +267,10 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* Tabs */}
-          <div className="flex items-center gap-1 bg-slate-200/70 p-1.5 rounded-2xl text-xs font-bold">
+          {/* Active / Deactivated Tabs */}
+          <div className="flex items-center gap-1 bg-slate-200/70 p-1 rounded-2xl text-xs font-bold">
             <button
+              type="button"
               onClick={() => setActiveTab('active')}
               className={`px-3.5 py-1.5 rounded-xl transition ${
                 activeTab === 'active' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
@@ -286,6 +279,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
               Active Catalog
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('deactivated')}
               className={`px-3.5 py-1.5 rounded-xl transition ${
                 activeTab === 'deactivated' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
@@ -298,11 +292,24 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
           <Button
             variant="outline"
             size="md"
-            icon={<Layers className="h-4 w-4 text-emerald-600" />}
-            onClick={() => setShowBulkModal(true)}
+            icon={<Truck className="h-4 w-4 text-emerald-600" />}
+            onClick={() => {
+              setStockUpdateProduct(null);
+              setShowStockUpdateModal(true);
+            }}
             className="font-bold border-emerald-300 text-emerald-800 bg-emerald-50/50 hover:bg-emerald-100/60"
           >
-            + Bulk Add Products
+            + Update Stock
+          </Button>
+
+          <Button
+            variant="outline"
+            size="md"
+            icon={<Plus className="h-4 w-4 text-slate-700" />}
+            onClick={() => setShowBulkModal(true)}
+            className="font-bold"
+          >
+            + Bulk Add
           </Button>
 
           <Button
@@ -352,11 +359,23 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
         ) : categoryGroups.length === 0 || products.length === 0 ? (
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
             <EmptyState
-              title={activeTab === 'active' ? 'No products in catalog' : 'No deactivated products'}
+              title={
+                activeTab === 'deactivated'
+                  ? 'No deactivated products'
+                  : search.trim()
+                  ? `No products matching "${search.trim()}"`
+                  : selectedCategory
+                  ? 'No products in this category'
+                  : 'No products in catalog'
+              }
               description={
-                activeTab === 'active'
-                  ? 'Add products individually or use bulk adding to build your inventory.'
-                  : 'Deactivated products will appear here and can be restored anytime.'
+                activeTab === 'deactivated'
+                  ? 'Products you deactivate will appear here and can be restored or deleted permanently anytime.'
+                  : search.trim()
+                  ? 'Try searching with a different product name, ID, or barcode.'
+                  : selectedCategory
+                  ? 'Add products to this category individually or use bulk adding.'
+                  : 'Add products individually or use bulk adding to build your inventory.'
               }
               actionText={activeTab === 'active' ? '+ Add Product' : undefined}
               onAction={activeTab === 'active' ? handleOpenAdd : undefined}
@@ -369,10 +388,6 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
               .sort((a, b) => a.display_order - b.display_order);
 
             const totalStock = group.products.reduce((acc, p) => acc + Number(p.current_stock || 0), 0);
-            const totalValuation = group.products.reduce(
-              (acc, p) => acc + Number(p.purchase_price || 0) * Number(p.current_stock || 0),
-              0
-            );
 
             return (
               <div
@@ -393,13 +408,6 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
                     <span>
                       Total Stock:{' '}
                       <strong className="text-slate-900 font-bold">{totalStock} units</strong>
-                    </span>
-                    <span className="text-slate-300">•</span>
-                    <span>
-                      Valuation:{' '}
-                      <strong className="text-emerald-700 font-bold">
-                        {formatCurrency(totalValuation, currency)}
-                      </strong>
                     </span>
                   </div>
                 </div>
@@ -473,7 +481,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
                               {formatCurrency(p.selling_price, currency)}
                             </td>
                             <td className="py-4 px-6 text-right whitespace-nowrap">
-                              <div className="flex items-center justify-end gap-1.5">
+                              <div className="flex items-center justify-end gap-2">
                                 <span
                                   className={`font-black text-sm ${
                                     p.current_stock > 5
@@ -487,22 +495,34 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
                                 </span>
                                 {p.is_active && (
                                   <button
-                                    onClick={() => setAdjustingProduct(p)}
-                                    className="p-1 text-slate-300 hover:text-slate-600"
-                                    title="Adjust Physical Stock Count"
+                                    type="button"
+                                    onClick={() => {
+                                      setStockUpdateProduct(p);
+                                      setShowStockUpdateModal(true);
+                                    }}
+                                    className="inline-flex items-center justify-center h-6 w-6 rounded-md bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-300/80 hover:border-emerald-600 shadow-2xs transition group"
+                                    title={`Add / Update stock for ${p.name}`}
                                   >
-                                    <SlidersHorizontal className="h-3 w-3" />
+                                    <Plus className="h-3.5 w-3.5 transition group-hover:scale-110" />
                                   </button>
                                 )}
                               </div>
                             </td>
                             <td className="py-4 px-6 text-center whitespace-nowrap">
-                              <Badge status={p.is_active ? 'ACTIVE' : 'INACTIVE'} />
+                              <Badge
+                                status={
+                                  p.current_stock > 5
+                                    ? 'IN_STOCK'
+                                    : p.current_stock > 0
+                                    ? 'LOW_STOCK'
+                                    : 'OUT_OF_STOCK'
+                                }
+                              />
                             </td>
                             <td className="py-4 px-6 text-right whitespace-nowrap">
                               {p.is_active ? (
                                 <div className="flex items-center justify-end gap-2">
-                                  {/* Direct SELL Button (Section 59 requirement) */}
+                                  {/* Direct SELL Button */}
                                   {onSellProduct && p.current_stock > 0 && (
                                     <Button
                                       variant="primary"
@@ -515,6 +535,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
                                     </Button>
                                   )}
                                   <button
+                                    type="button"
                                     onClick={() => handleOpenEdit(p)}
                                     className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
                                     title="Edit Product"
@@ -522,11 +543,12 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
                                     <Edit2 className="h-4 w-4" />
                                   </button>
                                   <button
-                                    onClick={() => setDeactivatingProduct(p)}
+                                    type="button"
+                                    onClick={() => setDeletingProduct(p)}
                                     className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
                                     title="Deactivate Product"
                                   >
-                                    <Archive className="h-4 w-4" />
+                                    <Trash2 className="h-4 w-4" />
                                   </button>
                                 </div>
                               ) : (
@@ -813,6 +835,19 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
         onStockAdjusted={loadData}
       />
 
+      {/* Stock Update / Purchase Modal */}
+      <NewPurchaseModal
+        isOpen={showStockUpdateModal}
+        onClose={() => {
+          setShowStockUpdateModal(false);
+          setStockUpdateProduct(null);
+        }}
+        products={products}
+        settings={settings}
+        lockedProduct={stockUpdateProduct}
+        onPurchaseCreated={loadData}
+      />
+
       {/* Quick Add / Manage Category Modal */}
       <Modal
         isOpen={showAddCatModal}
@@ -884,26 +919,14 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
         </div>
       </Modal>
 
-      {/* Deactivate Friendly Confirm Dialog */}
-      <ConfirmDialog
-        isOpen={Boolean(deactivatingProduct)}
-        onClose={() => setDeactivatingProduct(null)}
-        onConfirm={handleConfirmDeactivate}
-        title={`Deactivate ${deactivatingProduct?.name}?`}
-        message="You can find it later under Deactivated Products and restore it anytime."
-        confirmText="Deactivate"
-        variant="danger"
-        loading={deactivating}
-      />
-
-      {/* Permanent Delete Confirm Dialog */}
+      {/* Delete Product Confirmation Dialog */}
       <ConfirmDialog
         isOpen={Boolean(deletingProduct)}
         onClose={() => setDeletingProduct(null)}
-        onConfirm={handleConfirmPermanentDelete}
-        title={`Permanently Delete ${deletingProduct?.name}?`}
-        message={`Are you sure you want to permanently delete "${deletingProduct?.name}" (${deletingProduct?.product_id})? This action cannot be undone and will completely remove the product from your database.`}
-        confirmText="Delete Permanently"
+        onConfirm={handleConfirmDelete}
+        title={`Delete ${deletingProduct?.name}?`}
+        message={`Are you sure you want to delete "${deletingProduct?.name}"? This action will remove the product from your catalog.`}
+        confirmText="Delete Product"
         variant="danger"
         loading={deleting}
       />
