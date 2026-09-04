@@ -107,7 +107,7 @@ def get_purchases_report(db: Session, start_date: Optional[datetime] = None, end
         result.append(PurchasesReportRow(
             purchase_number=p.purchase_number,
             date=p.created_at,
-            supplier_name=p.supplier.name if p.supplier else "Unknown",
+            supplier_name=p.supplier.name if p.supplier else "Direct / No Supplier",
             total_amount=p.total_amount,
             paid_amount=p.paid_amount,
             due_amount=net_due,

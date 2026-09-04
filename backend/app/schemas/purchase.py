@@ -7,9 +7,10 @@ class PurchaseItemCreate(BaseModel):
     product_id: int
     quantity: Decimal
     unit_cost: Decimal
+    selling_price: Optional[Decimal] = None
 
 class PurchaseCreate(BaseModel):
-    supplier_id: int
+    supplier_id: Optional[int] = None
     items: List[PurchaseItemCreate]
     discount_amount: Decimal = Decimal("0.00")
     tax_amount: Decimal = Decimal("0.00")
@@ -23,6 +24,7 @@ class PurchaseItemResponse(BaseModel):
     product_name: Optional[str] = None
     quantity: Decimal
     unit_cost: Decimal
+    selling_price: Optional[Decimal] = None
     total_cost: Decimal
 
     class Config:
@@ -40,7 +42,7 @@ class PurchasePaymentResponse(BaseModel):
 class PurchaseResponse(BaseModel):
     id: int
     purchase_number: str
-    supplier_id: int
+    supplier_id: Optional[int] = None
     supplier_name: Optional[str] = None
     subtotal: Decimal
     discount_amount: Decimal

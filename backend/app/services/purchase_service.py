@@ -39,6 +39,7 @@ def _format_purchase_response(purchase: Purchase) -> PurchaseResponse:
             product_name=it.product.name if it.product else "Unknown",
             quantity=it.quantity,
             unit_cost=it.unit_cost,
+            selling_price=getattr(it, 'selling_price', None),
             total_cost=it.total_cost
         ))
 
@@ -72,7 +73,7 @@ def _format_purchase_response(purchase: Purchase) -> PurchaseResponse:
         id=purchase.id,
         purchase_number=purchase.purchase_number,
         supplier_id=purchase.supplier_id,
-        supplier_name=purchase.supplier.name if purchase.supplier else "Unknown",
+        supplier_name=purchase.supplier.name if purchase.supplier else "Direct / No Supplier",
         subtotal=purchase.subtotal,
         discount_amount=purchase.discount_amount,
         tax_amount=purchase.tax_amount,
@@ -87,9 +88,11 @@ def _format_purchase_response(purchase: Purchase) -> PurchaseResponse:
     )
 
 def create_purchase(db: Session, data: PurchaseCreate) -> PurchaseResponse:
-    supplier = db.query(Supplier).filter(Supplier.id == data.supplier_id).first()
-    if not supplier:
-        raise EntityNotFoundException("Supplier", str(data.supplier_id))
+    supplier = None
+    if data.supplier_id:
+        supplier = db.query(Supplier).filter(Supplier.id == data.supplier_id).first()
+        if not supplier:
+            raise EntityNotFoundException("Supplier", str(data.supplier_id))
 
     if not data.items:
         raise BusinessRuleException("Purchase must have at least one product.")
@@ -97,7 +100,7 @@ def create_purchase(db: Session, data: PurchaseCreate) -> PurchaseResponse:
     po_num = generate_purchase_number(db)
 
     subtotal = Decimal("0.00")
-    processed_items = []
+    validated_items = []
 
     for it in data.items:
         product = db.query(Product).filter(Product.id == it.product_id).first()
@@ -108,19 +111,17 @@ def create_purchase(db: Session, data: PurchaseCreate) -> PurchaseResponse:
             raise BusinessRuleException(f"Quantity for {product.name} must be greater than zero.")
         if it.unit_cost < Decimal("0.00"):
             raise BusinessRuleException(f"Unit cost for {product.name} cannot be negative.")
+        if it.selling_price is not None and it.selling_price < Decimal("0.00"):
+            raise BusinessRuleException(f"Selling price for {product.name} cannot be negative.")
 
         line_total = it.quantity * it.unit_cost
         subtotal += line_total
 
-        # Increase product current stock
-        product.current_stock += it.quantity
-        # Update product's latest purchase price
-        product.purchase_price = it.unit_cost
-
-        processed_items.append({
+        validated_items.append({
             "product": product,
             "quantity": it.quantity,
             "unit_cost": it.unit_cost,
+            "selling_price": it.selling_price,
             "total_cost": line_total
         })
 
@@ -128,20 +129,38 @@ def create_purchase(db: Session, data: PurchaseCreate) -> PurchaseResponse:
     tax = data.tax_amount or Decimal("0.00")
     total_amount = max(Decimal("0.00"), subtotal - disc + tax)
 
-    paid = min(data.paid_amount, total_amount) if data.paid_amount > Decimal("0.00") else Decimal("0.00")
-    due = max(Decimal("0.00"), total_amount - paid)
-
-    if due == Decimal("0.00"):
+    # Validate supplier payment rules:
+    # If no supplier is assigned, partial payments / credit are not permitted. Must be settled in full.
+    if supplier is None:
+        if data.paid_amount < total_amount:
+            raise BusinessRuleException(
+                "Direct stock updates without a supplier cannot have unpaid credit or partial payments. Full payment is required."
+            )
+        paid = total_amount
+        due = Decimal("0.00")
         status = "PAID"
-    elif paid > Decimal("0.00"):
-        status = "PARTIALLY_PAID"
     else:
-        status = "UNPAID"
+        paid = min(data.paid_amount, total_amount) if data.paid_amount > Decimal("0.00") else Decimal("0.00")
+        due = max(Decimal("0.00"), total_amount - paid)
+        if due == Decimal("0.00"):
+            status = "PAID"
+        elif paid > Decimal("0.00"):
+            status = "PARTIALLY_PAID"
+        else:
+            status = "UNPAID"
+
+    # Now that all business rules are validated, update product stocks and prices
+    for v_it in validated_items:
+        prod = v_it["product"]
+        prod.current_stock += v_it["quantity"]
+        prod.purchase_price = v_it["unit_cost"]
+        if v_it["selling_price"] is not None and v_it["selling_price"] >= Decimal("0.00"):
+            prod.selling_price = v_it["selling_price"]
 
     # Create Purchase
     purchase = Purchase(
         purchase_number=po_num,
-        supplier_id=supplier.id,
+        supplier_id=supplier.id if supplier else None,
         subtotal=subtotal,
         discount_amount=disc,
         tax_amount=tax,
@@ -155,16 +174,18 @@ def create_purchase(db: Session, data: PurchaseCreate) -> PurchaseResponse:
     db.flush()
 
     # Create Purchase Items, Inventory Batches, and Movements
-    for p_it in processed_items:
+    for p_it in validated_items:
         prod = p_it["product"]
         qty = p_it["quantity"]
         cost = p_it["unit_cost"]
+        sell_p = p_it["selling_price"]
 
         p_item = PurchaseItem(
             purchase_id=purchase.id,
             product_id=prod.id,
             quantity=qty,
             unit_cost=cost,
+            selling_price=sell_p,
             total_cost=p_it["total_cost"]
         )
         db.add(p_item)
@@ -180,6 +201,7 @@ def create_purchase(db: Session, data: PurchaseCreate) -> PurchaseResponse:
         db.add(batch)
 
         # Log movement
+        supp_label = f"from {supplier.name}" if supplier else "(Direct Stock Entry)"
         movement = InventoryMovement(
             product_id=prod.id,
             movement_type="PURCHASE",
@@ -187,7 +209,7 @@ def create_purchase(db: Session, data: PurchaseCreate) -> PurchaseResponse:
             unit_cost=cost,
             reference_type="PURCHASE",
             reference_id=po_num,
-            notes=f"Purchased from {supplier.name} ({po_num})"
+            notes=f"Received {supp_label} ({po_num})"
         )
         db.add(movement)
 
@@ -196,6 +218,7 @@ def create_purchase(db: Session, data: PurchaseCreate) -> PurchaseResponse:
             purchase_id=purchase.id,
             amount=paid,
             payment_method=data.payment_method or "Cash",
+            supplier_payment_id=None,
             created_at=purchase.created_at
         )
         db.add(payment)
@@ -239,7 +262,7 @@ def list_purchases(
         q = q.filter(Purchase.created_at <= end_date)
     if search:
         st = f"%{search.strip()}%"
-        q = q.join(Purchase.supplier).filter(
+        q = q.outerjoin(Purchase.supplier).filter(
             or_(
                 Purchase.purchase_number.ilike(st),
                 Supplier.name.ilike(st)

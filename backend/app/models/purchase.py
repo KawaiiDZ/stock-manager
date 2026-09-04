@@ -8,7 +8,7 @@ class Purchase(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     purchase_number = Column(String(30), unique=True, nullable=False, index=True) # PO-000001
-    supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=False, index=True)
+    supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=True, index=True)
     subtotal = Column(Numeric(12, 2), nullable=False, default=0.00)
     discount_amount = Column(Numeric(12, 2), nullable=False, default=0.00)
     tax_amount = Column(Numeric(12, 2), nullable=False, default=0.00)
@@ -33,6 +33,7 @@ class PurchaseItem(Base):
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
     quantity = Column(Numeric(12, 2), nullable=False)
     unit_cost = Column(Numeric(12, 2), nullable=False)
+    selling_price = Column(Numeric(12, 2), nullable=True)
     total_cost = Column(Numeric(12, 2), nullable=False)
 
     __table_args__ = (

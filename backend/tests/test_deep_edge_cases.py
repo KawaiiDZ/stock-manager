@@ -184,3 +184,66 @@ def test_deactivated_products_retrieval_and_filtering(client):
     # Active catalog contains it again
     active_final = client.get("/api/products?is_active=true").json()
     assert any(p["id"] == p_id for p in active_final)
+
+def test_no_supplier_purchase_must_be_paid_in_full(client):
+    """Verify purchases without a supplier cannot have partial payment/credit and must be paid in full."""
+    prod = client.post("/api/products", json={
+        "name": "Direct Stock Item",
+        "purchase_price": 50.0,
+        "selling_price": 80.0,
+        "opening_stock": 5.0
+    }).json()
+
+    # 1. Attempting partial payment without a supplier must be rejected (400)
+    partial_res = client.post("/api/purchases", json={
+        "supplier_id": None,
+        "items": [{"product_id": prod["id"], "quantity": 10.0, "unit_cost": 50.0}],
+        "paid_amount": 200.0 # total is 500
+    })
+    assert partial_res.status_code == 400
+    assert "without a supplier cannot have unpaid credit" in partial_res.json()["detail"]
+
+    # 2. Full payment without a supplier succeeds
+    full_res = client.post("/api/purchases", json={
+        "supplier_id": None,
+        "items": [{"product_id": prod["id"], "quantity": 10.0, "unit_cost": 50.0}],
+        "paid_amount": 500.0
+    })
+    assert full_res.status_code in [200, 201]
+    data = full_res.json()
+    assert data["supplier_id"] is None
+    assert data["supplier_name"] == "Direct / No Supplier"
+    assert data["payment_status"] == "PAID"
+    assert float(data["due_amount"]) == 0.0
+
+    # Product stock must now be 5 + 10 = 15
+    refetched_prod = client.get(f"/api/products/{prod['id']}").json()
+    assert float(refetched_prod["current_stock"]) == 15.0
+
+def test_stock_update_changes_product_cost_and_selling_price(client):
+    """Verify receiving stock at new rates updates both cost and selling price on product master."""
+    prod = client.post("/api/products", json={
+        "name": "Rate Change Item",
+        "purchase_price": 100.0,
+        "selling_price": 150.0,
+        "opening_stock": 10.0
+    }).json()
+
+    # Receive new stock at cost 120 and updated retail selling price 180
+    purch_res = client.post("/api/purchases", json={
+        "supplier_id": None,
+        "items": [{
+            "product_id": prod["id"],
+            "quantity": 5.0,
+            "unit_cost": 120.0,
+            "selling_price": 180.0
+        }],
+        "paid_amount": 600.0
+    })
+    assert purch_res.status_code in [200, 201]
+
+    # Verify product master record was updated to new cost and new selling price
+    refetched = client.get(f"/api/products/{prod['id']}").json()
+    assert float(refetched["purchase_price"]) == 120.0
+    assert float(refetched["selling_price"]) == 180.0
+    assert float(refetched["current_stock"]) == 15.0

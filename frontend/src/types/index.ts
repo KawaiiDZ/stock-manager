@@ -233,6 +233,7 @@ export interface PurchaseItem {
   product_name?: string;
   quantity: number;
   unit_cost: number;
+  selling_price?: number | null;
   total_cost: number;
 }
 
@@ -246,7 +247,7 @@ export interface PurchasePayment {
 export interface Purchase {
   id: number;
   purchase_number: string;
-  supplier_id: number;
+  supplier_id?: number | null;
   supplier_name?: string;
   subtotal: number;
   discount_amount: number;

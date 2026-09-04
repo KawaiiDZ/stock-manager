@@ -86,3 +86,51 @@ def auto_upgrade_schema():
         except Exception as e:
             print("Auto-upgrade error (purchase_payments):", e)
 
+        # Check purchases table (ensure supplier_id allows NULL)
+        try:
+            res = conn.execute(text("PRAGMA table_info(purchases)"))
+            cols = {r[1]: r for r in res.fetchall()}
+            if cols and "supplier_id" in cols and cols["supplier_id"][3] == 1:
+                conn.execute(text("PRAGMA foreign_keys=OFF"))
+                conn.execute(text("""
+                    CREATE TABLE purchases_temp (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        purchase_number VARCHAR(30) UNIQUE NOT NULL,
+                        supplier_id INTEGER REFERENCES suppliers(id) NULL,
+                        subtotal NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                        discount_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                        tax_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                        total_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                        paid_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                        due_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                        payment_status VARCHAR(20) NOT NULL DEFAULT 'PAID',
+                        notes TEXT NULL,
+                        created_at DATETIME
+                    )
+                """))
+                conn.execute(text("""
+                    INSERT INTO purchases_temp (id, purchase_number, supplier_id, subtotal, discount_amount, tax_amount, total_amount, paid_amount, due_amount, payment_status, notes, created_at)
+                    SELECT id, purchase_number, supplier_id, subtotal, discount_amount, tax_amount, total_amount, paid_amount, due_amount, payment_status, notes, created_at FROM purchases
+                """))
+                conn.execute(text("DROP TABLE purchases"))
+                conn.execute(text("ALTER TABLE purchases_temp RENAME TO purchases"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_purchases_id ON purchases (id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_purchases_purchase_number ON purchases (purchase_number)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_purchases_supplier_id ON purchases (supplier_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_purchases_payment_status ON purchases (payment_status)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_purchases_created_at ON purchases (created_at)"))
+                conn.commit()
+                conn.execute(text("PRAGMA foreign_keys=ON"))
+        except Exception as e:
+            print("Auto-upgrade error (purchases):", e)
+
+        # Check purchase_items table (ensure selling_price column exists)
+        try:
+            res = conn.execute(text("PRAGMA table_info(purchase_items)"))
+            cols = [row[1] for row in res.fetchall()]
+            if cols and "selling_price" not in cols:
+                conn.execute(text("ALTER TABLE purchase_items ADD COLUMN selling_price NUMERIC(12, 2) NULL"))
+                conn.commit()
+        except Exception as e:
+            print("Auto-upgrade error (purchase_items):", e)
+
