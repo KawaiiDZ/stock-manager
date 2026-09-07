@@ -19,5 +19,7 @@ class BusinessSettings(Base):
     receipt_printer_type = Column(String(20), nullable=False, default="80mm")  # 58mm, 80mm, standard
     industry_preset = Column(String(50), nullable=True, default="general")  # mobile, clothing, pharmacy, grocery, autoparts, general, custom
     setup_completed = Column(Boolean, nullable=False, default=False)
+    show_sku = Column(Boolean, nullable=False, default=True)
+    show_barcode = Column(Boolean, nullable=False, default=True)
     config_pin_hash = Column(String(255), nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

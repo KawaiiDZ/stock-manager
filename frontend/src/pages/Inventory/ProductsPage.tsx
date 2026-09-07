@@ -61,6 +61,8 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
   const [deleting, setDeleting] = useState(false);
 
   const currency = settings?.currency || 'Rs.';
+  const showSku = settings?.show_sku !== false;
+  const showBarcode = settings?.show_barcode !== false;
 
   const loadData = async () => {
     setLoading(true);
@@ -153,8 +155,8 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
       if (editingProduct) {
         await api.updateProduct(editingProduct.id, {
           name: formData.name.trim(),
-          sku: formData.sku.trim() || undefined,
-          barcode: formData.barcode.trim() || undefined,
+          sku: showSku ? (formData.sku.trim() || undefined) : editingProduct.sku,
+          barcode: showBarcode ? (formData.barcode.trim() || undefined) : editingProduct.barcode,
           category_id: formData.category_id > 0 ? formData.category_id : undefined,
           purchase_price: formData.purchase_price,
           selling_price: formData.selling_price,
@@ -163,8 +165,8 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
       } else {
         await api.createProduct({
           name: formData.name.trim(),
-          sku: formData.sku.trim() || undefined,
-          barcode: formData.barcode.trim() || undefined,
+          sku: showSku ? (formData.sku.trim() || undefined) : undefined,
+          barcode: showBarcode ? (formData.barcode.trim() || undefined) : undefined,
           category_id: formData.category_id > 0 ? formData.category_id : undefined,
           purchase_price: formData.purchase_price,
           selling_price: formData.selling_price,
@@ -230,6 +232,8 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
 
     const groups: { id: number | null; name: string; products: Product[] }[] = [];
 
+    const categoryIds = new Set(categories.map((c) => c.id));
+
     // Categories in order
     categories.forEach((cat) => {
       const catProds = products.filter((p) => p.category_id === cat.id);
@@ -242,8 +246,8 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
       }
     });
 
-    // Uncategorized products
-    const uncategorized = products.filter((p) => !p.category_id);
+    // Uncategorized products (no category or orphaned category)
+    const uncategorized = products.filter((p) => !p.category_id || !categoryIds.has(p.category_id));
     if (uncategorized.length > 0) {
       groups.push({
         id: null,
@@ -327,7 +331,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
       <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
         <div className="flex-1">
           <Input
-            placeholder="Search products by Name, Product ID, SKU, or Barcode..."
+            placeholder={`Search products by Name, Product ID${showSku ? ', SKU' : ''}${showBarcode ? ', Barcode' : ''}...`}
             prefix={<Search className="h-4 w-4" />}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -434,7 +438,11 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
                             </div>
                           </th>
                         ))}
-                        <th className="py-3.5 px-6 whitespace-nowrap">SKU / Barcode</th>
+                        {(showSku || showBarcode) && (
+                          <th className="py-3.5 px-6 whitespace-nowrap">
+                            {showSku && showBarcode ? 'SKU / Barcode' : showSku ? 'SKU' : 'Barcode'}
+                          </th>
+                        )}
                         <th className="py-3.5 px-6 text-right whitespace-nowrap">Cost Price</th>
                         <th className="py-3.5 px-6 text-right whitespace-nowrap">Selling Price</th>
                         <th className="py-3.5 px-6 text-right whitespace-nowrap">Current Stock</th>
@@ -464,16 +472,18 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
                                 </td>
                               );
                             })}
-                            <td className="py-4 px-6 text-slate-500 text-xs font-mono whitespace-nowrap">
-                              {p.sku || p.barcode ? (
-                                <div>
-                                  {p.sku && <div>SKU: {p.sku}</div>}
-                                  {p.barcode && <div>BC: {p.barcode}</div>}
-                                </div>
-                              ) : (
-                                '—'
-                              )}
-                            </td>
+                            {(showSku || showBarcode) && (
+                              <td className="py-4 px-6 text-slate-500 text-xs font-mono whitespace-nowrap">
+                                {(showSku && p.sku) || (showBarcode && p.barcode) ? (
+                                  <div>
+                                    {showSku && p.sku && <div>SKU: {p.sku}</div>}
+                                    {showBarcode && p.barcode && <div>BC: {p.barcode}</div>}
+                                  </div>
+                                ) : (
+                                  '—'
+                                )}
+                              </td>
+                            )}
                             <td className="py-4 px-6 text-right text-slate-600 whitespace-nowrap">
                               {formatCurrency(p.purchase_price, currency)}
                             </td>
@@ -612,7 +622,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
             autoFocus
           />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className={showSku ? "grid grid-cols-1 sm:grid-cols-2 gap-3" : "space-y-3"}>
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
@@ -642,20 +652,24 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
               </select>
             </div>
 
-            <Input
-              label="SKU (Optional)"
-              placeholder="e.g. SKU-001"
-              value={formData.sku}
-              onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-            />
+            {showSku && (
+              <Input
+                label="SKU (Optional)"
+                placeholder="e.g. SKU-001"
+                value={formData.sku}
+                onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+              />
+            )}
           </div>
 
-          <Input
-            label="Barcode (Optional)"
-            placeholder="Scan or type barcode..."
-            value={formData.barcode}
-            onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
-          />
+          {showBarcode && (
+            <Input
+              label="Barcode (Optional)"
+              placeholder="Scan or type barcode..."
+              value={formData.barcode}
+              onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+            />
+          )}
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <Input

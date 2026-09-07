@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 import os
+import sys
 from pathlib import Path
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -95,6 +96,7 @@ app.include_router(inventory.router, prefix=api_prefix)
 app.include_router(customers.router, prefix=api_prefix)
 app.include_router(sales.router, prefix=api_prefix)
 app.include_router(returns.router, prefix=api_prefix)
+app.include_router(returns.purchase_returns_router, prefix=api_prefix)
 app.include_router(suppliers.router, prefix=api_prefix)
 app.include_router(purchases.router, prefix=api_prefix)
 app.include_router(bills.router, prefix=api_prefix)
@@ -109,6 +111,11 @@ def health_check():
 
 # Mount Frontend Dist if built
 frontend_dist = settings.BASE_DIR / "frontend" / "dist"
+if not frontend_dist.exists() and getattr(sys, "frozen", False):
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass and (Path(meipass) / "frontend" / "dist").exists():
+        frontend_dist = Path(meipass) / "frontend" / "dist"
+
 if frontend_dist.exists():
     app.mount("/assets", StaticFiles(directory=str(frontend_dist / "assets")), name="assets")
 

@@ -2,7 +2,7 @@ from datetime import date, datetime, time
 from decimal import Decimal
 import calendar
 from typing import List, Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
 from backend.app.models.sales import Sale, SalePayment, SalesReturn, SalesReturnItem
@@ -23,56 +23,65 @@ def get_dashboard_stats(db: Session) -> DashboardStatsResponse:
     start_of_today = datetime.combine(today, time.min)
     end_of_today = datetime.combine(today, time.max)
 
-    # 1. Today's Gross Sales Revenue
-    gross_sales_revenue = db.query(func.coalesce(func.sum(Sale.total_amount), Decimal("0.00")))\
-        .filter(Sale.created_at >= start_of_today, Sale.created_at <= end_of_today).scalar()
-
-    # 1b. Today's Customer Returns
-    returns_revenue = db.query(func.coalesce(func.sum(SalesReturn.total_return_amount), Decimal("0.00")))\
-        .filter(SalesReturn.created_at >= start_of_today, SalesReturn.created_at <= end_of_today).scalar()
-
-    # Net Sales Revenue (Returns deducted)
-    today_sales_revenue = max(Decimal("0.00"), gross_sales_revenue - returns_revenue)
-
-    # 1c. Today's Cash Collected (Direct sale payments + debt collections today)
-    today_payments = db.query(SalePayment).filter(
-        SalePayment.created_at >= start_of_today, SalePayment.created_at <= end_of_today
+    # 1. Today's Sales
+    sales_today = db.query(Sale).filter(
+        Sale.created_at >= start_of_today, Sale.created_at <= end_of_today
     ).all()
-    today_gross_cash = sum((p.amount for p in today_payments), Decimal("0.00"))
+    gross_sales_revenue = sum((s.total_amount for s in sales_today), Decimal("0.00"))
+    sales_gross_profit = sum((s.gross_profit for s in sales_today), Decimal("0.00"))
 
-    # 2. Today's Invoiced Gross Profit from Sales
-    sales_gross_profit = db.query(func.coalesce(func.sum(Sale.gross_profit), Decimal("0.00")))\
-        .filter(Sale.created_at >= start_of_today, Sale.created_at <= end_of_today).scalar()
-
-    # 2b. Calculate Profit Reversed on Returns today and Cash Refunds
-    today_returns = db.query(SalesReturn).filter(
+    # 1b. Customer Returns today
+    returns_today = db.query(SalesReturn).options(
+        joinedload(SalesReturn.items).joinedload(SalesReturnItem.product)
+    ).filter(
         SalesReturn.created_at >= start_of_today, SalesReturn.created_at <= end_of_today
     ).all()
+    returns_revenue = sum((r.total_return_amount for r in returns_today), Decimal("0.00"))
+    cash_refunds_today = sum((r.cash_refund_amount for r in returns_today), Decimal("0.00"))
+
     reversed_profit = Decimal("0.00")
-    cash_refunds_today = Decimal("0.00")
-    for ret in today_returns:
-        cash_refunds_today += ret.cash_refund_amount
+    for ret in returns_today:
         for it in ret.items:
             prod_cost = it.product.purchase_price if it.product else Decimal("0.00")
-            item_profit = max(Decimal("0.00"), it.unit_price - prod_cost) * it.quantity
-            reversed_profit += item_profit
+            reversed_profit += max(Decimal("0.00"), it.unit_price - prod_cost) * it.quantity
 
-    # Net Cash Collected Today
-    today_collected_cash = max(Decimal("0.00"), today_gross_cash - cash_refunds_today)
+    # Net Sales Revenue (Sales - Returns)
+    today_sales_revenue = max(Decimal("0.00"), gross_sales_revenue - returns_revenue)
 
-    # Net Invoiced Gross Profit (Profit from returns is reversed)
-    today_gross_profit = max(Decimal("0.00"), sales_gross_profit - reversed_profit)
+    # Net Gross Profit on Today's Sales (Sales gross profit - returns profit reversed, allows signed loss)
+    today_gross_profit = (sales_gross_profit - reversed_profit).quantize(Decimal("0.01"))
 
-    # 2c. Realized Gross Profit on Cash Collected Today
+    # Cash collected and realized profit specifically from Today's Sales
+    today_sales_cash = Decimal("0.00")
     today_realized_profit_raw = Decimal("0.00")
-    for p in today_payments:
-        if p.sale and p.sale.total_amount > Decimal("0.00"):
-            margin_ratio = max(Decimal("0.00"), p.sale.gross_profit / p.sale.total_amount)
-            today_realized_profit_raw += (p.amount * margin_ratio)
-        elif p.sale:
-            today_realized_profit_raw += p.sale.gross_profit
+    for s in sales_today:
+        cash_paid = min(s.total_amount, s.paid_amount)
+        today_sales_cash += cash_paid
+        ratio = (cash_paid / s.total_amount) if s.total_amount > Decimal("0.00") else Decimal("1.00")
+        today_realized_profit_raw += (s.gross_profit * ratio)
 
     today_realized_profit = max(Decimal("0.00"), today_realized_profit_raw - reversed_profit).quantize(Decimal("0.01"))
+    today_unrealized_profit = max(Decimal("0.00"), today_gross_profit - today_realized_profit)
+
+    # All payments received today (including debt payments on past sales)
+    today_payments = db.query(SalePayment).options(joinedload(SalePayment.sale)).filter(
+        SalePayment.created_at >= start_of_today, SalePayment.created_at <= end_of_today
+    ).all()
+
+    today_past_debt_collected = Decimal("0.00")
+    today_past_debt_profit = Decimal("0.00")
+    for p in today_payments:
+        if p.sale and (p.sale.created_at < start_of_today or p.sale.created_at > end_of_today):
+            today_past_debt_collected += p.amount
+            if p.sale.total_amount > Decimal("0.00"):
+                p_ratio = p.amount / p.sale.total_amount
+                today_past_debt_profit += (p.sale.gross_profit * p_ratio)
+
+    today_past_debt_profit = today_past_debt_profit.quantize(Decimal("0.01"))
+
+    # Total physical cash collected today across all sources minus cash refunds
+    today_gross_cash = sum((p.amount for p in today_payments), Decimal("0.00"))
+    today_collected_cash = max(Decimal("0.00"), today_gross_cash - cash_refunds_today)
 
     # 3. Total Customer Outstanding
     all_customers = list_customers(db, is_active=True)
@@ -88,9 +97,13 @@ def get_dashboard_stats(db: Session) -> DashboardStatsResponse:
 
     return DashboardStatsResponse(
         today_sales_revenue=today_sales_revenue,
+        today_sales_cash=today_sales_cash,
+        today_past_debt_collected=today_past_debt_collected,
         today_collected_cash=today_collected_cash,
         today_gross_profit=today_gross_profit,
         today_realized_profit=today_realized_profit,
+        today_unrealized_profit=today_unrealized_profit,
+        today_past_debt_profit=today_past_debt_profit,
         customer_outstanding=customer_outstanding,
         supplier_outstanding=supplier_outstanding,
         bills_needing_attention_count=bills_count

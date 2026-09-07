@@ -146,12 +146,14 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
   }, [resizingCol]);
 
   const currency = settings?.currency || 'Rs.';
+  const showSku = settings?.show_sku !== false;
+  const showBarcode = settings?.show_barcode !== false;
 
   const hasUnsavedData = rows.some(
     (r) =>
       r.name.trim().length > 0 ||
-      r.sku.trim().length > 0 ||
-      r.barcode.trim().length > 0 ||
+      (showSku && r.sku.trim().length > 0) ||
+      (showBarcode && r.barcode.trim().length > 0) ||
       r.purchase_price > 0 ||
       r.selling_price > 0 ||
       r.opening_stock > 0 ||
@@ -244,15 +246,17 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
         return;
       }
 
-      const bc = r.barcode.trim();
-      if (bc) {
-        if (seenBarcodes.has(bc)) {
-          setErrorMsg(
-            `Duplicate barcode "${bc}" found in Row ${seenBarcodes.get(bc)} and Row ${rowNum}. Barcodes must be unique.`
-          );
-          return;
+      if (showBarcode) {
+        const bc = r.barcode.trim();
+        if (bc) {
+          if (seenBarcodes.has(bc)) {
+            setErrorMsg(
+              `Duplicate barcode "${bc}" found in Row ${seenBarcodes.get(bc)} and Row ${rowNum}. Barcodes must be unique.`
+            );
+            return;
+          }
+          seenBarcodes.set(bc, rowNum);
         }
-        seenBarcodes.set(bc, rowNum);
       }
     }
 
@@ -273,8 +277,8 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
           purchase_price: Number(r.purchase_price || 0),
           selling_price: Number(r.selling_price || 0),
           opening_stock: Number(r.opening_stock || 0),
-          barcode: r.barcode.trim() || undefined,
-          sku: r.sku.trim() || undefined,
+          barcode: showBarcode ? (r.barcode.trim() || undefined) : undefined,
+          sku: showSku ? (r.sku.trim() || undefined) : undefined,
           custom_fields: customFieldList.length > 0 ? customFieldList : undefined,
         };
       });
@@ -295,8 +299,8 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
   const totalTableWidth =
     (colWidths.index || 45) +
     (colWidths.name || 220) +
-    (colWidths.sku || 130) +
-    (colWidths.barcode || 140) +
+    (showSku ? (colWidths.sku || 130) : 0) +
+    (showBarcode ? (colWidths.barcode || 140) : 0) +
     (colWidths.purchase_price || 130) +
     (colWidths.selling_price || 130) +
     (colWidths.opening_stock || 110) +
@@ -397,28 +401,32 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                   </th>
 
                   {/* SKU (Optional) */}
-                  <th
-                    style={{ width: `${colWidths.sku || 130}px` }}
-                    className="py-3 px-2.5 relative group"
-                  >
-                    <span className="truncate">SKU (Opt)</span>
-                    <div
-                      onMouseDown={(e) => handleStartResize('sku', e)}
-                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-emerald-500 active:bg-emerald-600 transition"
-                    />
-                  </th>
+                  {showSku && (
+                    <th
+                      style={{ width: `${colWidths.sku || 130}px` }}
+                      className="py-3 px-2.5 relative group"
+                    >
+                      <span className="truncate">SKU (Opt)</span>
+                      <div
+                        onMouseDown={(e) => handleStartResize('sku', e)}
+                        className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-emerald-500 active:bg-emerald-600 transition"
+                      />
+                    </th>
+                  )}
 
                   {/* Barcode (Optional) */}
-                  <th
-                    style={{ width: `${colWidths.barcode || 140}px` }}
-                    className="py-3 px-2.5 relative group"
-                  >
-                    <span className="truncate">Barcode (Opt)</span>
-                    <div
-                      onMouseDown={(e) => handleStartResize('barcode', e)}
-                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-emerald-500 active:bg-emerald-600 transition"
-                    />
-                  </th>
+                  {showBarcode && (
+                    <th
+                      style={{ width: `${colWidths.barcode || 140}px` }}
+                      className="py-3 px-2.5 relative group"
+                    >
+                      <span className="truncate">Barcode (Opt)</span>
+                      <div
+                        onMouseDown={(e) => handleStartResize('barcode', e)}
+                        className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-emerald-500 active:bg-emerald-600 transition"
+                      />
+                    </th>
+                  )}
 
                   {/* Cost Price */}
                   <th
@@ -522,26 +530,30 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                     </td>
 
                     {/* SKU */}
-                    <td style={{ width: `${colWidths.sku || 130}px` }} className="py-1 px-1">
-                      <input
-                        type="text"
-                        placeholder="SKU-001"
-                        value={row.sku}
-                        onChange={(e) => handleUpdateCell(idx, 'sku', e.target.value)}
-                        className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1.5 text-xs text-slate-700 focus:outline-none"
-                      />
-                    </td>
+                    {showSku && (
+                      <td style={{ width: `${colWidths.sku || 130}px` }} className="py-1 px-1">
+                        <input
+                          type="text"
+                          placeholder="SKU-001"
+                          value={row.sku}
+                          onChange={(e) => handleUpdateCell(idx, 'sku', e.target.value)}
+                          className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1.5 text-xs text-slate-700 focus:outline-none"
+                        />
+                      </td>
+                    )}
 
                     {/* Barcode */}
-                    <td style={{ width: `${colWidths.barcode || 140}px` }} className="py-1 px-1">
-                      <input
-                        type="text"
-                        placeholder="Scan / Barcode"
-                        value={row.barcode}
-                        onChange={(e) => handleUpdateCell(idx, 'barcode', e.target.value)}
-                        className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1.5 font-mono text-slate-700 text-xs focus:outline-none"
-                      />
-                    </td>
+                    {showBarcode && (
+                      <td style={{ width: `${colWidths.barcode || 140}px` }} className="py-1 px-1">
+                        <input
+                          type="text"
+                          placeholder="Scan / Barcode"
+                          value={row.barcode}
+                          onChange={(e) => handleUpdateCell(idx, 'barcode', e.target.value)}
+                          className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1.5 font-mono text-slate-700 text-xs focus:outline-none"
+                        />
+                      </td>
+                    )}
 
                     {/* Cost Price */}
                     <td

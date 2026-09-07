@@ -62,6 +62,7 @@ class SaleResponse(BaseModel):
     receipt_number: str
     customer_id: int
     customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
     subtotal: Decimal
     discount_amount: Decimal
     tax_rate: Decimal

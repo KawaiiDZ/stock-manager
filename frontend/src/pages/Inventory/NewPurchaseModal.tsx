@@ -69,6 +69,8 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const currency = settings?.currency || 'Rs.';
+  const showSku = settings?.show_sku !== false;
+  const showBarcode = settings?.show_barcode !== false;
 
   useEffect(() => {
     if (isOpen) {
@@ -220,13 +222,13 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
     return products
       .filter((p) => {
         const nameMatch = p.name.toLowerCase().includes(q);
-        const barcodeMatch = p.barcode ? p.barcode.toLowerCase().includes(q) : false;
-        const skuMatch = p.sku ? p.sku.toLowerCase().includes(q) : false;
+        const barcodeMatch = showBarcode && p.barcode ? p.barcode.toLowerCase().includes(q) : false;
+        const skuMatch = showSku && p.sku ? p.sku.toLowerCase().includes(q) : false;
         const catMatch = p.category_name ? p.category_name.toLowerCase().includes(q) : false;
         return nameMatch || barcodeMatch || skuMatch || catMatch;
       })
       .slice(0, 30);
-  }, [products, rowSearchQuery]);
+  }, [products, rowSearchQuery, showBarcode, showSku]);
 
   const handleProceedToReview = (e: React.FormEvent) => {
     e.preventDefault();
@@ -727,7 +729,7 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                               type="text"
                               value={rowSearchQuery}
                               onChange={(e) => setRowSearchQuery(e.target.value)}
-                              placeholder="Search 500+ products by name, SKU, barcode..."
+                              placeholder={`Search 500+ products by name${showSku ? ', SKU' : ''}${showBarcode ? ', barcode' : ''}...`}
                               className="w-full bg-slate-50 focus:bg-white border-2 border-emerald-500 rounded-xl pl-9 pr-8 py-1.5 text-xs font-bold text-slate-800 focus:outline-none shadow-sm"
                               autoFocus
                             />
@@ -758,8 +760,8 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                                     <div className="font-bold text-slate-900 truncate">{p.name}</div>
                                     <div className="text-[10px] text-slate-400 flex items-center gap-2">
                                       {p.category_name && <span>{p.category_name}</span>}
-                                      {p.barcode && <span>• Barcode: {p.barcode}</span>}
-                                      {p.sku && <span>• SKU: {p.sku}</span>}
+                                      {showBarcode && p.barcode && <span>• Barcode: {p.barcode}</span>}
+                                      {showSku && p.sku && <span>• SKU: {p.sku}</span>}
                                     </div>
                                   </div>
 

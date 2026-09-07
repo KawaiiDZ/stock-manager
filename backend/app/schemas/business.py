@@ -18,6 +18,8 @@ class BusinessSettingsResponse(BaseModel):
     receipt_printer_type: str
     industry_preset: Optional[str] = "general"
     setup_completed: bool = False
+    show_sku: bool = True
+    show_barcode: bool = True
 
     class Config:
         from_attributes = True
@@ -36,6 +38,8 @@ class BusinessSettingsUpdate(BaseModel):
     receipt_printer_type: Optional[str] = None
     industry_preset: Optional[str] = None
     setup_completed: Optional[bool] = None
+    show_sku: Optional[bool] = None
+    show_barcode: Optional[bool] = None
 
 class PresetTemplateResponse(BaseModel):
     key: str

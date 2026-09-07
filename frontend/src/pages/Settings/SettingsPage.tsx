@@ -54,6 +54,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [bizPhone, setBizPhone] = useState(settings?.phone || '');
   const [bizAddress, setBizAddress] = useState(settings?.address || '');
   const [currency, setCurrency] = useState(settings?.currency || 'Rs.');
+  const [showSku, setShowSku] = useState(settings?.show_sku ?? true);
+  const [showBarcode, setShowBarcode] = useState(settings?.show_barcode ?? true);
 
   // Tax State
   const [taxEnabled, setTaxEnabled] = useState(settings?.tax_enabled || false);
@@ -104,6 +106,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setReceiptHeader(settings.receipt_header);
       setReceiptFooter(settings.receipt_footer);
       setPrinterType(settings.receipt_printer_type);
+      setShowSku(settings.show_sku ?? true);
+      setShowBarcode(settings.show_barcode ?? true);
     }
   }, [settings]);
 
@@ -164,6 +168,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         receipt_header: receiptHeader.trim(),
         receipt_footer: receiptFooter.trim(),
         receipt_printer_type: printerType,
+        show_sku: showSku,
+        show_barcode: showBarcode,
       });
       setSuccessMsg('Settings saved successfully!');
       onSettingsUpdated();
@@ -491,6 +497,51 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               hint="e.g. Rs., PKR, $"
               required
             />
+
+            {/* Product Identifiers: Barcode & SKU Visibility */}
+            <div className="pt-3 border-t border-slate-100 space-y-3">
+              <div>
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Product Identifiers (Catalog Display)
+                </h4>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Configure whether your business requires Barcodes and SKUs. Existing data is safely preserved even when hidden.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <label className="flex items-start gap-3 p-3.5 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition">
+                  <input
+                    type="checkbox"
+                    checked={showBarcode}
+                    onChange={(e) => setShowBarcode(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div className="text-xs">
+                    <span className="font-bold text-slate-800 block">Show Barcode & Scanner</span>
+                    <span className="text-slate-500 text-[11px] leading-relaxed">
+                      Show barcode fields & scanner support in Catalog, Bulk Add, POS, and Stock Updates.
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-3 p-3.5 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition">
+                  <input
+                    type="checkbox"
+                    checked={showSku}
+                    onChange={(e) => setShowSku(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div className="text-xs">
+                    <span className="font-bold text-slate-800 block">Show SKU (Stock Keeping Unit)</span>
+                    <span className="text-slate-500 text-[11px] leading-relaxed">
+                      Show SKU fields & search indexing in Catalog, Bulk Add, and Stock Updates.
+                    </span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
             <div className="pt-2">
               <Button type="submit" variant="primary" loading={saving}>
                 Save Profile

@@ -125,6 +125,13 @@ def create_purchase(db: Session, data: PurchaseCreate) -> PurchaseResponse:
             "total_cost": line_total
         })
 
+    if data.discount_amount is not None and data.discount_amount < Decimal("0.00"):
+        raise BusinessRuleException("Discount amount cannot be negative.")
+    if data.tax_amount is not None and data.tax_amount < Decimal("0.00"):
+        raise BusinessRuleException("Tax amount cannot be negative.")
+    if data.paid_amount is not None and data.paid_amount < Decimal("0.00"):
+        raise BusinessRuleException("Paid amount cannot be negative.")
+
     disc = data.discount_amount or Decimal("0.00")
     tax = data.tax_amount or Decimal("0.00")
     total_amount = max(Decimal("0.00"), subtotal - disc + tax)

@@ -22,6 +22,8 @@ def list_categories(db: Session, active_only: bool = True) -> List[ProductCatego
     return q.order_by(ProductCategory.name.asc()).all()
 
 def create_category(db: Session, data: CategoryCreate) -> ProductCategory:
+    if not data.name or not data.name.strip():
+        raise BusinessRuleException("Category name cannot be empty.")
     existing = db.query(ProductCategory).filter(ProductCategory.name == data.name.strip()).first()
     if existing:
         if not existing.is_active:
@@ -39,6 +41,8 @@ def update_category(db: Session, cat_id: int, name: str, is_active: Optional[boo
     cat = db.query(ProductCategory).filter(ProductCategory.id == cat_id).first()
     if not cat:
         raise EntityNotFoundException("Category", str(cat_id))
+    if not name or not name.strip():
+        raise BusinessRuleException("Category name cannot be empty.")
     cat.name = name.strip()
     if is_active is not None:
         cat.is_active = is_active
@@ -56,9 +60,11 @@ def delete_category(db: Session, cat_id: int) -> None:
 
     for p in products:
         has_sales = db.query(SaleItem).filter(SaleItem.product_id == p.id).first() is not None
+        has_sales_returns = db.query(SalesReturnItem).filter(SalesReturnItem.product_id == p.id).first() is not None
         has_purchases = db.query(PurchaseItem).filter(PurchaseItem.product_id == p.id).first() is not None
+        has_purchase_returns = db.query(PurchaseReturnItem).filter(PurchaseReturnItem.product_id == p.id).first() is not None
 
-        if has_sales or has_purchases:
+        if has_sales or has_sales_returns or has_purchases or has_purchase_returns:
             # Products with transaction history cannot be hard-deleted due to foreign keys and invoice integrity.
             # Deactivate them, zero their stock, unlink from category, and delete custom values.
             p.is_active = False
@@ -118,6 +124,8 @@ def list_custom_fields(
     return [_format_custom_field_response(f) for f in fields]
 
 def create_custom_field(db: Session, data: CustomFieldCreate) -> CustomFieldResponse:
+    if not data.name or not data.name.strip():
+        raise BusinessRuleException("Custom field name cannot be empty.")
     cat_id = data.category_id if data.category_id and data.category_id > 0 else None
     if cat_id:
         cat = db.query(ProductCategory).filter(ProductCategory.id == cat_id).first()
@@ -157,6 +165,8 @@ def update_custom_field(
                 raise EntityNotFoundException("Category", str(cat_id))
         field.category_id = cat_id
     if data.name is not None:
+        if not data.name.strip():
+            raise BusinessRuleException("Custom field name cannot be empty.")
         field.name = data.name.strip()
     if data.field_type is not None:
         field.field_type = data.field_type
@@ -261,6 +271,15 @@ def get_product_by_barcode(db: Session, barcode: str) -> Optional[dict]:
     return _format_product_response(product)
 
 def create_product(db: Session, data: ProductCreate) -> dict:
+    if not data.name or not data.name.strip():
+        raise BusinessRuleException("Product name cannot be empty.")
+    if data.purchase_price < Decimal("0.00"):
+        raise BusinessRuleException("Purchase price cannot be negative.")
+    if data.selling_price < Decimal("0.00"):
+        raise BusinessRuleException("Selling price cannot be negative.")
+    if data.opening_stock < Decimal("0.00"):
+        raise BusinessRuleException("Opening stock cannot be negative.")
+
     # Check duplicate barcode
     if data.barcode and data.barcode.strip():
         existing_bc = db.query(Product).filter(Product.barcode == data.barcode.strip()).first()
@@ -307,6 +326,9 @@ def create_product(db: Session, data: ProductCreate) -> dict:
     if data.custom_fields:
         for cf in data.custom_fields:
             if cf.value and cf.value.strip():
+                field_exists = db.query(ProductCustomField).filter(ProductCustomField.id == cf.field_id).first()
+                if not field_exists:
+                    continue
                 val = ProductCustomValue(
                     product_id=product.id,
                     field_id=cf.field_id,
@@ -329,6 +351,13 @@ def create_products_bulk(db: Session, products_data: List[ProductCreate]) -> Bul
         name = item.name.strip()
         if not name:
             continue
+
+        if item.purchase_price < Decimal("0.00"):
+            raise BusinessRuleException(f"Purchase price for '{name}' cannot be negative.")
+        if item.selling_price < Decimal("0.00"):
+            raise BusinessRuleException(f"Selling price for '{name}' cannot be negative.")
+        if item.opening_stock < Decimal("0.00"):
+            raise BusinessRuleException(f"Opening stock for '{name}' cannot be negative.")
 
         barcode = item.barcode.strip() if item.barcode else None
         if barcode:
@@ -380,6 +409,9 @@ def create_products_bulk(db: Session, products_data: List[ProductCreate]) -> Bul
         if item.custom_fields:
             for cf in item.custom_fields:
                 if cf.value and cf.value.strip():
+                    field_exists = db.query(ProductCustomField).filter(ProductCustomField.id == cf.field_id).first()
+                    if not field_exists:
+                        continue
                     val = ProductCustomValue(
                         product_id=product.id,
                         field_id=cf.field_id,
@@ -400,6 +432,8 @@ def create_products_bulk(db: Session, products_data: List[ProductCreate]) -> Bul
     )
 
 def adjust_stock(db: Session, product_id: int, data: StockAdjustmentRequest) -> dict:
+    if data.new_stock < Decimal("0.00"):
+        raise BusinessRuleException("New stock count cannot be negative.")
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise EntityNotFoundException("Product", str(product_id))
@@ -465,20 +499,29 @@ def update_product(db: Session, product_id: int, data: ProductUpdate) -> dict:
         product.barcode = bc_val
 
     if data.name is not None:
+        if not data.name.strip():
+            raise BusinessRuleException("Product name cannot be empty.")
         product.name = data.name.strip()
     if data.sku is not None:
         product.sku = data.sku.strip() if data.sku else None
     if data.category_id is not None:
         product.category_id = data.category_id if data.category_id > 0 else None
     if data.purchase_price is not None:
+        if data.purchase_price < Decimal("0.00"):
+            raise BusinessRuleException("Purchase price cannot be negative.")
         product.purchase_price = data.purchase_price
     if data.selling_price is not None:
+        if data.selling_price < Decimal("0.00"):
+            raise BusinessRuleException("Selling price cannot be negative.")
         product.selling_price = data.selling_price
 
     if data.custom_fields is not None:
         db.query(ProductCustomValue).filter(ProductCustomValue.product_id == product_id).delete()
         for cf in data.custom_fields:
             if cf.value and cf.value.strip():
+                field_exists = db.query(ProductCustomField).filter(ProductCustomField.id == cf.field_id).first()
+                if not field_exists:
+                    continue
                 val = ProductCustomValue(
                     product_id=product.id,
                     field_id=cf.field_id,

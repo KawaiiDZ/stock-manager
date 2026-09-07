@@ -68,6 +68,8 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   const barcodeBufferRef = useRef<{ code: string; time: number }>({ code: '', time: 0 });
 
   const currency = settings?.currency || 'Rs.';
+  const showSku = settings?.show_sku !== false;
+  const showBarcode = settings?.show_barcode !== false;
 
   // Initial load
   useEffect(() => {
@@ -117,8 +119,8 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         if (scanned.length >= 3) {
           const match = products.find(
             (p) =>
-              p.barcode?.toLowerCase() === scanned.toLowerCase() ||
-              p.sku?.toLowerCase() === scanned.toLowerCase()
+              (showBarcode && p.barcode?.toLowerCase() === scanned.toLowerCase()) ||
+              (showSku && p.sku?.toLowerCase() === scanned.toLowerCase())
           );
           if (match) {
             addToCart(match);
@@ -215,8 +217,8 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         const matchesCore =
           p.name.toLowerCase().includes(q) ||
           p.product_id.toLowerCase().includes(q) ||
-          (p.sku && p.sku.toLowerCase().includes(q)) ||
-          (p.barcode && p.barcode.toLowerCase().includes(q));
+          (showSku && p.sku && p.sku.toLowerCase().includes(q)) ||
+          (showBarcode && p.barcode && p.barcode.toLowerCase().includes(q));
         if (matchesCore) return true;
 
         if (p.custom_fields && p.custom_fields.length > 0) {
@@ -350,7 +352,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
           <div>
             <h1 className="text-2xl font-black tracking-tight">Point of Sale (POS)</h1>
             <p className="text-emerald-200 text-xs mt-0.5 font-medium">
-              Scan barcode or search product • Press{' '}
+              {showBarcode ? 'Scan barcode or search product • ' : 'Search product • '}Press{' '}
               <kbd className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-mono">F4</kbd> to
               search
             </p>
@@ -386,7 +388,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
           <div className="bg-white rounded-3xl border border-slate-200 p-4 shadow-sm relative">
             <Input
               ref={searchInputRef}
-              placeholder="Search by Product name, ID, or scan barcode... (Press Enter to add)"
+              placeholder={`Search by Product name, ID${showSku ? ', SKU' : ''}${showBarcode ? ', or scan barcode' : ''}... (Press Enter to add)`}
               prefix={<Search className="h-5 w-5 text-emerald-600" />}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -420,7 +422,8 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                         </div>
                         <div className="text-xs text-slate-400 flex flex-wrap items-center gap-1.5 mt-0.5">
                           <span>ID: {prod.product_id}</span>
-                          {prod.barcode && <span>• BC: {prod.barcode}</span>}
+                          {showBarcode && prod.barcode && <span>• BC: {prod.barcode}</span>}
+                          {showSku && prod.sku && <span>• SKU: {prod.sku}</span>}
                           {prod.custom_fields &&
                             prod.custom_fields.map((cf) => (
                               <span
@@ -479,7 +482,9 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                   </div>
                   <p className="font-semibold text-slate-600 text-sm">Cart is empty</p>
                   <p className="text-xs text-slate-400 mt-1">
-                    Scan a product barcode or use search above
+                    {showBarcode
+                      ? 'Scan a product barcode or use search above'
+                      : 'Search products above to add to cart'}
                   </p>
                 </div>
               ) : (

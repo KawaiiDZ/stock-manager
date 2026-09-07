@@ -32,13 +32,32 @@ def get_single_sales_return(id: int, db: Session = Depends(get_db)):
 # Supplier Returns
 @router.post("/purchase", response_model=PurchaseReturnResponse)
 @router.post("/purchases", response_model=PurchaseReturnResponse)
+@router.post("/purchase-returns", response_model=PurchaseReturnResponse)
 def return_supplier_purchase(data: PurchaseReturnCreate, db: Session = Depends(get_db)):
     return create_purchase_return(db, data)
 
 @router.get("/purchases", response_model=List[PurchaseReturnResponse])
+@router.get("/purchase-returns", response_model=List[PurchaseReturnResponse])
 def get_all_purchase_returns(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return list_purchase_returns(db, skip=skip, limit=limit)
 
 @router.get("/purchases/{id}", response_model=PurchaseReturnResponse)
+@router.get("/purchase-returns/{id}", response_model=PurchaseReturnResponse)
 def get_single_purchase_return(id: int, db: Session = Depends(get_db)):
+    return get_purchase_return(db, id)
+
+purchase_returns_router = APIRouter(prefix="/purchase-returns", tags=["Returns"])
+
+@purchase_returns_router.post("", response_model=PurchaseReturnResponse)
+@purchase_returns_router.post("/", response_model=PurchaseReturnResponse)
+def create_pur_return(data: PurchaseReturnCreate, db: Session = Depends(get_db)):
+    return create_purchase_return(db, data)
+
+@purchase_returns_router.get("", response_model=List[PurchaseReturnResponse])
+@purchase_returns_router.get("/", response_model=List[PurchaseReturnResponse])
+def list_pur_returns(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return list_purchase_returns(db, skip=skip, limit=limit)
+
+@purchase_returns_router.get("/{id}", response_model=PurchaseReturnResponse)
+def get_pur_return(id: int, db: Session = Depends(get_db)):
     return get_purchase_return(db, id)

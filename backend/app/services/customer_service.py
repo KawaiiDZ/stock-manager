@@ -97,6 +97,8 @@ def get_customer(db: Session, customer_id: int) -> CustomerResponse:
     )
 
 def create_customer(db: Session, data: CustomerCreate) -> CustomerResponse:
+    if not data.name or not data.name.strip():
+        raise BusinessRuleException("Customer name cannot be empty.")
     new_cid = generate_customer_id(db)
     cust = Customer(
         customer_id=new_cid,
@@ -115,6 +117,8 @@ def update_customer(db: Session, customer_id: int, data: CustomerUpdate) -> Cust
     if not c:
         raise EntityNotFoundException("Customer", str(customer_id))
     if data.name is not None:
+        if not data.name.strip():
+            raise BusinessRuleException("Customer name cannot be empty.")
         c.name = data.name.strip()
     if data.phone is not None:
         c.phone = data.phone.strip() if data.phone else None
@@ -179,7 +183,14 @@ def record_customer_payment(db: Session, customer_id: int, data: CustomerPayment
         alloc = min(unallocated, s.due_amount)
         s.paid_amount += alloc
         s.due_amount = max(Decimal("0.00"), s.due_amount - alloc)
-        if s.due_amount == Decimal("0.00"):
+
+        total_ret_qty = sum((ri.quantity for r in s.returns for ri in r.items), Decimal("0.00")) if s.returns else Decimal("0.00")
+        total_orig_qty = sum((it.quantity for it in s.items), Decimal("0.00"))
+        if total_orig_qty > Decimal("0.00") and total_ret_qty >= total_orig_qty:
+            s.payment_status = "RETURNED"
+        elif total_ret_qty > Decimal("0.00"):
+            s.payment_status = "PARTIALLY_RETURNED" if s.due_amount == Decimal("0.00") else "PARTIALLY_PAID"
+        elif s.due_amount == Decimal("0.00"):
             s.payment_status = "PAID"
         else:
             s.payment_status = "PARTIALLY_PAID"
@@ -219,21 +230,20 @@ def get_customer_ledger(db: Session, customer_id: int) -> List[CustomerLedgerEnt
             "credit": Decimal("0.00"),
         })
 
-        # Checkout down payment (if any paid at time of sale, not linked to a CustomerPayment)
-        initial_payments = [
-            pm for pm in (s.payments or [])
-            if pm.customer_payment_id is None and pm.amount > Decimal("0.00")
-        ]
-        initial_credit = sum((pm.amount for pm in initial_payments), Decimal("0.00"))
-        if initial_credit > Decimal("0.00"):
-            method = initial_payments[0].payment_method if initial_payments else "Cash"
+        # Sale payments not linked to a standalone CustomerPayment
+        sorted_pms = sorted(
+            [pm for pm in (s.payments or []) if pm.customer_payment_id is None and pm.amount > Decimal("0.00")],
+            key=lambda x: x.id
+        )
+        for idx, pm in enumerate(sorted_pms):
+            is_initial = (idx == 0 and abs((pm.created_at - s.created_at).total_seconds()) < 2)
             timeline.append({
-                "date": s.created_at,
+                "date": s.created_at if is_initial else pm.created_at,
                 "type": "Payment",
                 "reference": s.receipt_number,
-                "description": f"Down payment at checkout ({method})",
+                "description": f"Down payment at checkout ({pm.payment_method})" if is_initial else f"Direct payment on receipt ({pm.payment_method})",
                 "debit": Decimal("0.00"),
-                "credit": initial_credit,
+                "credit": pm.amount,
             })
 
     for p in standalone_payments:

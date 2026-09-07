@@ -77,6 +77,8 @@ def create_sales_return(db: Session, data: SalesReturnCreate) -> SalesReturnResp
 
         if item_data.quantity <= Decimal("0.00"):
             raise BusinessRuleException(f"Return quantity for {product.name} must be greater than zero.")
+        if item_data.unit_price < Decimal("0.00"):
+            raise BusinessRuleException(f"Unit price for {product.name} cannot be negative.")
 
         # If return is tied to a sale, ensure returned quantity does not exceed remaining returnable units
         if original_sale:
@@ -99,7 +101,7 @@ def create_sales_return(db: Session, data: SalesReturnCreate) -> SalesReturnResp
         product.current_stock += item_data.quantity
 
         # Create a new inventory batch for the returned goods
-        return_cost = product.purchase_price
+        return_cost = (sale_item.unit_cost if original_sale and sale_item else product.purchase_price)
         batch = InventoryBatch(
             product_id=product.id,
             purchase_id=None,
@@ -138,7 +140,8 @@ def create_sales_return(db: Session, data: SalesReturnCreate) -> SalesReturnResp
         balance_credit = total_return_amount - cash_refund
     else:
         # For manual returns without receipt:
-        if customer.customer_id == "C-000001":
+        is_walk_in = customer.customer_id == "C-000001" or customer.name.strip().lower() == "walk-in customer"
+        if is_walk_in:
             cash_refund = total_return_amount
             balance_credit = Decimal("0.00")
         else:
@@ -276,6 +279,8 @@ def create_purchase_return(db: Session, data: PurchaseReturnCreate) -> PurchaseR
 
         if item_data.quantity <= Decimal("0.00"):
             raise BusinessRuleException(f"Return quantity for {product.name} must be greater than zero.")
+        if item_data.unit_cost < Decimal("0.00"):
+            raise BusinessRuleException(f"Unit cost for {product.name} cannot be negative.")
 
         # Check purchase item limit
         if original_purchase:

@@ -89,6 +89,8 @@ def get_supplier(db: Session, supplier_id: int) -> SupplierResponse:
     )
 
 def create_supplier(db: Session, data: SupplierCreate) -> SupplierResponse:
+    if not data.name or not data.name.strip():
+        raise BusinessRuleException("Supplier name cannot be empty.")
     new_sid = generate_supplier_id(db)
     supp = Supplier(
         supplier_id=new_sid,
@@ -107,6 +109,8 @@ def update_supplier(db: Session, supplier_id: int, data: SupplierUpdate) -> Supp
     if not s:
         raise EntityNotFoundException("Supplier", str(supplier_id))
     if data.name is not None:
+        if not data.name.strip():
+            raise BusinessRuleException("Supplier name cannot be empty.")
         s.name = data.name.strip()
     if data.phone is not None:
         s.phone = data.phone.strip() if data.phone else None
@@ -169,7 +173,14 @@ def record_supplier_payment(db: Session, supplier_id: int, data: SupplierPayment
         alloc = min(unallocated, pur.due_amount)
         pur.paid_amount += alloc
         pur.due_amount = max(Decimal("0.00"), pur.due_amount - alloc)
-        if pur.due_amount == Decimal("0.00"):
+
+        total_ret_qty = sum((ri.quantity for r in pur.returns for ri in r.items), Decimal("0.00")) if pur.returns else Decimal("0.00")
+        total_orig_qty = sum((it.quantity for it in pur.items), Decimal("0.00"))
+        if total_orig_qty > Decimal("0.00") and total_ret_qty >= total_orig_qty:
+            pur.payment_status = "RETURNED"
+        elif total_ret_qty > Decimal("0.00"):
+            pur.payment_status = "PARTIALLY_RETURNED" if pur.due_amount == Decimal("0.00") else "PARTIALLY_PAID"
+        elif pur.due_amount == Decimal("0.00"):
             pur.payment_status = "PAID"
         else:
             pur.payment_status = "PARTIALLY_PAID"
@@ -208,20 +219,19 @@ def get_supplier_ledger(db: Session, supplier_id: int) -> List[SupplierLedgerEnt
             "credit": p.total_amount,
         })
 
-        # Checkout down payment (if any paid at time of purchase, not linked to a SupplierPayment)
-        initial_payments = [
-            pm for pm in (p.payments or [])
-            if pm.supplier_payment_id is None and pm.amount > Decimal("0.00")
-        ]
-        initial_paid = sum((pm.amount for pm in initial_payments), Decimal("0.00"))
-        if initial_paid > Decimal("0.00"):
-            method = initial_payments[0].payment_method if initial_payments else "Cash"
+        # Purchase payments not linked to a standalone SupplierPayment
+        sorted_pms = sorted(
+            [pm for pm in (p.payments or []) if pm.supplier_payment_id is None and pm.amount > Decimal("0.00")],
+            key=lambda x: x.id
+        )
+        for idx, pm in enumerate(sorted_pms):
+            is_initial = (idx == 0 and abs((pm.created_at - p.created_at).total_seconds()) < 2)
             timeline.append({
-                "date": p.created_at,
+                "date": p.created_at if is_initial else pm.created_at,
                 "type": "Payment",
                 "reference": p.purchase_number,
-                "description": f"Down payment on purchase ({method})",
-                "debit": initial_paid,
+                "description": f"Down payment on purchase ({pm.payment_method})" if is_initial else f"Direct payment on invoice ({pm.payment_method})",
+                "debit": pm.amount,
                 "credit": Decimal("0.00"),
             })
 

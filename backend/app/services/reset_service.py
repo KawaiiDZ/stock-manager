@@ -72,7 +72,6 @@ def reset_database_data(db: Session, confirm_pin: str, wipe_mode: str = "invento
             db.add(walk_in)
 
         db.commit()
-        db.execute(text("PRAGMA foreign_keys = ON;"))
 
         message = (
             f"Successfully wiped inventory and all sales/purchase transactions ({deleted_products_count} products removed). "
@@ -90,5 +89,6 @@ def reset_database_data(db: Session, confirm_pin: str, wipe_mode: str = "invento
 
     except Exception as e:
         db.rollback()
-        db.execute(text("PRAGMA foreign_keys = ON;"))
         raise HTTPException(status_code=500, detail=f"Database reset failed: {str(e)}")
+    finally:
+        db.execute(text("PRAGMA foreign_keys = ON;"))

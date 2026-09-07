@@ -21,6 +21,8 @@ def list_bill_categories(db: Session, active_only: bool = True) -> List[BillCate
     return [BillCategoryResponse.model_validate(c) for c in categories]
 
 def create_bill_category(db: Session, data: BillCategoryCreate) -> BillCategoryResponse:
+    if not data.name or not data.name.strip():
+        raise BusinessRuleException("Bill category name cannot be empty.")
     existing = db.query(BillCategory).filter(BillCategory.name == data.name.strip()).first()
     if existing:
         if not existing.is_active:
@@ -98,6 +100,9 @@ def create_bill(db: Session, data: BillCreate) -> BillResponse:
     if not cat:
         raise EntityNotFoundException("Bill Category", str(data.category_id))
 
+    if not data.name or not data.name.strip():
+        raise BusinessRuleException("Bill name cannot be empty.")
+
     if data.amount <= Decimal("0.00"):
         raise BusinessRuleException("Bill amount must be greater than zero.")
 
@@ -126,10 +131,14 @@ def update_bill(db: Session, bill_id: int, data: BillUpdate) -> BillResponse:
     if data.bill_number is not None:
         bill.bill_number = data.bill_number.strip()
     if data.name is not None:
+        if not data.name.strip():
+            raise BusinessRuleException("Bill name cannot be empty.")
         bill.name = data.name.strip()
     if data.category_id is not None:
         bill.category_id = data.category_id
     if data.amount is not None:
+        if data.amount < Decimal("0.00"):
+            raise BusinessRuleException("Bill amount cannot be negative.")
         if data.amount < bill.paid_amount:
             raise BusinessRuleException(f"Bill amount cannot be less than already paid amount (Rs. {bill.paid_amount}).")
         bill.amount = data.amount
@@ -146,6 +155,9 @@ def update_bill(db: Session, bill_id: int, data: BillUpdate) -> BillResponse:
         bill.status = "PAID"
     elif bill.paid_amount > Decimal("0.00"):
         bill.status = "PARTIALLY_PAID"
+    else:
+        if bill.status in ("PAID", "PARTIALLY_PAID") or data.status is None:
+            bill.status = "TO_PAY"
 
     db.commit()
     db.refresh(bill)

@@ -63,10 +63,13 @@ def verify_settings_pin(db: Session, pin: str) -> bool:
     return verify_password(settings.config_pin_hash, pin)
 
 def change_user_password(db: Session, user_id: int, current_pass: str, new_pass: str) -> bool:
+    clean_pass = (new_pass or "").strip()
+    if len(clean_pass) < 4:
+        raise BusinessRuleException("New password must be at least 4 characters long.")
     user = db.query(User).filter(User.id == user_id).first()
     if not user or not verify_password(user.password_hash, current_pass):
         raise BusinessRuleException("Current password does not match.")
-    user.password_hash = hash_password(new_pass)
+    user.password_hash = hash_password(clean_pass)
     db.commit()
     return True
 

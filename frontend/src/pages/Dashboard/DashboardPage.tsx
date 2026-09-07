@@ -134,10 +134,32 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
             <div className="text-2xl font-black text-slate-900">
               {formatCurrency(stats?.today_sales_revenue, currency)}
             </div>
-            <div className="flex items-center justify-between text-xs mt-1 font-semibold">
-              <span className="text-slate-400">Cash Collected:</span>
-              <span className="text-emerald-700 font-bold">{formatCurrency(stats?.today_collected_cash || 0, currency)}</span>
-            </div>
+            {stats && (stats.today_past_debt_collected || 0) > 0 ? (
+              <div className="mt-1 space-y-0.5">
+                <div className="flex items-center justify-between text-xs font-semibold">
+                  <span className="text-slate-400">Cash from Sales:</span>
+                  <span className="text-emerald-700 font-bold">{formatCurrency(stats.today_sales_cash || 0, currency)}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium">
+                  <span className="text-slate-400">+ Past Debt Collected:</span>
+                  <span className="text-slate-600 font-semibold">+{formatCurrency(stats.today_past_debt_collected, currency)}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between text-xs mt-1 font-semibold">
+                <span className="text-slate-400">Cash Collected:</span>
+                <span className="text-emerald-700 font-bold">
+                  {formatCurrency(stats?.today_sales_cash !== undefined ? stats.today_sales_cash : (stats?.today_collected_cash || 0), currency)}
+                  {stats && Number(stats.today_sales_revenue) > 0 && Number(stats.today_sales_cash ?? stats.today_collected_cash ?? 0) >= Number(stats.today_sales_revenue) ? ' (100%)' : ''}
+                </span>
+              </div>
+            )}
+            {stats && Number(stats.today_sales_revenue) > Number(stats.today_sales_cash ?? stats.today_collected_cash ?? 0) && !(stats.today_past_debt_collected || 0) && (
+              <div className="flex items-center justify-between text-[11px] mt-0.5 text-amber-600 font-medium">
+                <span>Credit / Due:</span>
+                <span className="font-semibold">{formatCurrency(Number(stats.today_sales_revenue) - Number(stats.today_sales_cash ?? stats.today_collected_cash ?? 0), currency)}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -153,12 +175,34 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
           </div>
           <div>
             <div className="text-2xl font-black text-emerald-700">
-              {formatCurrency(stats?.today_realized_profit !== undefined ? stats.today_realized_profit : stats?.today_gross_profit, currency)}
+              {formatCurrency(stats?.today_gross_profit, currency)}
             </div>
-            <div className="flex items-center justify-between text-xs mt-1 font-semibold">
-              <span className="text-slate-400">Invoiced Profit:</span>
-              <span className="text-slate-700 font-bold">{formatCurrency(stats?.today_gross_profit || 0, currency)}</span>
-            </div>
+            {stats && (stats.today_past_debt_profit || 0) > 0 ? (
+              <div className="mt-1 space-y-0.5">
+                <div className="flex items-center justify-between text-xs font-semibold">
+                  <span className="text-slate-400">Realized on Sales:</span>
+                  <span className="text-emerald-700 font-bold">{formatCurrency(stats.today_realized_profit || 0, currency)}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium">
+                  <span className="text-slate-400">+ Past Debt Profit:</span>
+                  <span className="text-slate-600 font-semibold">+{formatCurrency(stats.today_past_debt_profit, currency)}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between text-xs mt-1 font-semibold">
+                <span className="text-slate-400">Realized (Cash):</span>
+                <span className="text-slate-700 font-bold">
+                  {formatCurrency(stats?.today_realized_profit || 0, currency)}
+                  {stats && Number(stats.today_gross_profit) > 0 && Number(stats.today_realized_profit) >= Number(stats.today_gross_profit) ? ' (100%)' : ''}
+                </span>
+              </div>
+            )}
+            {stats && Number(stats.today_unrealized_profit || 0) > 0 && (
+              <div className="flex items-center justify-between text-[11px] mt-0.5 text-amber-600 font-medium">
+                <span>Credit Pending:</span>
+                <span className="font-semibold">{formatCurrency(stats.today_unrealized_profit || 0, currency)}</span>
+              </div>
+            )}
           </div>
         </div>
 

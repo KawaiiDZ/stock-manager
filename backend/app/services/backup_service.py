@@ -6,6 +6,7 @@ from typing import List
 from pathlib import Path
 
 from backend.app.core.config import settings
+from backend.app.core.database import engine, auto_upgrade_schema
 from backend.app.core.errors import BusinessRuleException
 from backend.app.schemas.backup import BackupFileResponse, BackupCreateResponse, BackupRestoreResponse
 
@@ -93,6 +94,9 @@ def restore_backup(backup_filename: str) -> BackupRestoreResponse:
 
     db_path = settings.SQLITE_DB_PATH
 
+    # Dispose active SQLAlchemy connection pool before replacing database file
+    engine.dispose()
+
     # 1. Create safety rollback backup of current state
     if db_path.exists():
         ts_now = datetime.now().strftime("%Y-%m-%d_%H%M%S")
@@ -112,6 +116,13 @@ def restore_backup(backup_filename: str) -> BackupRestoreResponse:
         source_conn.close()
     except Exception as e:
         shutil.copy2(backup_path, db_path)
+
+    # Dispose connections to flush file handles and run any required migrations
+    engine.dispose()
+    try:
+        auto_upgrade_schema()
+    except Exception:
+        pass
 
     return BackupRestoreResponse(
         success=True,

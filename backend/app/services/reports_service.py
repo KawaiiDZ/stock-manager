@@ -4,8 +4,8 @@ from typing import List, Optional
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
-from backend.app.models.sales import Sale, SaleItem
-from backend.app.models.purchase import Purchase, PurchaseItem
+from backend.app.models.sales import Sale, SaleItem, SalesReturn
+from backend.app.models.purchase import Purchase, PurchaseItem, PurchaseReturn
 from backend.app.models.product import Product
 from backend.app.models.inventory import InventoryMovement
 from backend.app.models.customer import Customer
@@ -27,7 +27,11 @@ def _normalize_datetime_range(start_date: Optional[datetime], end_date: Optional
 
 def get_sales_report(db: Session, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> List[SalesReportRow]:
     start_date, end_date = _normalize_datetime_range(start_date, end_date)
-    q = db.query(Sale).options(joinedload(Sale.customer), joinedload(Sale.returns))
+    q = db.query(Sale).options(
+        joinedload(Sale.customer),
+        joinedload(Sale.items),
+        joinedload(Sale.returns).joinedload(SalesReturn.items)
+    )
     if start_date:
         q = q.filter(Sale.created_at >= start_date)
     if end_date:
@@ -36,11 +40,25 @@ def get_sales_report(db: Session, start_date: Optional[datetime] = None, end_dat
 
     result = []
     for s in sales:
+        total_sale_qty = sum((it.quantity for it in s.items), Decimal("0.00"))
+        total_ret_qty = sum((ri.quantity for r in s.returns for ri in r.items), Decimal("0.00")) if s.returns else Decimal("0.00")
         total_balance_credit = sum((r.balance_credit_amount for r in s.returns), Decimal("0.00")) if s.returns else Decimal("0.00")
         net_due = max(Decimal("0.00"), s.total_amount - s.paid_amount - total_balance_credit)
-        status = s.payment_status
-        if s.returns and net_due == Decimal("0.00") and status != "RETURNED":
-            status = "PARTIALLY_RETURNED" if s.paid_amount > Decimal("0.00") else "RETURNED"
+
+        if total_sale_qty > Decimal("0.00") and total_ret_qty >= total_sale_qty:
+            status = "RETURNED"
+            net_due = Decimal("0.00")
+        elif total_ret_qty > Decimal("0.00"):
+            if net_due == Decimal("0.00"):
+                status = "PARTIALLY_RETURNED"
+            else:
+                status = "PARTIALLY_PAID"
+        elif net_due == Decimal("0.00") and s.paid_amount >= s.total_amount:
+            status = "PAID"
+        elif s.paid_amount > Decimal("0.00"):
+            status = "PARTIALLY_PAID"
+        else:
+            status = "UNPAID"
 
         paid_ratio = min(Decimal("1.00"), max(Decimal("0.00"), s.paid_amount / s.total_amount)) if s.total_amount > Decimal("0.00") else Decimal("1.00")
         realized_profit = (s.gross_profit * paid_ratio).quantize(Decimal("0.01"))
@@ -89,7 +107,11 @@ def get_sales_detail_report(db: Session, start_date: Optional[datetime] = None, 
 
 def get_purchases_report(db: Session, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> List[PurchasesReportRow]:
     start_date, end_date = _normalize_datetime_range(start_date, end_date)
-    q = db.query(Purchase).options(joinedload(Purchase.supplier), joinedload(Purchase.returns))
+    q = db.query(Purchase).options(
+        joinedload(Purchase.supplier),
+        joinedload(Purchase.items),
+        joinedload(Purchase.returns).joinedload(PurchaseReturn.items)
+    )
     if start_date:
         q = q.filter(Purchase.created_at >= start_date)
     if end_date:
@@ -98,11 +120,25 @@ def get_purchases_report(db: Session, start_date: Optional[datetime] = None, end
 
     result = []
     for p in purchases:
+        total_pur_qty = sum((it.quantity for it in p.items), Decimal("0.00"))
+        total_ret_qty = sum((ri.quantity for r in p.returns for ri in r.items), Decimal("0.00")) if p.returns else Decimal("0.00")
         total_ret = sum((r.total_return_amount for r in p.returns), Decimal("0.00")) if p.returns else Decimal("0.00")
         net_due = max(Decimal("0.00"), p.total_amount - p.paid_amount - total_ret)
-        status = p.payment_status
-        if p.returns and net_due == Decimal("0.00") and status != "RETURNED":
-            status = "PARTIALLY_RETURNED" if p.paid_amount > Decimal("0.00") else "RETURNED"
+
+        if total_pur_qty > Decimal("0.00") and total_ret_qty >= total_pur_qty:
+            status = "RETURNED"
+            net_due = Decimal("0.00")
+        elif total_ret_qty > Decimal("0.00"):
+            if net_due == Decimal("0.00"):
+                status = "PARTIALLY_RETURNED"
+            else:
+                status = "PARTIALLY_PAID"
+        elif net_due == Decimal("0.00") and p.paid_amount >= p.total_amount:
+            status = "PAID"
+        elif p.paid_amount > Decimal("0.00"):
+            status = "PARTIALLY_PAID"
+        else:
+            status = "UNPAID"
 
         result.append(PurchasesReportRow(
             purchase_number=p.purchase_number,

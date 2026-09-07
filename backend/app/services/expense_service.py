@@ -17,6 +17,8 @@ def list_expense_categories(db: Session, active_only: bool = True) -> List[Expen
     return [ExpenseCategoryResponse.model_validate(c) for c in cats]
 
 def create_expense_category(db: Session, data: ExpenseCategoryCreate) -> ExpenseCategoryResponse:
+    if not data.name or not data.name.strip():
+        raise BusinessRuleException("Expense category name cannot be empty.")
     existing = db.query(ExpenseCategory).filter(ExpenseCategory.name == data.name.strip()).first()
     if existing:
         if not existing.is_active:
@@ -66,6 +68,9 @@ def create_expense(db: Session, data: ExpenseCreate) -> ExpenseResponse:
     cat = db.query(ExpenseCategory).filter(ExpenseCategory.id == data.category_id).first()
     if not cat:
         raise EntityNotFoundException("Expense Category", str(data.category_id))
+
+    if not data.title or not data.title.strip():
+        raise BusinessRuleException("Expense title cannot be empty.")
 
     if data.amount <= Decimal("0.00"):
         raise BusinessRuleException("Expense amount must be greater than zero.")

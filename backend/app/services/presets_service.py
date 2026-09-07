@@ -383,18 +383,4 @@ def apply_preset(db: Session, request: ApplyPresetRequest) -> BusinessSettingsRe
     db.commit()
     db.refresh(settings)
 
-    return BusinessSettingsResponse(
-        id=settings.id,
-        business_name=settings.business_name,
-        phone=settings.phone,
-        address=settings.address,
-        logo_path=settings.logo_path,
-        currency=settings.currency,
-        tax_enabled=settings.tax_enabled,
-        default_tax_rate=settings.default_tax_rate,
-        receipt_header=settings.receipt_header,
-        receipt_footer=settings.receipt_footer,
-        receipt_printer_type=settings.receipt_printer_type,
-        industry_preset=settings.industry_preset,
-        setup_completed=settings.setup_completed
-    )
+    return BusinessSettingsResponse.model_validate(settings)

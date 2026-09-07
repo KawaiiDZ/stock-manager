@@ -13,6 +13,8 @@ export interface BusinessSettings {
   receipt_printer_type: '58mm' | '80mm' | 'standard';
   industry_preset?: string | null;
   setup_completed?: boolean;
+  show_sku?: boolean;
+  show_barcode?: boolean;
 }
 
 export interface CustomField {
@@ -337,9 +339,13 @@ export interface Expense {
 
 export interface DashboardKPIs {
   today_sales_revenue: number;
+  today_sales_cash?: number;
+  today_past_debt_collected?: number;
   today_collected_cash?: number;
   today_gross_profit: number;
   today_realized_profit?: number;
+  today_unrealized_profit?: number;
+  today_past_debt_profit?: number;
   customer_outstanding: number;
   supplier_outstanding: number;
   bills_needing_attention_count: number;

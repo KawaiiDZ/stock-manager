@@ -55,6 +55,9 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
       setReturnsHistory(historyData);
       setCustomers(custs);
       setProducts(prods);
+      if (custs.length > 0) {
+        setManualCustomerId((prev) => (custs.some((c) => c.id === prev) ? prev : custs[0].id));
+      }
       if (prods.length > 0) {
         setManualProductId(prods[0].id);
         setManualPrice(prods[0].selling_price);

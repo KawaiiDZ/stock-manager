@@ -108,6 +108,7 @@ def _format_sale_response(sale: Sale) -> SaleResponse:
         receipt_number=sale.receipt_number,
         customer_id=sale.customer_id,
         customer_name=sale.customer.name if sale.customer else "Counter Sale",
+        customer_phone=sale.customer.phone if (sale.customer and sale.customer.phone) else None,
         subtotal=sale.subtotal,
         discount_amount=sale.discount_amount,
         tax_rate=sale.tax_rate,
@@ -198,6 +199,9 @@ def create_sale(db: Session, data: SaleCreate) -> SaleResponse:
         if item_data.unit_price < Decimal("0.00"):
             raise BusinessRuleException(f"Unit price for {product.name} cannot be negative.")
 
+        if item_data.discount_amount < Decimal("0.00"):
+            raise BusinessRuleException(f"Discount for {product.name} cannot be negative.")
+
         # Stock check
         if product.current_stock < item_data.quantity:
             raise InsufficientStockException(
@@ -236,11 +240,24 @@ def create_sale(db: Session, data: SaleCreate) -> SaleResponse:
             })
 
         if qty_needed > Decimal("0.00"):
-            raise InsufficientStockException(
-                product_name=product.name,
-                available=float(product.current_stock - qty_needed),
-                requested=float(item_data.quantity)
+            # Auto-heal FIFO batch deficit if physical stock was available
+            fallback_batch = InventoryBatch(
+                product_id=product.id,
+                purchase_id=None,
+                quantity_received=qty_needed,
+                quantity_remaining=Decimal("0.00"),
+                unit_cost=product.purchase_price
             )
+            db.add(fallback_batch)
+            db.flush()
+
+            item_fifo_cost += (qty_needed * product.purchase_price)
+            batch_links_to_create.append({
+                "batch_id": fallback_batch.id,
+                "quantity": qty_needed,
+                "unit_cost": product.purchase_price
+            })
+            qty_needed = Decimal("0.00")
 
         product.current_stock -= item_data.quantity
 
@@ -417,8 +434,19 @@ def record_additional_sale_payment(db: Session, sale_id: int, amount: Decimal, p
     if amount <= Decimal("0.00"):
         raise BusinessRuleException("Payment amount must be greater than zero.")
 
-    if amount > sale.due_amount:
-        raise BusinessRuleException(f"Payment amount cannot exceed remaining due (Rs. {sale.due_amount}).")
+    total_balance_credit = Decimal("0.00")
+    total_returned_qty = Decimal("0.00")
+    total_sold_qty = sum(item.quantity for item in sale.items)
+    if sale.returns:
+        for ret in sale.returns:
+            total_balance_credit += ret.balance_credit_amount
+            for ri in ret.items:
+                total_returned_qty += ri.quantity
+
+    current_due = max(Decimal("0.00"), sale.total_amount - sale.paid_amount - total_balance_credit)
+
+    if amount > current_due:
+        raise BusinessRuleException(f"Payment amount cannot exceed remaining due (Rs. {current_due}).")
 
     payment = SalePayment(
         sale_id=sale.id,
@@ -428,8 +456,17 @@ def record_additional_sale_payment(db: Session, sale_id: int, amount: Decimal, p
     db.add(payment)
 
     sale.paid_amount += amount
-    sale.due_amount -= amount
-    if sale.due_amount == Decimal("0.00"):
+    new_due = max(Decimal("0.00"), sale.total_amount - sale.paid_amount - total_balance_credit)
+    sale.due_amount = new_due
+
+    if total_sold_qty > Decimal("0.00") and total_returned_qty >= total_sold_qty:
+        sale.payment_status = "RETURNED"
+    elif total_returned_qty > Decimal("0.00"):
+        if new_due == Decimal("0.00"):
+            sale.payment_status = "PARTIALLY_RETURNED"
+        else:
+            sale.payment_status = "PARTIALLY_PAID"
+    elif new_due == Decimal("0.00") and sale.paid_amount >= sale.total_amount:
         sale.payment_status = "PAID"
     else:
         sale.payment_status = "PARTIALLY_PAID"
@@ -452,7 +489,7 @@ def get_receipt_print_data(db: Session, receipt_number: str) -> ReceiptPrintResp
         receipt_number=sale.receipt_number,
         created_at=sale.created_at,
         customer_name=sale.customer_name or "Walk-in Customer",
-        customer_phone=sale.customer.phone if hasattr(sale, "customer") and sale.customer else None,
+        customer_phone=sale.customer_phone,
         items=sale.items,
         subtotal=sale.subtotal,
         discount_amount=sale.discount_amount,

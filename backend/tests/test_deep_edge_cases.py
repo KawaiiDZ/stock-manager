@@ -247,3 +247,30 @@ def test_stock_update_changes_product_cost_and_selling_price(client):
     assert float(refetched["purchase_price"]) == 120.0
     assert float(refetched["selling_price"]) == 180.0
     assert float(refetched["current_stock"]) == 15.0
+
+def test_show_sku_and_show_barcode_settings_toggle(client):
+    """Verify toggling show_sku and show_barcode checkboxes in business settings."""
+    # 1. Fetch current settings - defaults to True
+    res = client.get("/api/settings")
+    assert res.status_code == 200
+    data = res.json()
+    assert "show_sku" in data
+    assert "show_barcode" in data
+
+    # 2. Toggle both to False (e.g. for businesses that do not use barcodes/SKUs)
+    upd = client.put("/api/settings", json={"show_sku": False, "show_barcode": False})
+    assert upd.status_code == 200
+    upd_data = upd.json()
+    assert upd_data["show_sku"] is False
+    assert upd_data["show_barcode"] is False
+
+    # 3. Verify persisted
+    refetched = client.get("/api/settings").json()
+    assert refetched["show_sku"] is False
+    assert refetched["show_barcode"] is False
+
+    # 4. Re-enable them
+    client.put("/api/settings", json={"show_sku": True, "show_barcode": True})
+    restored = client.get("/api/settings").json()
+    assert restored["show_sku"] is True
+    assert restored["show_barcode"] is True
