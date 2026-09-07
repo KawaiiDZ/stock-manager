@@ -39,9 +39,12 @@ hidden_imports = [
     'starlette.types',
     'pydantic',
     'pydantic_settings',
+    'anyio',
+    'anyio._backends._asyncio',
+    'sniffio',
 ]
 
-for pkg in ['fastapi', 'starlette', 'uvicorn', 'sqlalchemy', 'pydantic', 'pydantic_settings']:
+for pkg in ['fastapi', 'starlette', 'uvicorn', 'sqlalchemy', 'pydantic', 'pydantic_settings', 'anyio', 'sniffio']:
     try:
         pkg_datas, pkg_binaries, pkg_hidden = collect_all(pkg)
         datas += pkg_datas

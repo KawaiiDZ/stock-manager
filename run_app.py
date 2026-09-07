@@ -8,25 +8,56 @@ import sys
 import time
 import webbrowser
 import threading
-import uvicorn
 from pathlib import Path
 
 # Ensure root workspace is in sys.path
 BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR))
-
+import socket
+import urllib.request
+import uvicorn
 from backend.app.core.config import settings
 from backend.app.main import app
 
-def open_browser():
+DEFAULT_PORT = 8000
+
+def is_stock_manager_already_running(port: int = DEFAULT_PORT) -> bool:
+    """Check if Stock Manager is already active on the given port."""
+    try:
+        url = f"http://127.0.0.1:{port}/api/health"
+        req = urllib.request.Request(url, headers={'User-Agent': 'StockManager-Launcher'})
+        with urllib.request.urlopen(req, timeout=1.0) as resp:
+            data = resp.read().decode('utf-8', errors='ignore')
+            return "Offline Stock Manager" in data or '"status":"ok"' in data
+    except Exception:
+        return False
+
+def find_available_port(start_port: int = DEFAULT_PORT, max_tries: int = 10) -> int:
+    """Find the first available port if default port is occupied by another application."""
+    for port in range(start_port, start_port + max_tries):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(('127.0.0.1', port))
+                return port
+            except OSError:
+                continue
+    return start_port
+
+def open_browser(port: int = DEFAULT_PORT):
     time.sleep(1.2)
-    url = "http://127.0.0.1:8000"
+    url = f"http://127.0.0.1:{port}"
     print(f"\n=======================================================")
     print(f"  Stock Manager (Offline Edition) is now LIVE at:")
     print(f"  --> {url}")
     print(f"  Press Ctrl+C to stop the application.")
     print(f"=======================================================\n")
     try:
+        if sys.platform == "win32":
+            try:
+                os.startfile(url)
+                return
+            except Exception:
+                pass
         webbrowser.open(url)
     except Exception:
         pass
@@ -36,17 +67,36 @@ def main():
     os.makedirs(settings.DATA_DIR, exist_ok=True)
     os.makedirs(settings.BACKUP_DIR, exist_ok=True)
 
-    # Launch browser in a background thread
-    threading.Thread(target=open_browser, daemon=True).start()
+    # 1. Prevent double-instance crash: if Stock Manager is already running, open browser and exit cleanly
+    if is_stock_manager_already_running(DEFAULT_PORT):
+        print(f"\n[INFO] Stock Manager is already running in the background.")
+        print(f"Opening browser at http://127.0.0.1:{DEFAULT_PORT} ...")
+        open_browser(DEFAULT_PORT)
+        time.sleep(1.0)
+        return
 
-    # Start FastAPI server on port 8000 with direct app instance
+    # 2. Port conflict safety: if port 8000 is occupied by another app, find next free port
+    active_port = find_available_port(DEFAULT_PORT)
+    if active_port != DEFAULT_PORT:
+        print(f"[INFO] Port {DEFAULT_PORT} is in use by another program. Switching to port {active_port}.")
+
+    # 3. Launch browser in a background thread
+    threading.Thread(target=open_browser, args=(active_port,), daemon=True).start()
+
+    # 4. Start FastAPI server on active port
     uvicorn.run(
         app,
         host="127.0.0.1",
-        port=8000,
+        port=active_port,
         log_level="info",
         reload=False
     )
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print(f"\n[FATAL ERROR] An unexpected error occurred: {e}")
+        import traceback
+        traceback.print_exc()
+        input("\nPress Enter to exit...")

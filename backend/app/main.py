@@ -115,6 +115,8 @@ if not frontend_dist.exists() and getattr(sys, "frozen", False):
     meipass = getattr(sys, "_MEIPASS", None)
     if meipass and (Path(meipass) / "frontend" / "dist").exists():
         frontend_dist = Path(meipass) / "frontend" / "dist"
+    elif (settings.BASE_DIR / "_internal" / "frontend" / "dist").exists():
+        frontend_dist = settings.BASE_DIR / "_internal" / "frontend" / "dist"
 
 if frontend_dist.exists():
     app.mount("/assets", StaticFiles(directory=str(frontend_dist / "assets")), name="assets")
@@ -125,3 +127,14 @@ if frontend_dist.exists():
         if file_path.exists() and file_path.is_file():
             return FileResponse(file_path)
         return FileResponse(frontend_dist / "index.html")
+else:
+    from fastapi.responses import HTMLResponse
+    @app.get("/{full_path:path}")
+    async def serve_missing_frontend(full_path: str):
+        return HTMLResponse(
+            "<html><body style='font-family:sans-serif;text-align:center;padding:50px;'>"
+            "<h2>Stock Manager Backend is Running</h2>"
+            "<p>Frontend UI files were not found. Please ensure <code>frontend/dist</code> is present.</p>"
+            "</body></html>",
+            status_code=200
+        )
