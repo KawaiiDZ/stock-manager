@@ -1,6 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
+import sys
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 block_cipher = None
 
@@ -9,8 +11,9 @@ base_dir = Path('.').resolve()
 datas = [
     ('frontend/dist', 'frontend/dist'),
     ('backend', 'backend'),
+    ('app_icon.ico', '.'),
 ]
-
+binaries = []
 hidden_imports = [
     'uvicorn',
     'uvicorn.logging',
@@ -24,15 +27,33 @@ hidden_imports = [
     'uvicorn.lifespans',
     'uvicorn.lifespans.on',
     'sqlalchemy.dialects.sqlite',
+    'fastapi',
+    'fastapi.middleware',
+    'fastapi.middleware.cors',
+    'starlette',
+    'starlette.middleware',
+    'starlette.middleware.cors',
+    'starlette.responses',
+    'starlette.staticfiles',
+    'starlette.routing',
+    'starlette.types',
     'pydantic',
     'pydantic_settings',
-    'fastapi',
 ]
+
+for pkg in ['fastapi', 'starlette', 'uvicorn', 'sqlalchemy', 'pydantic', 'pydantic_settings']:
+    try:
+        pkg_datas, pkg_binaries, pkg_hidden = collect_all(pkg)
+        datas += pkg_datas
+        binaries += pkg_binaries
+        hidden_imports += pkg_hidden
+    except Exception as e:
+        print(f"Warning: collect_all({pkg}) failed: {e}")
 
 a = Analysis(
     ['run_app.py'],
     pathex=[str(base_dir)],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=hidden_imports,
     hookspath=[],

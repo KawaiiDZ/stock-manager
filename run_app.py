@@ -16,6 +16,7 @@ BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR))
 
 from backend.app.core.config import settings
+from backend.app.main import app
 
 def open_browser():
     time.sleep(1.2)
@@ -38,9 +39,9 @@ def main():
     # Launch browser in a background thread
     threading.Thread(target=open_browser, daemon=True).start()
 
-    # Start FastAPI server on port 8000
+    # Start FastAPI server on port 8000 with direct app instance
     uvicorn.run(
-        "backend.app.main:app",
+        app,
         host="127.0.0.1",
         port=8000,
         log_level="info",
