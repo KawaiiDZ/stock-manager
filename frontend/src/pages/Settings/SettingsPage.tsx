@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../services/api';
 import { BusinessSettings, CustomField, BackupFile } from '../../types';
 import {
@@ -75,7 +75,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   // Backup & Restore
   const [backups, setBackups] = useState<BackupFile[]>([]);
   const [loadingBackups, setLoadingBackups] = useState(false);
+  const [uploadingBackup, setUploadingBackup] = useState(false);
   const [selectedRestoreBackup, setSelectedRestoreBackup] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Passwords / PIN
   const [currentPass, setCurrentPass] = useState('');
@@ -286,6 +288,26 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       loadBackups();
     } catch (err: any) {
       setErrorMsg(err.detail || 'Failed to create backup');
+    }
+  };
+
+  const handleUploadBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith('.db')) {
+      alert('Only .db SQLite database backup files can be imported.');
+      return;
+    }
+    setUploadingBackup(true);
+    try {
+      const res = await api.uploadBackup(file);
+      setSuccessMsg(`Backup '${res.filename}' imported successfully! You can now restore it anytime.`);
+      loadBackups();
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to import backup file');
+    } finally {
+      setUploadingBackup(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -819,14 +841,32 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 Create local snapshots of your database in the Backups folder and restore safely
               </p>
             </div>
-            <Button
-              variant="primary"
-              size="md"
-              icon={<Database className="h-4 w-4" />}
-              onClick={handleCreateBackup}
-            >
-              Backup Now
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept=".db"
+                className="hidden"
+                onChange={handleUploadBackup}
+              />
+              <Button
+                variant="outline"
+                size="md"
+                icon={<Upload className="h-4 w-4" />}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingBackup}
+              >
+                {uploadingBackup ? 'Importing...' : 'Import Backup (.db)'}
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
+                icon={<Database className="h-4 w-4" />}
+                onClick={handleCreateBackup}
+              >
+                Backup Now
+              </Button>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -847,25 +887,36 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 <div className="p-8 text-center text-slate-400 text-xs">Scanning backups folder...</div>
               ) : backups.length === 0 ? (
                 <div className="p-8 text-center text-slate-400 text-xs">
-                  No local backups found. Click "Backup Now" to create your first backup.
+                  No local backups found. Click "Backup Now" or "Import Backup (.db)" to manage backups.
                 </div>
               ) : (
                 backups.map((b) => (
-                  <div key={b.filename} className="p-4 flex items-center justify-between bg-white hover:bg-slate-50">
+                  <div key={b.filename} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white hover:bg-slate-50">
                     <div>
                       <div className="font-mono font-bold text-slate-800 text-xs">{b.filename}</div>
                       <div className="text-[11px] text-slate-400 mt-0.5">
                         {new Date(b.created_at).toLocaleString()} • {b.size_formatted}
                       </div>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSelectedRestoreBackup(b.filename)}
-                      className="text-xs py-1 px-3 font-semibold text-rose-700 hover:bg-rose-50 border-rose-200"
-                    >
-                      Restore This Backup
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={api.downloadBackupUrl(b.filename)}
+                        download={b.filename}
+                        className="inline-flex items-center gap-1.5 text-xs py-1.5 px-3 font-semibold text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-xl transition"
+                        title="Download backup file to USB or disk"
+                      >
+                        <Download className="h-3.5 w-3.5 text-slate-500" />
+                        <span>Download</span>
+                      </a>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedRestoreBackup(b.filename)}
+                        className="text-xs py-1 px-3 font-semibold text-rose-700 hover:bg-rose-50 border-rose-200"
+                      >
+                        Restore This Backup
+                      </Button>
+                    </div>
                   </div>
                 ))
               )}

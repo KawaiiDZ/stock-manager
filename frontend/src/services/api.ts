@@ -296,10 +296,28 @@ export const api = {
   getExpensesReport: (start?: string, end?: string) => request<any[]>(`/reports/expenses?${start ? `start_date=${start}&` : ''}${end ? `end_date=${end}` : ''}`),
 
   // Backup & Restore
-  createBackup: () => request<{ success: boolean; message: string; filename: string }>('/backup', { method: 'POST' }),
+  createBackup: () => request<{ success: boolean; message: string; filename: string }>('/backup/create', { method: 'POST' }),
   listBackups: () => request<BackupFile[]>('/backup/list'),
   getBackups: () => request<BackupFile[]>('/backup/list'),
   restoreBackup: (filename: string) => request<{ success: boolean; message: string }>('/backup/restore', { method: 'POST', body: JSON.stringify({ filename }) }),
+  downloadBackupUrl: (filename: string) => `/api/backup/download/${encodeURIComponent(filename)}`,
+  uploadBackup: async (file: File): Promise<BackupFile> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const token = localStorage.getItem('access_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch('/api/backup/upload', {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Failed to upload backup' }));
+      throw new ApiError(err.detail || 'Failed to upload backup', res.status);
+    }
+    return res.json();
+  },
 
   // Data & Inventory Reset
   resetData: (data: { confirm_pin: string; wipe_mode?: 'inventory_only' | 'all_data' }) =>

@@ -128,3 +128,41 @@ def restore_backup(backup_filename: str) -> BackupRestoreResponse:
         success=True,
         message=f"Database restored successfully from '{backup_filename}'."
     )
+
+def get_backup_path(backup_filename: str) -> Path:
+    safe_filename = os.path.basename(backup_filename.strip())
+    if not safe_filename.endswith(".db"):
+        raise BusinessRuleException("Invalid backup file extension. Only .db files are supported.")
+    backup_path = (settings.BACKUP_DIR / safe_filename).resolve()
+    if backup_path.parent != settings.BACKUP_DIR.resolve() or not backup_path.exists():
+        raise BusinessRuleException(f"Backup file '{safe_filename}' not found.")
+    return backup_path
+
+def import_backup_file(file_content: bytes, original_filename: str) -> BackupFileResponse:
+    os.makedirs(settings.BACKUP_DIR, exist_ok=True)
+    clean_name = os.path.basename(original_filename.strip())
+    if not clean_name.endswith(".db"):
+        raise BusinessRuleException("Only .db SQLite database files can be imported as backups.")
+
+    # Prevent overwriting existing backups by suffixing if needed
+    dest_path = settings.BACKUP_DIR / clean_name
+    if dest_path.exists():
+        stem = clean_name[:-3]
+        clean_name = f"{stem}_imported_{int(datetime.now().timestamp())}.db"
+        dest_path = settings.BACKUP_DIR / clean_name
+
+    with open(dest_path, "wb") as f:
+        f.write(file_content)
+
+    if not validate_sqlite_file(dest_path):
+        if dest_path.exists():
+            os.remove(dest_path)
+        raise BusinessRuleException("Import failed: The selected file is not a valid SQLite database or is corrupted.")
+
+    stat = dest_path.stat()
+    return BackupFileResponse(
+        filename=clean_name,
+        size_bytes=stat.st_size,
+        size_formatted=_format_size(stat.st_size),
+        created_at=datetime.fromtimestamp(stat.st_mtime)
+    )
