@@ -19,6 +19,8 @@ import {
   Download,
   Upload,
   Image,
+  Calendar,
+  FileText,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -26,6 +28,7 @@ import { Modal } from '../../components/common/Modal';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { SchemaBuilder } from './SchemaBuilder';
 import { SetupWizardModal } from '../../components/wizard/SetupWizardModal';
+import { STANDARD_DATE_FORMATS, setGlobalFormattingPreferences, formatDate } from '../../utils/format';
 
 interface SettingsPageProps {
   settings: BusinessSettings | null;
@@ -60,6 +63,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   // Tax State
   const [taxEnabled, setTaxEnabled] = useState(settings?.tax_enabled || false);
   const [defaultTaxRate, setDefaultTaxRate] = useState(settings?.default_tax_rate || 0);
+
+  // Format & Receipt States
+  const [dateFormat, setDateFormat] = useState(settings?.date_format || 'YYYY-MM-DD');
+  const [formatPricesWithCommas, setFormatPricesWithCommas] = useState(settings?.format_prices_with_commas ?? true);
+  const [receiptType, setReceiptType] = useState<'thermal' | 'pdf'>(settings?.receipt_type || 'thermal');
+  const [showLetterhead, setShowLetterhead] = useState(settings?.show_letterhead ?? false);
+  const [hideHeaderTextWithLetterhead, setHideHeaderTextWithLetterhead] = useState(settings?.hide_header_text_with_letterhead ?? false);
+  const [letterheadImage, setLetterheadImage] = useState(settings?.receipt_letterhead_path || '');
+  const [invoiceTitle, setInvoiceTitle] = useState(settings?.invoice_title || 'TAX INVOICE');
+  const [enableQuotations, setEnableQuotations] = useState(settings?.enable_quotations ?? true);
+  const [invoiceTerms, setInvoiceTerms] = useState(settings?.invoice_terms || '');
+  const [quotationTerms, setQuotationTerms] = useState(settings?.quotation_terms || '');
 
   // Printer State
   const [receiptHeader, setReceiptHeader] = useState(settings?.receipt_header || '');
@@ -110,6 +125,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setPrinterType(settings.receipt_printer_type);
       setShowSku(settings.show_sku ?? true);
       setShowBarcode(settings.show_barcode ?? true);
+      setDateFormat(settings.date_format || 'YYYY-MM-DD');
+      setFormatPricesWithCommas(settings.format_prices_with_commas ?? true);
+      setReceiptType(settings.receipt_type || 'thermal');
+      setShowLetterhead(settings.show_letterhead ?? false);
+      setHideHeaderTextWithLetterhead(settings.hide_header_text_with_letterhead ?? false);
+      setLetterheadImage(settings.receipt_letterhead_path || '');
+      setInvoiceTitle(settings.invoice_title || 'TAX INVOICE');
+      setEnableQuotations(settings.enable_quotations ?? true);
+      setInvoiceTerms(settings.invoice_terms || '1. Goods once sold will be accepted for return within 7 days in original condition.\n2. Warranty claims require presenting this invoice.\n3. Thank you for your business!');
+      setQuotationTerms(settings.quotation_terms || '1. This quotation is an estimate and valid for 15 days from issue date.\n2. Stock is subject to physical availability upon confirmation.\n3. This document does not constitute a tax invoice until approved.');
     }
   }, [settings]);
 
@@ -172,6 +197,20 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         receipt_printer_type: printerType,
         show_sku: showSku,
         show_barcode: showBarcode,
+        date_format: dateFormat,
+        format_prices_with_commas: formatPricesWithCommas,
+        receipt_type: receiptType,
+        show_letterhead: showLetterhead,
+        hide_header_text_with_letterhead: hideHeaderTextWithLetterhead,
+        receipt_letterhead_path: letterheadImage || null,
+        invoice_title: invoiceTitle.trim() || 'TAX INVOICE',
+        enable_quotations: enableQuotations,
+        invoice_terms: invoiceTerms,
+        quotation_terms: quotationTerms,
+      });
+      setGlobalFormattingPreferences({
+        dateFormat,
+        formatPricesWithCommas,
       });
       setSuccessMsg('Settings saved successfully!');
       onSettingsUpdated();
@@ -259,6 +298,57 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       onSettingsUpdated();
     } catch (err: any) {
       setErrorMsg(err.detail || 'Failed to reset receipt logo.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLetterheadFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2.5 * 1024 * 1024) {
+      setErrorMsg('Letterhead image file size must be under 2.5MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64Data = reader.result as string;
+      setLetterheadImage(base64Data);
+      setSaving(true);
+      setErrorMsg(null);
+      try {
+        await api.updateSettings({
+          receipt_letterhead_path: base64Data,
+          show_letterhead: true,
+        });
+        setShowLetterhead(true);
+        setSuccessMsg('Letterhead banner uploaded and enabled successfully!');
+        onSettingsUpdated();
+      } catch (err: any) {
+        setErrorMsg(err.detail || 'Failed to upload letterhead.');
+      } finally {
+        setSaving(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleResetLetterhead = async () => {
+    setSaving(true);
+    setErrorMsg(null);
+    try {
+      await api.updateSettings({
+        receipt_letterhead_path: '',
+        show_letterhead: false,
+      });
+      setLetterheadImage('');
+      setShowLetterhead(false);
+      setSuccessMsg('Custom letterhead removed successfully.');
+      onSettingsUpdated();
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to remove letterhead.');
     } finally {
       setSaving(false);
     }
@@ -520,6 +610,58 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               required
             />
 
+            {/* Date & Number Formatting Preferences */}
+            <div className="pt-3 border-t border-slate-100 space-y-3">
+              <div>
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Calendar className="h-4 w-4 text-emerald-600" />
+                  Date & Number Formatting
+                </h4>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Select your preferred date format and number style to be applied across your app, invoices, and reports.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">
+                    Date Format (Global & Invoices)
+                  </label>
+                  <select
+                    value={dateFormat}
+                    onChange={(e) => setDateFormat(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 cursor-pointer"
+                  >
+                    {STANDARD_DATE_FORMATS.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.id} (e.g. {formatDate(new Date(), f.id)})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Today preview: <span className="font-semibold text-emerald-700">{formatDate(new Date(), dateFormat)}</span>
+                  </p>
+                </div>
+
+                <div className="flex items-start">
+                  <label className="flex items-start gap-3 p-3.5 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition w-full">
+                    <input
+                      type="checkbox"
+                      checked={formatPricesWithCommas}
+                      onChange={(e) => setFormatPricesWithCommas(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <div className="text-xs">
+                      <span className="font-bold text-slate-800 block">Add Commas in Prices</span>
+                      <span className="text-slate-500 text-[11px] leading-relaxed">
+                        Display thousands separators across prices (e.g. {currency} 1,250,000.00 instead of {currency} 1250000.00).
+                      </span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
+
             {/* Product Identifiers: Barcode & SKU Visibility */}
             <div className="pt-3 border-t border-slate-100 space-y-3">
               <div>
@@ -705,50 +847,319 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       {/* Tab: Receipt & Printer */}
       {activeTab === 'printer' && (
         <div className="max-w-3xl space-y-6">
-          <form onSubmit={handleSaveSettings} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
-            <h3 className="font-bold text-slate-800 text-base mb-2">Receipt & Thermal Printer Settings</h3>
-            
+          <form onSubmit={handleSaveSettings} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
             <div>
-              <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">
-                Receipt Printer Paper Size
-              </label>
-              <select
-                value={printerType}
-                onChange={(e) => setPrinterType(e.target.value as any)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
-              >
-                <option value="80mm">80mm Thermal Receipt (Standard Wide)</option>
-                <option value="58mm">58mm Thermal Receipt (Narrow Compact)</option>
-                <option value="standard">Standard A4 / Letter Page</option>
-              </select>
+              <h3 className="font-bold text-slate-800 text-base">Receipt & Invoice Formatting</h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Choose between fast point-of-sale thermal receipts or full-page PDF/A4 corporate invoices with letterheads.
+              </p>
             </div>
 
-            <Input
-              label="Receipt Header Subtitle"
-              placeholder="e.g. Welcome to our store"
-              value={receiptHeader}
-              onChange={(e) => setReceiptHeader(e.target.value)}
-            />
+            {/* Receipt Format Selector Cards */}
+            <div>
+              <label className="block text-xs font-bold uppercase text-slate-500 mb-2">
+                Default Receipt Format
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setReceiptType('thermal')}
+                  className={`p-4 rounded-2xl border-2 text-left transition-all flex items-start gap-3.5 ${
+                    receiptType === 'thermal'
+                      ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
+                      : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                  }`}
+                >
+                  <div className={`p-2.5 rounded-xl mt-0.5 ${receiptType === 'thermal' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                    <Printer className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-sm flex items-center gap-1.5">
+                      Thermal Receipt Roll
+                      {receiptType === 'thermal' && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-200 text-emerald-800 rounded-md">Default</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                      Optimized for 80mm & 58mm thermal printers. Quick checkout, compact footprint, fast cuts.
+                    </p>
+                  </div>
+                </button>
 
-            <Input
-              label="Receipt Footer Note"
-              placeholder="e.g. Thank you for shopping with us!"
-              value={receiptFooter}
-              onChange={(e) => setReceiptFooter(e.target.value)}
-            />
+                <button
+                  type="button"
+                  onClick={() => setReceiptType('pdf')}
+                  className={`p-4 rounded-2xl border-2 text-left transition-all flex items-start gap-3.5 ${
+                    receiptType === 'pdf'
+                      ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
+                      : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                  }`}
+                >
+                  <div className={`p-2.5 rounded-xl mt-0.5 ${receiptType === 'pdf' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                    <FileText className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-sm flex items-center gap-1.5">
+                      Standard PDF / A4 Invoice
+                      {receiptType === 'pdf' && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-200 text-emerald-800 rounded-md">Default</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                      Full-page corporate layout. Supports custom letterhead graphics, detailed tables & signature blocks.
+                    </p>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Conditional Options for Thermal */}
+            {receiptType === 'thermal' && (
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">
+                  Receipt Printer Paper Size
+                </label>
+                <select
+                  value={printerType}
+                  onChange={(e) => setPrinterType(e.target.value as any)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="80mm">80mm Thermal Receipt (Standard Wide)</option>
+                  <option value="58mm">58mm Thermal Receipt (Narrow Compact)</option>
+                  <option value="standard">Standard A4 / Letter Page</option>
+                </select>
+              </div>
+            )}
+
+            {/* Conditional Options for PDF / A4 */}
+            {receiptType === 'pdf' && (
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-sm font-bold text-slate-800 block">Custom / Pre-printed Letterhead</span>
+                    <span className="text-xs text-slate-500">Enable custom full-width branding banner or pre-printed letterhead alignment</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showLetterhead}
+                      onChange={(e) => setShowLetterhead(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                  </label>
+                </div>
+
+                {showLetterhead && (
+                  <div className="pt-3 border-t border-slate-200/80 space-y-3">
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={hideHeaderTextWithLetterhead}
+                        onChange={(e) => setHideHeaderTextWithLetterhead(e.target.checked)}
+                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 mt-0.5"
+                      />
+                      <div>
+                        <span className="text-xs font-semibold text-slate-800 block">
+                          Hide Computer-Generated Business Header Text
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          Check this if your physical stationary or uploaded letterhead graphic already contains your business name, address, and phone number.
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+                )}
+
+                <div className="pt-2">
+                  <Input
+                    label="A4 Invoice Document Heading Text"
+                    placeholder="e.g. TAX INVOICE, COMMERCIAL INVOICE, SALES INVOICE, BILL OF SALE, RECEIPT"
+                    value={invoiceTitle}
+                    onChange={(e) => setInvoiceTitle(e.target.value)}
+                    hint="Customize the main title text printed in bold capital letters at the top of A4/PDF invoices (Default: TAX INVOICE)."
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Quotations Feature Optional Toggle Card */}
+            <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-200 flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-indigo-600" />
+                  <span className="text-sm font-bold text-slate-800">
+                    Customer Quotations & Estimates
+                  </span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${enableQuotations ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}`}>
+                    {enableQuotations ? 'Enabled' : 'Disabled'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed max-w-xl">
+                  Allow cashiers to prepare non-binding quotation estimates in POS without deducting stock or money, and manage active offers in the sidebar. Turn off if your business does not require quotations.
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
+                <input
+                  type="checkbox"
+                  checked={enableQuotations}
+                  onChange={(e) => setEnableQuotations(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+              </label>
+            </div>
+
+            {/* Customizable Terms & Conditions (T&Cs) */}
+            <div className="space-y-4 pt-2 border-t border-slate-100">
+              <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                <FileText className="h-4 w-4 text-emerald-600" />
+                Customizable Terms & Conditions (T&Cs)
+              </h4>
+
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1.5">
+                    A4 / PDF Invoice Terms & Conditions
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={invoiceTerms}
+                    onChange={(e) => setInvoiceTerms(e.target.value)}
+                    placeholder="Enter invoice terms and conditions to print at the bottom of standard A4 invoices..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800 focus:outline-none focus:border-emerald-500 leading-relaxed"
+                  />
+                  <span className="text-[11px] text-slate-400 block mt-1">
+                    Printed at the bottom of all corporate A4 invoices (warranty, return policies, customer notice).
+                  </span>
+                </div>
+
+                {enableQuotations && (
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-slate-600 mb-1.5">
+                      Quotation Terms & Conditions
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={quotationTerms}
+                      onChange={(e) => setQuotationTerms(e.target.value)}
+                      placeholder="Enter quotation terms and conditions to print on customer quotation documents..."
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800 focus:outline-none focus:border-emerald-500 leading-relaxed"
+                    />
+                    <span className="text-[11px] text-slate-400 block mt-1">
+                      Printed on commercial quotation documents (validity period, stock availability clause, acceptance terms).
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label="Receipt Header Subtitle"
+                placeholder="e.g. Welcome to our store / Tax Invoice"
+                value={receiptHeader}
+                onChange={(e) => setReceiptHeader(e.target.value)}
+              />
+
+              <Input
+                label="Receipt Footer Note"
+                placeholder="e.g. Thank you for your business!"
+                value={receiptFooter}
+                onChange={(e) => setReceiptFooter(e.target.value)}
+              />
+            </div>
 
             <div className="pt-2">
               <Button type="submit" variant="primary" loading={saving}>
-                Save Printer Settings
+                Save Receipt & Printer Settings
               </Button>
             </div>
           </form>
+
+          {/* Custom PDF / A4 Letterhead Banner Uploader */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-slate-800 text-base">Corporate A4 Letterhead Banner</h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">PDF / A4 Format</span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Upload an official high-resolution corporate header banner to print across the top of all PDF invoices.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/png, image/jpeg, image/webp"
+                    onChange={handleLetterheadFileUpload}
+                    className="hidden"
+                  />
+                  <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition">
+                    <Upload className="h-4 w-4" />
+                    Upload Letterhead
+                  </span>
+                </label>
+
+                {(letterheadImage || settings?.receipt_letterhead_path) && (
+                  <button
+                    type="button"
+                    onClick={handleResetLetterhead}
+                    className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 font-semibold text-xs transition"
+                    title="Remove custom letterhead"
+                  >
+                    Remove Letterhead
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Live Letterhead Preview */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+              {(letterheadImage || settings?.receipt_letterhead_path) ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-700 flex items-center gap-1.5">
+                      <CheckCircle2 className="h-4 w-4" /> Custom Letterhead Active
+                    </span>
+                    <span className="text-[11px] text-slate-400">Preview scaled to fit container</span>
+                  </div>
+                  <div className="w-full bg-white border border-slate-200 rounded-xl p-2 overflow-hidden shadow-sm max-h-36 flex items-center justify-center">
+                    <img
+                      src={letterheadImage || settings?.receipt_letterhead_path}
+                      alt="Uploaded Letterhead Banner"
+                      className="w-full max-h-32 object-contain"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="py-6 flex flex-col items-center justify-center text-center text-slate-400">
+                  <Image className="h-10 w-10 stroke-1 text-slate-300 mb-2" />
+                  <p className="text-xs font-semibold text-slate-600">No custom letterhead uploaded</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Standard business name, phone, address, and logo will be automatically rendered as the header.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-200/60 gap-1">
+                <span>Recommended Aspect Ratio: <strong>6:1 to 8:1</strong> (e.g. 1200×180px or 1600×220px)</span>
+                <span>Supported: PNG, JPEG, WebP (Max 2.5MB)</span>
+              </div>
+            </div>
+          </div>
 
           {/* 1-Click Thermal Receipt Print Logo Uploader */}
           <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h3 className="font-bold text-slate-800 text-base">Thermal Receipt Print Logo</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-slate-800 text-base">Thermal Receipt Print Logo</h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">Thermal Roll Format</span>
+                </div>
                 <p className="text-xs text-slate-400 mt-0.5">
                   High-contrast black & white logo printed at the top of 80mm & 58mm customer receipts.
                 </p>

@@ -22,6 +22,25 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
 }, ref) => {
   const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
 
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (props.type === 'number' || props.inputMode === 'numeric' || props.inputMode === 'decimal') {
+      if (e.target.value === '0' || e.target.value === '0.00' || e.target.value === '0.0') {
+        e.target.select();
+      }
+    }
+    props.onFocus?.(e);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (props.type === 'number') {
+      const val = e.target.value;
+      if (/^0\d+/.test(val) && !val.startsWith('0.')) {
+        e.target.value = val.replace(/^0+/, '');
+      }
+    }
+    props.onChange?.(e);
+  };
+
   return (
     <div className="w-full">
       {label && (
@@ -50,6 +69,8 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
             )
           )}
           {...props}
+          onFocus={handleFocus}
+          onChange={handleChange}
         />
         {suffix && (
           <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-slate-500 text-sm">

@@ -32,9 +32,38 @@ def seed_initial_data(db: Session):
             receipt_header="Welcome to My Business",
             receipt_footer="Thank you for shopping with us!",
             receipt_printer_type="80mm",
+            industry_preset="general",
+            date_format="YYYY-MM-DD",
+            format_prices_with_commas=True,
+            receipt_type="thermal",
+            show_letterhead=False,
+            hide_header_text_with_letterhead=False,
+            invoice_title="TAX INVOICE",
+            enable_quotations=True,
+            invoice_terms="1. Goods once sold will be accepted for return within 7 days in original condition.\n2. Warranty claims require presenting this invoice.\n3. Thank you for your business!",
+            quotation_terms="1. This quotation is an estimate and valid for 15 days from issue date.\n2. Stock is subject to physical availability upon confirmation.\n3. This document does not constitute a tax invoice until approved.",
             config_pin_hash=hash_password("1234")  # Default PIN 1234
         )
         db.add(default_settings)
+    else:
+        if not settings.config_pin_hash:
+            settings.config_pin_hash = hash_password("1234")
+        if not settings.industry_preset:
+            settings.industry_preset = "general"
+        if not getattr(settings, "date_format", None):
+            settings.date_format = "YYYY-MM-DD"
+        if getattr(settings, "format_prices_with_commas", None) is None:
+            settings.format_prices_with_commas = True
+        if not getattr(settings, "receipt_type", None):
+            settings.receipt_type = "thermal"
+        if not getattr(settings, "invoice_title", None):
+            settings.invoice_title = "TAX INVOICE"
+        if getattr(settings, "enable_quotations", None) is None:
+            settings.enable_quotations = True
+        if not getattr(settings, "invoice_terms", None):
+            settings.invoice_terms = "1. Goods once sold will be accepted for return within 7 days in original condition.\n2. Warranty claims require presenting this invoice.\n3. Thank you for your business!"
+        if not getattr(settings, "quotation_terms", None):
+            settings.quotation_terms = "1. This quotation is an estimate and valid for 15 days from issue date.\n2. Stock is subject to physical availability upon confirmation.\n3. This document does not constitute a tax invoice until approved."
 
     # 3. Default Walk-in Customer
     walk_in = db.query(Customer).filter(Customer.customer_id == "C-000001").first()
@@ -58,7 +87,7 @@ def authenticate_user(db: Session, username: str, password: str) -> User:
 
 def verify_settings_pin(db: Session, pin: str) -> bool:
     settings = db.query(BusinessSettings).filter(BusinessSettings.id == 1).first()
-    if not settings:
+    if not settings or not settings.config_pin_hash:
         return pin == "1234"
     return verify_password(settings.config_pin_hash, pin)
 

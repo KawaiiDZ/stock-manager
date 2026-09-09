@@ -7,6 +7,7 @@ from backend.app.models.sales import Sale, SalesReturn
 from backend.app.models.purchase import Purchase, PurchaseReturn
 from backend.app.models.bills import Bill
 from backend.app.models.expenses import Expense
+from backend.app.models.quotation import Quotation
 
 def _generate_unique_code(db: Session, model, id_column, prefix: str) -> str:
     """
@@ -53,4 +54,7 @@ def generate_expense_number(db: Session) -> str:
 
 def generate_bill_number(db: Session) -> str:
     return _generate_unique_code(db, Bill, Bill.bill_number, "B")
+
+def generate_quotation_number(db: Session) -> str:
+    return _generate_unique_code(db, Quotation, Quotation.quotation_number, "Q")
 

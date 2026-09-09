@@ -1,8 +1,14 @@
 from decimal import Decimal
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, time
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
+
+def _normalize_datetime_range(start_date: Optional[datetime], end_date: Optional[datetime]):
+    if end_date is not None and isinstance(end_date, datetime):
+        if end_date.time() == time.min:
+            end_date = datetime.combine(end_date.date(), time.max)
+    return start_date, end_date
 
 from backend.app.models.purchase import Purchase, PurchaseItem, PurchasePayment
 from backend.app.models.supplier import Supplier
@@ -254,6 +260,7 @@ def list_purchases(
     skip: int = 0,
     limit: int = 200
 ) -> List[PurchaseResponse]:
+    start_date, end_date = _normalize_datetime_range(start_date, end_date)
     q = db.query(Purchase).options(
         joinedload(Purchase.supplier),
         joinedload(Purchase.items).joinedload(PurchaseItem.product),

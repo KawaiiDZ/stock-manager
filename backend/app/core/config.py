@@ -56,7 +56,7 @@ def get_backup_dir() -> Path:
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Offline Stock Manager"
-    VERSION: str = "1.0.0"
+    VERSION: str = "2.0.0"
     API_PREFIX: str = "/api"
     
     BASE_DIR: Path = _BASE_DIR

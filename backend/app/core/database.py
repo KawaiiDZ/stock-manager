@@ -29,68 +29,82 @@ def get_db():
     finally:
         db.close()
 
-def auto_upgrade_schema():
-    """Safely adds missing columns to existing SQLite tables without data loss."""
-    with engine.connect() as conn:
-        # Check business_settings table
-        try:
-            res = conn.execute(text("PRAGMA table_info(business_settings)"))
-            cols = [row[1] for row in res.fetchall()]
-            if cols:
-                if "industry_preset" not in cols:
-                    conn.execute(text("ALTER TABLE business_settings ADD COLUMN industry_preset VARCHAR(50) DEFAULT 'general'"))
-                if "setup_completed" not in cols:
-                    conn.execute(text("ALTER TABLE business_settings ADD COLUMN setup_completed BOOLEAN DEFAULT 0"))
-                if "receipt_logo_path" not in cols:
-                    conn.execute(text("ALTER TABLE business_settings ADD COLUMN receipt_logo_path TEXT NULL"))
-                if "show_sku" not in cols:
-                    conn.execute(text("ALTER TABLE business_settings ADD COLUMN show_sku BOOLEAN DEFAULT 1"))
-                if "show_barcode" not in cols:
-                    conn.execute(text("ALTER TABLE business_settings ADD COLUMN show_barcode BOOLEAN DEFAULT 1"))
-                conn.commit()
-        except Exception as e:
-            print("Auto-upgrade error (business_settings):", e)
+def _get_sqlite_column_def(col, dialect):
+    """Generate SQLite-safe column definition with constant defaults for ADD COLUMN."""
+    from decimal import Decimal
+    from sqlalchemy import Boolean, Integer, Numeric, Float, String, Text as SAText, DateTime, Date
+    col_type = col.type.compile(dialect=dialect)
+    default_clause = ""
+    is_datetime = isinstance(col.type, (DateTime, Date))
 
-        # Check product_custom_fields table
-        try:
-            res = conn.execute(text("PRAGMA table_info(product_custom_fields)"))
-            cols = [row[1] for row in res.fetchall()]
-            if cols:
-                if "category_id" not in cols:
-                    conn.execute(text("ALTER TABLE product_custom_fields ADD COLUMN category_id INTEGER REFERENCES product_categories(id) NULL"))
-                if "options" not in cols:
-                    conn.execute(text("ALTER TABLE product_custom_fields ADD COLUMN options TEXT NULL"))
-                if "show_in_table" not in cols:
-                    conn.execute(text("ALTER TABLE product_custom_fields ADD COLUMN show_in_table BOOLEAN DEFAULT 1"))
-                if "show_in_pos" not in cols:
-                    conn.execute(text("ALTER TABLE product_custom_fields ADD COLUMN show_in_pos BOOLEAN DEFAULT 1"))
-                if "show_in_receipt" not in cols:
-                    conn.execute(text("ALTER TABLE product_custom_fields ADD COLUMN show_in_receipt BOOLEAN DEFAULT 0"))
-                conn.commit()
-        except Exception as e:
-            print("Auto-upgrade error (product_custom_fields):", e)
+    if col.server_default is not None:
+        raw_arg = str(col.server_default.arg)
+        if any(kw in raw_arg.upper() for kw in ["CURRENT_TIMESTAMP", "CURRENT_DATE", "CURRENT_TIME", "NOW()"]):
+            is_datetime = True
+        else:
+            default_clause = f" DEFAULT {raw_arg}"
+    elif col.default is not None and not callable(col.default.arg):
+        val = col.default.arg
+        if isinstance(val, bool):
+            default_clause = f" DEFAULT {1 if val else 0}"
+        elif isinstance(val, (int, float, Decimal)):
+            default_clause = f" DEFAULT {val}"
+        elif isinstance(val, str):
+            escaped = val.replace("'", "''")
+            default_clause = f" DEFAULT '{escaped}'"
+    elif not col.nullable:
+        if isinstance(col.type, Boolean):
+            default_clause = " DEFAULT 0"
+        elif isinstance(col.type, Integer):
+            default_clause = " DEFAULT 0"
+        elif isinstance(col.type, (Numeric, Float)):
+            default_clause = " DEFAULT 0.00"
+        elif isinstance(col.type, (String, SAText)):
+            default_clause = " DEFAULT ''"
+        elif is_datetime:
+            default_clause = ""
 
-        # Check sale_payments table
-        try:
-            res = conn.execute(text("PRAGMA table_info(sale_payments)"))
-            cols = [row[1] for row in res.fetchall()]
-            if cols and "customer_payment_id" not in cols:
-                conn.execute(text("ALTER TABLE sale_payments ADD COLUMN customer_payment_id INTEGER REFERENCES customer_payments(id) NULL"))
-                conn.commit()
-        except Exception as e:
-            print("Auto-upgrade error (sale_payments):", e)
+    if not col.nullable and default_clause and not is_datetime:
+        constraint = f"{default_clause} NOT NULL"
+    elif default_clause:
+        constraint = default_clause
+    else:
+        constraint = " NULL"
 
-        # Check purchase_payments table
-        try:
-            res = conn.execute(text("PRAGMA table_info(purchase_payments)"))
-            cols = [row[1] for row in res.fetchall()]
-            if cols and "supplier_payment_id" not in cols:
-                conn.execute(text("ALTER TABLE purchase_payments ADD COLUMN supplier_payment_id INTEGER REFERENCES supplier_payments(id) NULL"))
-                conn.commit()
-        except Exception as e:
-            print("Auto-upgrade error (purchase_payments):", e)
+    return f"{col.name} {col_type}{constraint}", is_datetime
 
-        # Check purchases table (ensure supplier_id allows NULL)
+def auto_upgrade_schema(target_engine=None):
+    """Safely and dynamically upgrades SQLite database schema without data loss.
+    Ensures that databases from earlier releases or restored from backups are 100% compatible
+    with the current application version and any future extensions.
+    """
+    from decimal import Decimal
+    import backend.app.models  # Ensure all models are registered on Base.metadata
+    active_engine = target_engine or engine
+
+    # 1. Create any tables introduced in newer versions that don't exist yet
+    Base.metadata.create_all(bind=active_engine)
+    dialect = active_engine.dialect
+
+    with active_engine.connect() as conn:
+        # 2. Dynamically detect and add any missing columns across all registered models
+        for table_name, table in Base.metadata.tables.items():
+            try:
+                res = conn.execute(text(f"PRAGMA table_info({table_name})"))
+                existing_cols = {row[1] for row in res.fetchall()}
+                if not existing_cols:
+                    continue
+                for col in table.columns:
+                    if col.name not in existing_cols:
+                        col_def, is_dt = _get_sqlite_column_def(col, dialect)
+                        conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_def}"))
+                        if is_dt:
+                            conn.execute(text(f"UPDATE {table_name} SET {col.name} = datetime('now') WHERE {col.name} IS NULL"))
+                conn.commit()
+            except Exception as e:
+                print(f"Auto-upgrade error on table {table_name}:", e)
+
+        # 3. Check purchases table (ensure supplier_id allows NULL for supplier-less purchases)
         try:
             res = conn.execute(text("PRAGMA table_info(purchases)"))
             cols = {r[1]: r for r in res.fetchall()}
@@ -126,15 +140,50 @@ def auto_upgrade_schema():
                 conn.commit()
                 conn.execute(text("PRAGMA foreign_keys=ON"))
         except Exception as e:
-            print("Auto-upgrade error (purchases):", e)
+            print("Auto-upgrade error (purchases constraint rebuild):", e)
 
-        # Check purchase_items table (ensure selling_price column exists)
+        # 4. Auto-heal missing entity identifiers and active flags in legacy tables
         try:
-            res = conn.execute(text("PRAGMA table_info(purchase_items)"))
-            cols = [row[1] for row in res.fetchall()]
-            if cols and "selling_price" not in cols:
-                conn.execute(text("ALTER TABLE purchase_items ADD COLUMN selling_price NUMERIC(12, 2) NULL"))
-                conn.commit()
+            conn.execute(text("UPDATE products SET product_id = 'P-' || printf('%06d', id) WHERE product_id IS NULL OR product_id = ''"))
+            conn.execute(text("UPDATE products SET is_active = 1 WHERE is_active IS NULL"))
+            conn.execute(text("UPDATE customers SET customer_id = 'C-' || printf('%06d', id) WHERE customer_id IS NULL OR customer_id = ''"))
+            conn.execute(text("UPDATE customers SET is_active = 1 WHERE is_active IS NULL"))
+            conn.execute(text("UPDATE suppliers SET supplier_id = 'S-' || printf('%06d', id) WHERE supplier_id IS NULL OR supplier_id = ''"))
+            conn.execute(text("UPDATE suppliers SET is_active = 1 WHERE is_active IS NULL"))
+            conn.execute(text("UPDATE business_settings SET industry_preset = 'general' WHERE industry_preset IS NULL OR industry_preset = ''"))
+            conn.commit()
         except Exception as e:
-            print("Auto-upgrade error (purchase_items):", e)
+            print("Auto-upgrade error (identifier auto-healing):", e)
+
+        # 5. FIFO Batch Auto-Healing:
+        # If any product has current_stock > total_batch_remaining, create opening batches so POS checkout never fails
+        try:
+            res = conn.execute(text("""
+                SELECT p.id, p.current_stock, p.purchase_price, COALESCE(SUM(b.quantity_remaining), 0) as total_batches
+                FROM products p
+                LEFT JOIN inventory_batches b ON b.product_id = p.id
+                WHERE p.current_stock > 0
+                GROUP BY p.id
+                HAVING p.current_stock > COALESCE(SUM(b.quantity_remaining), 0)
+            """))
+            deficits = res.fetchall()
+            for row in deficits:
+                p_id = row[0]
+                cur_stock = Decimal(str(row[1]))
+                cost = Decimal(str(row[2] or 0.00))
+                tot_batch = Decimal(str(row[3]))
+                deficit = cur_stock - tot_batch
+                if deficit > Decimal("0.00"):
+                    conn.execute(text("""
+                        INSERT INTO inventory_batches (product_id, purchase_id, quantity_received, quantity_remaining, unit_cost, created_at)
+                        VALUES (:pid, NULL, :qty, :qty, :cost, datetime('now'))
+                    """), {'pid': p_id, 'qty': float(deficit), 'cost': float(cost)})
+                    conn.execute(text("""
+                        INSERT INTO inventory_movements (product_id, movement_type, quantity, unit_cost, reference_type, reference_id, notes, created_at)
+                        VALUES (:pid, 'OPENING_STOCK', :qty, :cost, 'OPENING', 'MIGRATION-SYNC', 'Auto-healed opening inventory batch', datetime('now'))
+                    """), {'pid': p_id, 'qty': float(deficit), 'cost': float(cost)})
+            conn.commit()
+        except Exception as e:
+            print("Auto-upgrade error (FIFO batch auto-healing):", e)
+
 

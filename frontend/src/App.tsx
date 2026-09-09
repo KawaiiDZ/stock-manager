@@ -19,7 +19,10 @@ import { BillsPage } from './pages/Money/BillsPage';
 import { ExpensesPage } from './pages/Money/ExpensesPage';
 import { ReportsPage } from './pages/Reports/ReportsPage';
 import { SettingsPage } from './pages/Settings/SettingsPage';
+import { QuotationsPage } from './pages/Sales/QuotationsPage';
 import { SetupWizardModal } from './components/wizard/SetupWizardModal';
+
+import { setGlobalFormattingPreferences } from './utils/format';
 
 export const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<{ username: string; full_name: string } | null>(
@@ -32,18 +35,27 @@ export const App: React.FC = () => {
   const [settings, setSettings] = useState<BusinessSettings | null>(null);
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [urgentBillsCount, setUrgentBillsCount] = useState<number>(0);
+  const [pendingQuotationsCount, setPendingQuotationsCount] = useState<number>(0);
   const [returnSaleId, setReturnSaleId] = useState<number | undefined>();
   const [preLoadedSellProduct, setPreLoadedSellProduct] = useState<Product | null>(null);
   const [showWizard, setShowWizard] = useState<boolean>(false);
 
   const loadSettingsAndBadges = async () => {
     try {
-      const [bizSettings, billsAttention] = await Promise.all([
+      const [bizSettings, billsAttention, pendingQuotes] = await Promise.all([
         api.getSettings(),
         api.getBillsAttention(),
+        api.getQuotations('PENDING').catch(() => []),
       ]);
       setSettings(bizSettings);
+      if (bizSettings) {
+        setGlobalFormattingPreferences({
+          dateFormat: bizSettings.date_format,
+          formatPricesWithCommas: bizSettings.format_prices_with_commas,
+        });
+      }
       setUrgentBillsCount(billsAttention.length);
+      setPendingQuotationsCount(pendingQuotes?.length || 0);
 
       // If business has not finished setup wizard, auto open
       if (bizSettings && bizSettings.setup_completed === false) {
@@ -56,7 +68,42 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     // Always fetch business settings on initial mount so login page has brand logo and name
-    api.getSettings().then(setSettings).catch(() => {});
+    api.getSettings().then((s) => {
+      setSettings(s);
+      if (s) {
+        setGlobalFormattingPreferences({
+          dateFormat: s.date_format,
+          formatPricesWithCommas: s.format_prices_with_commas,
+        });
+      }
+    }).catch(() => {});
+
+    // Global UX enhancement: auto-select "0" in numeric inputs so typing replaces zero immediately
+    const handleGlobalFocusIn = (e: FocusEvent) => {
+      const target = e.target as HTMLInputElement;
+      if (target && target.tagName === 'INPUT' && (target.type === 'number' || target.inputMode === 'numeric' || target.inputMode === 'decimal')) {
+        if (target.value === '0' || target.value === '0.00' || target.value === '0.0') {
+          setTimeout(() => target.select(), 10);
+        }
+      }
+    };
+
+    const handleGlobalInput = (e: Event) => {
+      const target = e.target as HTMLInputElement;
+      if (target && target.tagName === 'INPUT' && target.type === 'number') {
+        const val = target.value;
+        if (/^0\d+/.test(val) && !val.startsWith('0.')) {
+          target.value = val.replace(/^0+/, '');
+        }
+      }
+    };
+
+    document.addEventListener('focusin', handleGlobalFocusIn);
+    document.addEventListener('input', handleGlobalInput);
+    return () => {
+      document.removeEventListener('focusin', handleGlobalFocusIn);
+      document.removeEventListener('input', handleGlobalInput);
+    };
   }, []);
 
   useEffect(() => {
@@ -113,6 +160,7 @@ export const App: React.FC = () => {
           setCurrentTab(tab);
         }}
         urgentBillsCount={urgentBillsCount}
+        pendingQuotationsCount={pendingQuotationsCount}
       />
 
       {/* Main Viewport Area */}
@@ -145,6 +193,17 @@ export const App: React.FC = () => {
             <SalesHistoryPage
               settings={settings}
               onNavigateToReturn={handleNavigateToReturn}
+            />
+          )}
+
+          {currentTab === 'quotations' && (
+            <QuotationsPage
+              settings={settings}
+              onNavigateToNewSale={() => {
+                setPreLoadedSellProduct(null);
+                setCurrentTab('new_sale');
+              }}
+              onQuotationConverted={loadSettingsAndBadges}
             />
           )}
 

@@ -17,7 +17,7 @@ from backend.app.services.auth_service import seed_initial_data
 from backend.app.api.routes import (
     auth, settings as settings_routes, products, inventory,
     customers, sales, returns, suppliers, purchases,
-    bills, expenses, dashboard, reports, backup
+    bills, expenses, dashboard, reports, backup, quotations
 )
 
 @asynccontextmanager
@@ -104,6 +104,7 @@ app.include_router(expenses.router, prefix=api_prefix)
 app.include_router(dashboard.router, prefix=api_prefix)
 app.include_router(reports.router, prefix=api_prefix)
 app.include_router(backup.router, prefix=api_prefix)
+app.include_router(quotations.router, prefix=api_prefix)
 
 @app.get("/api/health")
 def health_check():

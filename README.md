@@ -1,4 +1,4 @@
-# Offline Inventory, Sales, Billing & Business Management Application (v1.0.0)
+# Offline Inventory, Sales, Billing & Business Management Application (v2.0.0)
 
 A desktop-first, offline-first business management application designed for local retail shops and small businesses.
 

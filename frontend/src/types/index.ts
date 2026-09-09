@@ -15,6 +15,16 @@ export interface BusinessSettings {
   setup_completed?: boolean;
   show_sku?: boolean;
   show_barcode?: boolean;
+  date_format?: string;
+  format_prices_with_commas?: boolean;
+  receipt_type?: 'thermal' | 'pdf';
+  receipt_letterhead_path?: string | null;
+  show_letterhead?: boolean;
+  hide_header_text_with_letterhead?: boolean;
+  invoice_title?: string;
+  enable_quotations?: boolean;
+  invoice_terms?: string;
+  quotation_terms?: string;
 }
 
 export interface CustomField {
@@ -163,6 +173,8 @@ export interface Sale {
   receipt_number: string;
   customer_id: number;
   customer_name?: string;
+  customer_phone?: string;
+  customer_address?: string;
   subtotal: number;
   discount_amount: number;
   tax_rate: number;
@@ -414,4 +426,86 @@ export interface LoginResponse {
   username: string;
   full_name: string;
   token: string;
+}
+
+export interface QuotationItem {
+  id: number;
+  quotation_id: number;
+  product_id: number;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+  discount_amount: number;
+  total_price: number;
+  notes?: string | null;
+}
+
+export interface Quotation {
+  id: number;
+  quotation_number: string;
+  customer_id?: number | null;
+  customer_name: string;
+  customer_phone: string;
+  customer_address?: string | null;
+  subtotal: number;
+  discount_amount: number;
+  tax_rate: number;
+  tax_amount: number;
+  total_amount: number;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED' | string;
+  sale_id?: number | null;
+  converted_at?: string | null;
+  rejection_reason?: string | null;
+  valid_until?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  items: QuotationItem[];
+}
+
+export interface QuotationItemCreate {
+  product_id: number;
+  quantity: number;
+  unit_price: number;
+  discount_amount?: number;
+  notes?: string;
+}
+
+export interface QuotationCreate {
+  customer_id?: number | null;
+  customer_name: string;
+  customer_phone: string;
+  customer_address?: string | null;
+  items: QuotationItemCreate[];
+  discount_amount?: number;
+  tax_rate?: number;
+  valid_until?: string | null;
+  notes?: string | null;
+}
+
+export interface QuotationConversionCheckItem {
+  product_id: number;
+  product_name: string;
+  quantity: number;
+  quoted_price: number;
+  current_price: number;
+  price_difference: number;
+  price_changed: boolean;
+  current_stock: number;
+  has_stock_shortage: boolean;
+}
+
+export interface QuotationConversionCheckResponse {
+  quotation_id: number;
+  quotation_number: string;
+  has_price_changes: boolean;
+  has_stock_shortages: boolean;
+  items: QuotationConversionCheckItem[];
+}
+
+export interface QuotationConvertRequest {
+  price_mode: 'quoted' | 'current';
+  payment_method?: string;
+  amount_paid?: number;
+  notes?: string;
 }

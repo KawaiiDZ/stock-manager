@@ -15,6 +15,7 @@ import {
   Settings,
   Zap,
   Pin,
+  FileText,
 } from 'lucide-react';
 
 interface NavItem {
@@ -34,6 +35,7 @@ interface SidebarProps {
   currentTab: string;
   onTabChange: (tab: string) => void;
   urgentBillsCount?: number;
+  pendingQuotationsCount?: number;
   settings?: BusinessSettings | null;
 }
 
@@ -41,6 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentTab,
   onTabChange,
   urgentBillsCount = 0,
+  pendingQuotationsCount = 0,
   settings,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
@@ -65,6 +68,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
           isSellButton: true,
         },
         { id: 'sales_history', label: 'Sales History', icon: <History className="h-5 w-5" /> },
+        ...(settings?.enable_quotations !== false
+          ? [
+              {
+                id: 'quotations',
+                label: 'Active Quotations',
+                icon: <FileText className="h-5 w-5" />,
+                badge: pendingQuotationsCount > 0 ? pendingQuotationsCount : undefined,
+              },
+            ]
+          : []),
         { id: 'returns', label: 'Returns', icon: <RotateCcw className="h-5 w-5" /> },
       ],
     },
@@ -261,10 +274,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
                 Ready & Offline
               </span>
-              <span className="text-[10px] whitespace-nowrap">v1.0.0</span>
+              <span className="text-[10px] whitespace-nowrap">v2.0.0</span>
             </>
           ) : (
-            <div className="w-full flex justify-center py-0.5" title="Ready & Offline (v1.0.0)">
+            <div className="w-full flex justify-center py-0.5" title="Ready & Offline (v2.0.0)">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
             </div>
           )}

@@ -20,6 +20,16 @@ class BusinessSettingsResponse(BaseModel):
     setup_completed: bool = False
     show_sku: bool = True
     show_barcode: bool = True
+    date_format: str = "YYYY-MM-DD"
+    format_prices_with_commas: bool = True
+    receipt_type: str = "thermal"
+    receipt_letterhead_path: Optional[str] = None
+    show_letterhead: bool = False
+    hide_header_text_with_letterhead: bool = False
+    invoice_title: str = "TAX INVOICE"
+    enable_quotations: bool = True
+    invoice_terms: str = "1. Goods once sold will be accepted for return within 7 days in original condition.\n2. Warranty claims require presenting this invoice.\n3. Thank you for your business!"
+    quotation_terms: str = "1. This quotation is an estimate and valid for 15 days from issue date.\n2. Stock is subject to physical availability upon confirmation.\n3. This document does not constitute a tax invoice until approved."
 
     class Config:
         from_attributes = True
@@ -40,6 +50,16 @@ class BusinessSettingsUpdate(BaseModel):
     setup_completed: Optional[bool] = None
     show_sku: Optional[bool] = None
     show_barcode: Optional[bool] = None
+    date_format: Optional[str] = None
+    format_prices_with_commas: Optional[bool] = None
+    receipt_type: Optional[str] = None
+    receipt_letterhead_path: Optional[str] = None
+    show_letterhead: Optional[bool] = None
+    hide_header_text_with_letterhead: Optional[bool] = None
+    invoice_title: Optional[str] = None
+    enable_quotations: Optional[bool] = None
+    invoice_terms: Optional[str] = None
+    quotation_terms: Optional[str] = None
 
 class PresetTemplateResponse(BaseModel):
     key: str

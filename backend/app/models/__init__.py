@@ -10,6 +10,8 @@ from backend.app.models.purchase import Purchase, PurchaseItem, PurchasePayment,
 from backend.app.models.bills import BillCategory, Bill, BillPayment
 from backend.app.models.expenses import ExpenseCategory, Expense
 
+from backend.app.models.quotation import Quotation, QuotationItem
+
 __all__ = [
     "Base",
     "User",
@@ -40,4 +42,6 @@ __all__ = [
     "BillPayment",
     "ExpenseCategory",
     "Expense",
+    "Quotation",
+    "QuotationItem",
 ]

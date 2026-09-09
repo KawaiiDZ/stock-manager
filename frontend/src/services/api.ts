@@ -6,7 +6,8 @@ import {
   Purchase, Bill, BillCategory, BillAttention,
   Expense, ExpenseCategory,
   DashboardKPIs, MonthlySalesData, DaySalesDetail,
-  BusinessSettings, BackupFile, LoginResponse, IndustryPreset
+  BusinessSettings, BackupFile, LoginResponse, IndustryPreset,
+  Quotation, QuotationCreate, QuotationConversionCheckResponse, QuotationConvertRequest
 } from '../types';
 
 const API_BASE = '/api';
@@ -325,4 +326,20 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  // Quotations
+  getQuotations: (status?: string, search?: string) =>
+    request<Quotation[]>(`/quotations?${status ? `status=${encodeURIComponent(status)}&` : ''}${search ? `search=${encodeURIComponent(search)}&` : ''}`),
+  createQuotation: (data: QuotationCreate) =>
+    request<Quotation>('/quotations', { method: 'POST', body: JSON.stringify(data) }),
+  getQuotation: (id: number) =>
+    request<Quotation>(`/quotations/${id}`),
+  checkQuotationConversion: (id: number) =>
+    request<QuotationConversionCheckResponse>(`/quotations/${id}/check-conversion`),
+  convertQuotationToSale: (id: number, data: QuotationConvertRequest) =>
+    request<Sale>(`/quotations/${id}/convert`, { method: 'POST', body: JSON.stringify(data) }),
+  rejectQuotation: (id: number, reason?: string) =>
+    request<Quotation>(`/quotations/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  deleteQuotation: (id: number) =>
+    request<void>(`/quotations/${id}`, { method: 'DELETE' }),
 };

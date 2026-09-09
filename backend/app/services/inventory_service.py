@@ -1,10 +1,16 @@
 from decimal import Decimal
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, time
 from sqlalchemy.orm import Session, joinedload
 from backend.app.models.inventory import InventoryBatch, InventoryMovement
 from backend.app.models.product import Product
 from backend.app.schemas.inventory import InventoryBatchResponse, InventoryMovementResponse
+
+def _normalize_datetime_range(start_date: Optional[datetime], end_date: Optional[datetime]):
+    if end_date is not None and isinstance(end_date, datetime):
+        if end_date.time() == time.min:
+            end_date = datetime.combine(end_date.date(), time.max)
+    return start_date, end_date
 
 def get_product_batches(db: Session, product_id: int, remaining_only: bool = True) -> List[InventoryBatchResponse]:
     q = db.query(InventoryBatch).filter(InventoryBatch.product_id == product_id)
@@ -22,6 +28,7 @@ def list_inventory_movements(
     skip: int = 0,
     limit: int = 200
 ) -> List[InventoryMovementResponse]:
+    start_date, end_date = _normalize_datetime_range(start_date, end_date)
     q = db.query(InventoryMovement).options(joinedload(InventoryMovement.product))
     if product_id:
         q = q.filter(InventoryMovement.product_id == product_id)

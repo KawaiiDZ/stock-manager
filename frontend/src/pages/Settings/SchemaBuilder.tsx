@@ -47,6 +47,8 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
   // Quick Add Category Modal
   const [showAddCatModal, setShowAddCatModal] = useState(false);
   const [newCatName, setNewCatName] = useState('');
+  const [inlineCatName, setInlineCatName] = useState('');
+  const [inlineCatSaving, setInlineCatSaving] = useState(false);
 
   // Edit / Rename Category Modal
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
@@ -100,6 +102,26 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
       setSuccessMsg(`Category "${newCat.name}" created! You can now add its custom schema below.`);
     } catch (err: any) {
       setErrorMsg(err.detail || 'Failed to create category.');
+    }
+  };
+
+  const handleInlineCreateCategory = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const catName = inlineCatName.trim();
+    if (!catName || inlineCatSaving) return;
+    try {
+      setInlineCatSaving(true);
+      const newCat = await api.createCategory({ name: catName });
+      setCategories((prev) => [...prev, newCat]);
+      setActiveCategoryTab(newCat.id);
+      setTargetCategoryId(newCat.id);
+      setInlineCatName('');
+      setSuccessMsg(`Category "${newCat.name}" created! You can now add its custom schema below.`);
+      if (onSchemaUpdated) onSchemaUpdated();
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to create category.');
+    } finally {
+      setInlineCatSaving(false);
     }
   };
 
@@ -351,12 +373,12 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
               </span>
             </div>
 
-            {/* Category Schema Filter Tabs */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+            {/* Category Schema Filter Tabs - Spacious & Wrap-friendly */}
+            <div className="flex flex-wrap items-center gap-2 pt-1 pb-1">
               <button
                 type="button"
                 onClick={() => handleSelectTab('all')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
                   activeCategoryTab === 'all'
                     ? 'bg-slate-900 text-white shadow-sm'
                     : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
@@ -367,7 +389,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
               <button
                 type="button"
                 onClick={() => handleSelectTab('global')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
                   activeCategoryTab === 'global'
                     ? 'bg-blue-600 text-white shadow-sm'
                     : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
@@ -390,9 +412,9 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                     <button
                       type="button"
                       onClick={() => handleSelectTab(cat.id)}
-                      className="px-3 py-1.5 focus:outline-none"
+                      className="px-3.5 py-1.5 focus:outline-none"
                     >
-                      {cat.name} ({count})
+                      {cat.name} <span className={isActive ? 'text-emerald-100 text-[11px]' : 'text-slate-400 text-[11px]'}>({count})</span>
                     </button>
                     <button
                       type="button"
@@ -401,23 +423,47 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                         e.stopPropagation();
                         handleDeleteCategory(cat);
                       }}
-                      className={`px-1.5 py-1.5 border-l transition ${
+                      className={`px-2 py-1.5 border-l transition ${
                         isActive
                           ? 'border-emerald-500/60 hover:bg-rose-600 text-white'
                           : 'border-slate-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50'
                       }`}
                     >
-                      <Trash2 className="h-3 w-3" />
+                      <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 );
               })}
+
+              {/* Quick On-the-Fly Category Add Form */}
+              <form
+                onSubmit={handleInlineCreateCategory}
+                className="inline-flex items-center gap-1.5 bg-white border border-emerald-300 rounded-xl px-2.5 py-1 shadow-sm focus-within:ring-2 focus-within:ring-emerald-500/30"
+              >
+                <Plus className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="New category..."
+                  value={inlineCatName}
+                  onChange={(e) => setInlineCatName(e.target.value)}
+                  className="text-xs bg-transparent border-none focus:outline-none w-28 text-slate-800 placeholder:text-slate-400 font-medium"
+                />
+                <button
+                  type="submit"
+                  disabled={!inlineCatName.trim() || inlineCatSaving}
+                  className="px-2 py-0.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-700 disabled:opacity-40 transition"
+                >
+                  {inlineCatSaving ? '...' : '+ Add'}
+                </button>
+              </form>
+
               <button
                 type="button"
                 onClick={() => setShowAddCatModal(true)}
-                className="px-2.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-300 flex items-center gap-1"
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200 flex items-center gap-1"
+                title="Open Add Category Dialog"
               >
-                <Plus className="h-3.5 w-3.5" /> New Category
+                <Plus className="h-3.5 w-3.5" /> More
               </button>
             </div>
           </div>

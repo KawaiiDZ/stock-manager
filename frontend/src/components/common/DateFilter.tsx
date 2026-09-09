@@ -1,47 +1,75 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calendar } from 'lucide-react';
 
 export type DatePreset = 'all' | 'today' | 'yesterday' | 'this_week' | 'this_month' | 'custom';
 
 interface DateFilterProps {
   onFilterChange: (startDate?: string, endDate?: string, preset?: DatePreset) => void;
+  activePreset?: DatePreset;
 }
 
-export const DateFilter: React.FC<DateFilterProps> = ({ onFilterChange }) => {
-  const [preset, setPreset] = useState<DatePreset>('all');
+export const formatLocalDate = (d: Date): string => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+export const DateFilter: React.FC<DateFilterProps> = ({ onFilterChange, activePreset }) => {
+  const [preset, setPreset] = useState<DatePreset>(activePreset || 'all');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
 
-  const formatDate = (d: Date) => d.toISOString().split('T')[0];
+  useEffect(() => {
+    if (activePreset && activePreset !== preset) {
+      setPreset(activePreset);
+      if (activePreset !== 'custom') {
+        setCustomStart('');
+        setCustomEnd('');
+      }
+    }
+  }, [activePreset]);
 
   const applyPreset = (newPreset: DatePreset) => {
     setPreset(newPreset);
-    const today = new Date();
+    const now = new Date();
 
     if (newPreset === 'all') {
       onFilterChange(undefined, undefined, 'all');
     } else if (newPreset === 'today') {
-      const todayStr = formatDate(today);
+      const todayStr = formatLocalDate(now);
       onFilterChange(todayStr, todayStr, 'today');
     } else if (newPreset === 'yesterday') {
-      const yest = new Date(today);
-      yest.setDate(today.getDate() - 1);
-      const yestStr = formatDate(yest);
+      const yest = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      const yestStr = formatLocalDate(yest);
       onFilterChange(yestStr, yestStr, 'yesterday');
     } else if (newPreset === 'this_week') {
-      const day = today.getDay();
-      const diff = today.getDate() - day + (day === 0 ? -6 : 1);
-      const monday = new Date(today.setDate(diff));
-      onFilterChange(formatDate(monday), formatDate(new Date()), 'this_week');
+      const day = now.getDay(); // 0 is Sun, 1 is Mon
+      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(now.getFullYear(), now.getMonth(), diff);
+      const todayStr = formatLocalDate(now);
+      onFilterChange(formatLocalDate(monday), todayStr, 'this_week');
     } else if (newPreset === 'this_month') {
-      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-      onFilterChange(formatDate(firstDay), formatDate(new Date()), 'this_month');
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      const todayStr = formatLocalDate(now);
+      onFilterChange(formatLocalDate(firstDay), todayStr, 'this_month');
     }
   };
 
   const handleCustomApply = () => {
-    if (customStart && customEnd) {
-      onFilterChange(customStart, customEnd, 'custom');
+    let start = customStart || undefined;
+    let end = customEnd || undefined;
+
+    if (start && end && start > end) {
+      const temp = start;
+      start = end;
+      end = temp;
+      setCustomStart(start);
+      setCustomEnd(end);
+    }
+
+    if (start || end) {
+      onFilterChange(start, end, 'custom');
     }
   };
 

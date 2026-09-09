@@ -82,3 +82,133 @@ def test_backup_routes_and_transfer(client):
     finally:
         if test_db_path.exists():
             os.remove(test_db_path)
+
+def test_current_to_future_version_backup_restore():
+    """
+    Verifies that a database backup exported from the current version can be restored into
+    a future version of the software with new tables and new columns, and upgraded seamlessly.
+    """
+    import tempfile
+    import sqlite3
+    from pathlib import Path
+    from sqlalchemy import create_engine, text, Column, Integer, String, Boolean, Table
+    from sqlalchemy.orm import declarative_base, sessionmaker
+    from backend.app.core.database import Base, _get_sqlite_column_def
+    from backend.app.services.auth_service import seed_initial_data
+    from backend.app.models.product import Product
+
+    temp_dir = tempfile.TemporaryDirectory()
+    db_path = Path(temp_dir.name) / "current_prod.db"
+
+    # 1. Initialize database with current schema
+    current_engine = create_engine(f"sqlite:///{db_path}")
+    Base.metadata.create_all(bind=current_engine)
+    Session = sessionmaker(bind=current_engine)
+    s = Session()
+    seed_initial_data(s)
+    p = Product(
+        product_id="P-000001",
+        name="Production Wheat Flour 10kg",
+        purchase_price=Decimal("800.00"),
+        selling_price=Decimal("1100.00"),
+        current_stock=Decimal("15.00")
+    )
+    s.add(p)
+    s.commit()
+    s.close()
+    current_engine.dispose()
+
+    # 2. Simulate a Future Version that introduces a new model (e.g. loyalty_rewards)
+    # and new columns on products (e.g. is_taxable, warranty_months)
+    FutureBase = declarative_base()
+
+    class LoyaltyReward(FutureBase):
+        __tablename__ = "loyalty_rewards"
+        id = Column(Integer, primary_key=True)
+        customer_id = Column(Integer, nullable=False)
+        points = Column(Integer, nullable=False, default=100)
+
+    future_products = Table(
+        "products",
+        FutureBase.metadata,
+        Column("id", Integer, primary_key=True),
+        Column("product_id", String(20), nullable=False),
+        Column("name", String(150), nullable=False),
+        # New future columns:
+        Column("is_taxable", Boolean, nullable=False, default=True),
+        Column("warranty_months", Integer, nullable=False, default=12),
+        extend_existing=True
+    )
+
+    future_engine = create_engine(f"sqlite:///{db_path}")
+
+    # Future version creates new tables and runs column upgrade
+    FutureBase.metadata.create_all(bind=future_engine)
+    with future_engine.connect() as conn:
+        for table_name, table in FutureBase.metadata.tables.items():
+            res = conn.execute(text(f"PRAGMA table_info({table_name})"))
+            existing = {row[1] for row in res.fetchall()}
+            for col in table.columns:
+                if col.name not in existing:
+                    col_def, _ = _get_sqlite_column_def(col, future_engine.dialect)
+                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_def}"))
+        conn.commit()
+
+    # 3. Assert future version can query existing records with new columns populated
+    with future_engine.connect() as conn:
+        row = conn.execute(text("SELECT product_id, name, is_taxable, warranty_months FROM products WHERE product_id = 'P-000001'")).fetchone()
+        assert row is not None
+        assert row[0] == "P-000001"
+        assert row[1] == "Production Wheat Flour 10kg"
+        assert row[2] == 1  # default True
+        assert row[3] == 12  # default 12
+
+        # Assert new table works
+        conn.execute(text("INSERT INTO loyalty_rewards (customer_id, points) VALUES (1, 250)"))
+        conn.commit()
+        reward = conn.execute(text("SELECT points FROM loyalty_rewards WHERE customer_id = 1")).fetchone()
+        assert reward[0] == 250
+
+    future_engine.dispose()
+
+def test_auto_upgrade_schema_heals_fifo_batches_and_missing_pins(db_session):
+    """Verifies that auto_upgrade_schema automatically heals FIFO inventory batches and default PIN."""
+    from backend.app.core.database import auto_upgrade_schema
+    from backend.app.models.product import Product
+    from backend.app.models.inventory import InventoryBatch
+    from backend.app.models.business import BusinessSettings
+
+    p = Product(
+        product_id="P-TEST-HEAL",
+        name="Test Healing Product",
+        purchase_price=Decimal("200.00"),
+        selling_price=Decimal("300.00"),
+        current_stock=Decimal("8.00")
+    )
+    db_session.add(p)
+    db_session.commit()
+
+    # Clear batches for this product if any
+    db_session.query(InventoryBatch).filter(InventoryBatch.product_id == p.id).delete()
+    db_session.commit()
+
+    # Set empty config_pin_hash on settings to simulate uninitialized legacy PIN
+    settings_row = db_session.query(BusinessSettings).filter(BusinessSettings.id == 1).first()
+    if settings_row:
+        settings_row.config_pin_hash = ""
+        db_session.commit()
+
+    # Run auto_upgrade_schema on active test engine
+    auto_upgrade_schema(target_engine=db_session.bind)
+
+    # Verify FIFO batches auto-healed
+    batches = db_session.query(InventoryBatch).filter(InventoryBatch.product_id == p.id).all()
+    assert len(batches) == 1
+    assert batches[0].quantity_remaining == Decimal("8.00")
+    assert batches[0].unit_cost == Decimal("200.00")
+
+    # Verify PIN auto-healing
+    from backend.app.services.auth_service import verify_settings_pin, seed_initial_data
+    seed_initial_data(db_session)
+    assert verify_settings_pin(db_session, "1234") is True
+

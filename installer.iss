@@ -4,7 +4,7 @@
 ; =====================================================================
 
 #define MyAppName "Stock Manager"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "2.0.0"
 #define MyAppPublisher "StockFlow"
 #define MyAppURL "http://127.0.0.1:8000"
 #define MyAppExeName "StockManager.exe"

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Sale, BusinessSettings } from '../../types';
-import { formatCurrency, formatMoney } from '../../utils/format';
+import { formatCurrency, formatMoney, formatDateTime } from '../../utils/format';
 
 export interface ThermalReceiptProps {
   sale: Sale;
@@ -72,17 +72,7 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
         </div>
         <div className="flex justify-between">
           <span>Date:</span>
-          <span>
-            {new Date(sale.created_at).toLocaleDateString('en-GB', {
-              day: '2-digit',
-              month: 'short',
-              year: 'numeric',
-            })}{' '}
-            {new Date(sale.created_at).toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </span>
+          <span>{formatDateTime(sale.created_at)}</span>
         </div>
         <div className="flex justify-between">
           <span>Customer:</span>
@@ -97,20 +87,42 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
           <span className="text-right">Qty × Price = Total</span>
         </div>
         <div className="space-y-1.5">
-          {sale.items?.map((item, idx) => (
-            <div key={idx}>
-              <div className="font-semibold leading-tight">{item.product_name}</div>
-              <div className="flex justify-between text-[11px] text-slate-700">
-                <span>
-                  {item.quantity} × {formatCurrency(item.unit_price, currency)}
-                  {Number(item.discount_amount || 0) > 0 && ` (-${formatCurrency(item.discount_amount, currency)})`}
-                </span>
-                <span className="font-semibold">
-                  {formatCurrency(item.total_price, currency)}
-                </span>
+          {sale.items?.map((item, idx) => {
+            const origQty = Number(item.quantity || 0);
+            const retQty = Number(item.returned_quantity || 0);
+            const isFullyReturned = retQty >= origQty && origQty > 0;
+            const isPartiallyReturned = retQty > 0 && retQty < origQty;
+            const remainingQty = isFullyReturned ? 0 : Math.max(0, origQty - retQty);
+
+            return (
+              <div key={idx} className={isFullyReturned ? 'text-slate-500 line-through' : ''}>
+                <div className="font-semibold leading-tight flex justify-between">
+                  <span>
+                    {item.product_name}
+                    {isFullyReturned && ' [RETURNED]'}
+                    {isPartiallyReturned && ` [${retQty} RET]`}
+                  </span>
+                </div>
+                <div className="flex justify-between text-[11px] text-slate-700">
+                  <span>
+                    {isFullyReturned
+                      ? `0 (${origQty} ret) × ${formatCurrency(item.unit_price, currency)}`
+                      : isPartiallyReturned
+                      ? `${remainingQty} kept (${origQty} orig) × ${formatCurrency(item.unit_price, currency)}`
+                      : `${origQty} × ${formatCurrency(item.unit_price, currency)}`}
+                    {Number(item.discount_amount || 0) > 0 && ` (-${formatCurrency(item.discount_amount, currency)})`}
+                  </span>
+                  <span className="font-semibold">
+                    {isFullyReturned
+                      ? formatCurrency(0, currency)
+                      : isPartiallyReturned
+                      ? formatCurrency(remainingQty * Number(item.unit_price || 0), currency)
+                      : formatCurrency(item.total_price, currency)}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -118,53 +130,59 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
       <div className="py-2 border-b border-dashed border-black space-y-1">
         <div className="flex justify-between">
           <span>Subtotal:</span>
-          <span>
-            {formatCurrency(sale.subtotal, currency)}
-          </span>
+          <span>{formatCurrency(sale.subtotal, currency)}</span>
         </div>
         {Number(sale.discount_amount || 0) > 0 && (
           <div className="flex justify-between">
             <span>Discount:</span>
-            <span>
-              -{formatCurrency(sale.discount_amount, currency)}
-            </span>
+            <span>-{formatCurrency(sale.discount_amount, currency)}</span>
           </div>
         )}
         {Number(sale.tax_amount || 0) > 0 && (
           <div className="flex justify-between">
             <span>Tax ({sale.tax_rate}%):</span>
-            <span>
-              +{formatCurrency(sale.tax_amount, currency)}
-            </span>
+            <span>+{formatCurrency(sale.tax_amount, currency)}</span>
           </div>
         )}
         <div className="flex justify-between font-bold text-sm border-t border-black pt-1 mt-1">
-          <span>TOTAL:</span>
-          <span>
-            {formatCurrency(sale.total_amount, currency)}
-          </span>
+          <span>ORIGINAL TOTAL:</span>
+          <span>{formatCurrency(sale.total_amount, currency)}</span>
         </div>
+        {Number(sale.total_returned_amount || 0) > 0 && (
+          <>
+            <div className="flex justify-between text-[11px] text-rose-800 font-semibold">
+              <span>Less Returned Items:</span>
+              <span>-{formatCurrency(sale.total_returned_amount, currency)}</span>
+            </div>
+            <div className="flex justify-between font-bold border-t border-dotted border-black pt-0.5">
+              <span>ADJUSTED TOTAL:</span>
+              <span>{formatCurrency(Math.max(0, Number(sale.total_amount || 0) - Number(sale.total_returned_amount || 0)), currency)}</span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Payment details */}
       <div className="py-2 border-b border-dashed border-black space-y-1 text-[11px]">
         <div className="flex justify-between font-semibold">
           <span>Paid:</span>
-          <span>
-            {formatCurrency(sale.paid_amount, currency)}
-          </span>
+          <span>{formatCurrency(sale.paid_amount, currency)}</span>
         </div>
         {Number(sale.due_amount || 0) > 0 ? (
           <div className="flex justify-between font-bold text-rose-800">
             <span>Remaining Due:</span>
-            <span>
-              {formatCurrency(sale.due_amount, currency)}
-            </span>
+            <span>{formatCurrency(sale.due_amount, currency)}</span>
           </div>
         ) : (
           <div className="flex justify-between font-bold text-emerald-800">
             <span>Status:</span>
-            <span>FULLY PAID</span>
+            <span>
+              {(sale.payment_status || '').toUpperCase() === 'RETURNED'
+                ? 'FULLY RETURNED'
+                : (sale.payment_status || '').toUpperCase() === 'PARTIALLY_RETURNED'
+                ? 'PARTIALLY RETURNED (SETTLED)'
+                : 'FULLY PAID'}
+            </span>
           </div>
         )}
       </div>

@@ -1,10 +1,16 @@
 from decimal import Decimal
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, time
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_
 
-from backend.app.models.sales import Sale, SaleItem, SaleItemBatch, SalePayment
+def _normalize_datetime_range(start_date: Optional[datetime], end_date: Optional[datetime]):
+    if end_date is not None and isinstance(end_date, datetime):
+        if end_date.time() == time.min:
+            end_date = datetime.combine(end_date.date(), time.max)
+    return start_date, end_date
+
+from backend.app.models.sales import Sale, SaleItem, SaleItemBatch, SalePayment, SalesReturn, SalesReturnItem
 from backend.app.models.product import Product
 from backend.app.models.customer import Customer
 from backend.app.models.inventory import InventoryBatch, InventoryMovement
@@ -20,11 +26,13 @@ def _format_sale_response(sale: Sale) -> SaleResponse:
     # 1. Aggregate return data if returns exist on this sale
     total_returned_val = Decimal("0.00")
     total_balance_credit = Decimal("0.00")
+    total_cash_refunded = Decimal("0.00")
     returned_qty_by_prod = {}
     if sale.returns:
         for ret in sale.returns:
             total_returned_val += ret.total_return_amount
             total_balance_credit += ret.balance_credit_amount
+            total_cash_refunded += ret.cash_refund_amount
             for ri in ret.items:
                 returned_qty_by_prod[ri.product_id] = (
                     returned_qty_by_prod.get(ri.product_id, Decimal("0.00")) + ri.quantity
@@ -375,7 +383,8 @@ def get_sale(db: Session, sale_id: int) -> SaleResponse:
     sale = db.query(Sale).options(
         joinedload(Sale.customer),
         joinedload(Sale.items).joinedload(SaleItem.batch_links),
-        joinedload(Sale.payments)
+        joinedload(Sale.payments),
+        joinedload(Sale.returns).joinedload(SalesReturn.items)
     ).filter(Sale.id == sale_id).first()
     if not sale:
         raise EntityNotFoundException("Sale", str(sale_id))
@@ -385,7 +394,8 @@ def get_sale_by_receipt(db: Session, receipt_number: str) -> SaleResponse:
     sale = db.query(Sale).options(
         joinedload(Sale.customer),
         joinedload(Sale.items).joinedload(SaleItem.batch_links),
-        joinedload(Sale.payments)
+        joinedload(Sale.payments),
+        joinedload(Sale.returns).joinedload(SalesReturn.items)
     ).filter(Sale.receipt_number == receipt_number.strip()).first()
     if not sale:
         raise EntityNotFoundException("Receipt", receipt_number)
@@ -399,35 +409,60 @@ def list_sales(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     skip: int = 0,
-    limit: int = 200
+    limit: int = 500
 ) -> List[SaleResponse]:
+    start_date, end_date = _normalize_datetime_range(start_date, end_date)
     q = db.query(Sale).options(
         joinedload(Sale.customer),
         joinedload(Sale.items).joinedload(SaleItem.batch_links),
-        joinedload(Sale.payments)
+        joinedload(Sale.payments),
+        joinedload(Sale.returns).joinedload(SalesReturn.items)
     )
     if customer_id:
         q = q.filter(Sale.customer_id == customer_id)
-    if payment_status:
-        q = q.filter(Sale.payment_status == payment_status)
     if start_date:
         q = q.filter(Sale.created_at >= start_date)
     if end_date:
         q = q.filter(Sale.created_at <= end_date)
     if search:
-        st = f"%{search.strip()}%"
-        q = q.join(Sale.customer).filter(
+        clean_search = search.strip()
+        stripped_code = clean_search.lstrip('#')
+        st = f"%{clean_search}%"
+        st_code = f"%{stripped_code}%"
+        q = q.outerjoin(Sale.customer).filter(
             or_(
                 Sale.receipt_number.ilike(st),
+                Sale.receipt_number.ilike(st_code),
                 Customer.name.ilike(st),
-                Customer.phone.ilike(st)
+                Customer.phone.ilike(st),
+                Sale.items.any(SaleItem.product_name.ilike(st))
             )
         )
-    sales = q.order_by(Sale.created_at.desc(), Sale.id.desc()).offset(skip).limit(limit).all()
-    return [_format_sale_response(s) for s in sales]
+    sales = q.order_by(Sale.created_at.desc(), Sale.id.desc()).all()
+
+    formatted = []
+    needs_commit = False
+    for s in sales:
+        dto = _format_sale_response(s)
+        if s.payment_status != dto.payment_status:
+            s.payment_status = dto.payment_status
+            needs_commit = True
+        if payment_status and dto.payment_status != payment_status:
+            continue
+        formatted.append(dto)
+
+    if needs_commit:
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+
+    return formatted[skip:skip+limit]
 
 def record_additional_sale_payment(db: Session, sale_id: int, amount: Decimal, payment_method: str = "Cash") -> SaleResponse:
-    sale = db.query(Sale).filter(Sale.id == sale_id).first()
+    sale = db.query(Sale).options(
+        joinedload(Sale.returns).joinedload(SalesReturn.items)
+    ).filter(Sale.id == sale_id).first()
     if not sale:
         raise EntityNotFoundException("Sale", str(sale_id))
 

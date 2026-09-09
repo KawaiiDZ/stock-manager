@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../services/api';
-import { Product, Customer, BusinessSettings, Sale } from '../../types';
+import { Product, Customer, BusinessSettings, Sale, Quotation, QuotationCreate } from '../../types';
 import {
   Search,
   Plus,
@@ -14,11 +14,13 @@ import {
   AlertCircle,
   CheckCircle2,
   Zap,
+  FileText,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Modal } from '../../components/common/Modal';
 import { ReceiptModal } from '../../components/receipts/ReceiptModal';
+import { QuotationModal } from '../../components/receipts/QuotationModal';
 import { formatCurrency, formatMoney, formatQty } from '../../utils/format';
 
 interface CartItem {
@@ -60,9 +62,12 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
 
   // Submission state
   const [completing, setCompleting] = useState(false);
+  const [savingQuotation, setSavingQuotation] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [completedSale, setCompletedSale] = useState<Sale | null>(null);
   const [showReceipt, setShowReceipt] = useState(false);
+  const [createdQuotation, setCreatedQuotation] = useState<Quotation | null>(null);
+  const [showQuotationModal, setShowQuotationModal] = useState(false);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const barcodeBufferRef = useRef<{ code: string; time: number }>({ code: '', time: 0 });
@@ -336,6 +341,63 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       setErrorMsg(err.detail || 'Failed to complete sale. Please verify quantities.');
     } finally {
       setCompleting(false);
+    }
+  };
+
+  // Create Quotation (No stock deduction, no money/accounts touched)
+  const handleSaveQuotation = async () => {
+    if (cart.length === 0) {
+      setErrorMsg('Cannot create an empty quotation. Please add items to cart.');
+      return;
+    }
+
+    const selectedCust = customers.find((c) => c.id === selectedCustomerId);
+    const custName = (selectedCust ? selectedCust.name : inlineCustomerName).trim();
+    const custPhone = (selectedCust ? (selectedCust.phone || '') : inlineCustomerPhone).trim();
+
+    if (!custName || !custPhone) {
+      setErrorMsg('Customer Name and Customer Phone Number are mandatory to create an official Quotation.');
+      return;
+    }
+
+    setSavingQuotation(true);
+    setErrorMsg(null);
+
+    try {
+      const payload: QuotationCreate = {
+        customer_id: selectedCustomerId || undefined,
+        customer_name: custName,
+        customer_phone: custPhone,
+        customer_address: selectedCust ? (selectedCust.address || undefined) : undefined,
+        items: cart.map((i) => ({
+          product_id: i.product.id,
+          quantity: i.quantity,
+          unit_price: Number(i.unit_price),
+          discount_amount: Number(i.discount_amount || 0),
+        })),
+        discount_amount: Number(saleDiscount || 0),
+        tax_rate: Number(taxRate || 0),
+        notes: notes.trim() || undefined,
+      };
+
+      const res = await api.createQuotation(payload);
+      setCreatedQuotation(res);
+      setShowQuotationModal(true);
+
+      // Reset cart and fields
+      setCart([]);
+      setSelectedCustomerId(null);
+      setInlineCustomerName('');
+      setInlineCustomerPhone('');
+      setSaleDiscount(0);
+      setNotes('');
+      setIsPaidAmountCustomized(false);
+      setPaidAmount(0);
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.detail || 'Failed to save quotation.');
+    } finally {
+      setSavingQuotation(false);
     }
   };
 
@@ -767,18 +829,36 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
               </div>
             </div>
 
-            {/* Complete Sale Button */}
-            <Button
-              type="button"
-              variant="primary"
-              size="lg"
-              onClick={handleCompleteSale}
-              disabled={cart.length === 0 || completing}
-              loading={completing}
-              className="w-full py-3.5 text-base font-bold tracking-wide rounded-2xl shadow-lg shadow-emerald-600/20"
-            >
-              Complete Sale ({formatCurrency(grandTotal, currency)})
-            </Button>
+            {/* Action Buttons: Complete Sale & Create Quotation */}
+            <div className="flex flex-col sm:flex-row items-stretch gap-2.5">
+              {settings?.enable_quotations !== false && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  icon={<FileText className="h-5 w-5 text-indigo-600" />}
+                  onClick={handleSaveQuotation}
+                  disabled={cart.length === 0 || savingQuotation || completing}
+                  loading={savingQuotation}
+                  className="py-3.5 text-sm font-bold border-indigo-200 text-indigo-900 bg-indigo-50/50 hover:bg-indigo-100/60 rounded-2xl whitespace-nowrap"
+                  title="Create uncharged quotation (does not deduct stock or money)"
+                >
+                  Save as Quotation
+                </Button>
+              )}
+
+              <Button
+                type="button"
+                variant="primary"
+                size="lg"
+                onClick={handleCompleteSale}
+                disabled={cart.length === 0 || completing || savingQuotation}
+                loading={completing}
+                className="flex-1 py-3.5 text-base font-bold tracking-wide rounded-2xl shadow-lg shadow-emerald-600/20"
+              >
+                Complete Sale ({formatCurrency(grandTotal, currency)})
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -824,6 +904,17 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         isOpen={showReceipt}
         onClose={() => setShowReceipt(false)}
         sale={completedSale}
+        settings={settings}
+      />
+
+      {/* Quotation Print Modal */}
+      <QuotationModal
+        isOpen={showQuotationModal}
+        onClose={() => {
+          setShowQuotationModal(false);
+          setCreatedQuotation(null);
+        }}
+        quotation={createdQuotation}
         settings={settings}
       />
     </div>

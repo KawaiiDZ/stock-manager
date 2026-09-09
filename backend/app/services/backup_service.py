@@ -42,16 +42,28 @@ def create_backup() -> BackupCreateResponse:
     backup_filename = f"backup_{timestamp_str}.db"
     destination_path = settings.BACKUP_DIR / backup_filename
 
-    # Use sqlite3 backup API to create a live-safe consistent backup
+    # Ensure WAL pages are checkpointed into main database before backup
     try:
         source_conn = sqlite3.connect(str(db_path))
+        source_conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        source_conn.commit()
+    except Exception:
+        source_conn = None
+
+    try:
+        if source_conn is None:
+            source_conn = sqlite3.connect(str(db_path))
         dest_conn = sqlite3.connect(str(destination_path))
         with dest_conn:
             source_conn.backup(dest_conn)
         dest_conn.close()
         source_conn.close()
     except Exception as e:
-        # Fallback to copy if file is idle
+        if source_conn:
+            try:
+                source_conn.close()
+            except Exception:
+                pass
         shutil.copy2(db_path, destination_path)
 
     if not validate_sqlite_file(destination_path):
@@ -117,12 +129,37 @@ def restore_backup(backup_filename: str) -> BackupRestoreResponse:
     except Exception as e:
         shutil.copy2(backup_path, db_path)
 
-    # Dispose connections to flush file handles and run any required migrations
+    # 3. Clean up any stale WAL or SHM files
+    wal_file = Path(f"{db_path}-wal")
+    shm_file = Path(f"{db_path}-shm")
+    if wal_file.exists():
+        try:
+            wal_file.unlink()
+        except Exception:
+            pass
+    if shm_file.exists():
+        try:
+            shm_file.unlink()
+        except Exception:
+            pass
+
+    # 4. Dispose connections to flush file handles and run universal migrations
     engine.dispose()
     try:
         auto_upgrade_schema()
-    except Exception:
-        pass
+    except Exception as e:
+        print("Schema auto-upgrade error upon restore:", e)
+
+    # 5. Seed or heal baseline records (admin, default PIN, walk-in customer)
+    from backend.app.core.database import SessionLocal
+    from backend.app.services.auth_service import seed_initial_data
+    db = SessionLocal()
+    try:
+        seed_initial_data(db)
+    except Exception as e:
+        print("Baseline data seeding error upon restore:", e)
+    finally:
+        db.close()
 
     return BackupRestoreResponse(
         success=True,
