@@ -65,7 +65,7 @@ export const PdfQuotationReceipt: React.FC<PdfQuotationReceiptProps> = ({
 
   return (
     <div
-      id="printable-pdf-receipt"
+      id="printable-pdf-quotation"
       className="bg-white text-slate-800 font-sans text-xs p-8 max-w-[210mm] min-w-[190mm] min-h-[285mm] mx-auto shadow-sm border border-slate-200 rounded-lg print:border-none print:shadow-none print:p-0 print:m-0 print:max-w-none flex flex-col justify-between"
       style={{ boxSizing: 'border-box' }}
     >
@@ -197,12 +197,12 @@ export const PdfQuotationReceipt: React.FC<PdfQuotationReceiptProps> = ({
                       <span className="block text-[10px] font-normal text-slate-500">{item.notes}</span>
                     )}
                   </td>
-                  <td className="py-2.5 px-3 text-right font-medium">{qty}</td>
-                  <td className="py-2.5 px-3 text-right text-slate-600">{formatCurrency(unitPrice, currency)}</td>
-                  <td className="py-2.5 px-3 text-right text-emerald-700 font-medium">
+                  <td className="py-2.5 px-3 text-right font-medium whitespace-nowrap">{qty}</td>
+                  <td className="py-2.5 px-3 text-right text-slate-600 whitespace-nowrap">{formatCurrency(unitPrice, currency)}</td>
+                  <td className="py-2.5 px-3 text-right text-emerald-700 font-medium whitespace-nowrap">
                     {disc > 0 ? `-${formatCurrency(disc, currency)}` : '—'}
                   </td>
-                  <td className="py-2.5 px-3 text-right font-bold text-slate-900">
+                  <td className="py-2.5 px-3 text-right font-bold text-slate-900 whitespace-nowrap">
                     {formatCurrency(total, currency)}
                   </td>
                 </tr>
@@ -230,23 +230,23 @@ export const PdfQuotationReceipt: React.FC<PdfQuotationReceiptProps> = ({
         <div className="w-80 bg-slate-50 border border-slate-200 rounded-lg p-3.5 space-y-2">
           <div className="flex justify-between text-slate-600">
             <span>Subtotal:</span>
-            <span className="font-medium text-slate-900">{formatCurrency(quotation.subtotal, currency)}</span>
+            <span className="font-medium text-slate-900 whitespace-nowrap">{formatCurrency(quotation.subtotal, currency)}</span>
           </div>
           {Number(quotation.discount_amount || 0) > 0 && (
             <div className="flex justify-between text-emerald-700">
               <span>Discount:</span>
-              <span className="font-medium">-{formatCurrency(quotation.discount_amount, currency)}</span>
+              <span className="font-medium whitespace-nowrap">-{formatCurrency(quotation.discount_amount, currency)}</span>
             </div>
           )}
           {Number(quotation.tax_amount || 0) > 0 && (
             <div className="flex justify-between text-slate-600">
               <span>Tax ({quotation.tax_rate}%):</span>
-              <span className="font-medium text-slate-900">+{formatCurrency(quotation.tax_amount, currency)}</span>
+              <span className="font-medium text-slate-900 whitespace-nowrap">+{formatCurrency(quotation.tax_amount, currency)}</span>
             </div>
           )}
           <div className="flex justify-between font-black text-base text-indigo-950 pt-2 border-t border-slate-200">
             <span>Estimated Total:</span>
-            <span className="text-indigo-600">{formatCurrency(quotation.total_amount, currency)}</span>
+            <span className="text-indigo-600 whitespace-nowrap">{formatCurrency(quotation.total_amount, currency)}</span>
           </div>
         </div>
       </div>

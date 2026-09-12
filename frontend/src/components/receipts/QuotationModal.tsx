@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { PdfQuotationReceipt } from './PdfQuotationReceipt';
 import { Quotation, BusinessSettings } from '../../types';
 import { Printer, FileText } from 'lucide-react';
+import { printElement } from '../../utils/print';
 
 interface QuotationModalProps {
   isOpen: boolean;
@@ -18,11 +19,28 @@ export const QuotationModal: React.FC<QuotationModalProps> = ({
   quotation,
   settings,
 }) => {
-  if (!quotation) return null;
-
   const handlePrint = () => {
-    window.print();
+    if (!quotation) return;
+    printElement('printable-pdf-quotation', {
+      title: `Quotation_${quotation.quotation_number}`,
+      isThermal: false,
+    });
   };
+
+  useEffect(() => {
+    if (!isOpen || !quotation) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        e.stopPropagation();
+        handlePrint();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [isOpen, quotation, settings]);
+
+  if (!quotation) return null;
 
   return (
     <Modal
@@ -33,19 +51,21 @@ export const QuotationModal: React.FC<QuotationModalProps> = ({
       maxWidth="4xl"
     >
       <div className="space-y-4">
-        {/* Printable View Container */}
-        <div className="bg-slate-100 p-4 rounded-xl max-h-[65vh] overflow-y-auto flex justify-center">
+        {/* Printable View Stage with High-Contrast Paper Inspection Canvas */}
+        <div className="bg-slate-200/80 p-4 sm:p-6 rounded-2xl max-h-[68vh] overflow-auto flex justify-center border border-slate-200 shadow-inner">
           <div className="w-full flex justify-center">
-            <PdfQuotationReceipt
-              quotation={quotation}
-              settings={settings}
-              businessName={settings?.business_name}
-              phone={settings?.phone}
-              address={settings?.address}
-              currency={settings?.currency}
-              headerText={settings?.receipt_header}
-              footerText={settings?.receipt_footer}
-            />
+            <div className="shadow-xl rounded-lg overflow-hidden bg-white print:shadow-none print:rounded-none">
+              <PdfQuotationReceipt
+                quotation={quotation}
+                settings={settings}
+                businessName={settings?.business_name}
+                phone={settings?.phone}
+                address={settings?.address}
+                currency={settings?.currency}
+                headerText={settings?.receipt_header}
+                footerText={settings?.receipt_footer}
+              />
+            </div>
           </div>
         </div>
 

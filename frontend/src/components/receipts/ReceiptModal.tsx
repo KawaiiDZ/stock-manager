@@ -6,6 +6,8 @@ import { PdfInvoiceReceipt } from './PdfInvoiceReceipt';
 import { Sale, BusinessSettings } from '../../types';
 import { Printer, Plus, Receipt, FileText } from 'lucide-react';
 
+import { printElement } from '../../utils/print';
+
 interface ReceiptModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -29,11 +31,38 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
     }
   }, [isOpen, settings?.receipt_type]);
 
-  if (!sale) return null;
-
   const handlePrint = () => {
-    window.print();
+    if (!sale) return;
+    if (receiptType === 'thermal') {
+      const is58mm = (settings?.receipt_printer_type === '58mm');
+      printElement('printable-thermal-receipt', {
+        title: `Receipt_${sale.receipt_number}`,
+        isThermal: true,
+        paperWidth: is58mm ? '58mm' : '80mm',
+      });
+    } else {
+      const invoiceName = (settings?.invoice_title || 'Invoice').replace(/\s+/g, '_');
+      printElement('printable-pdf-invoice', {
+        title: `${invoiceName}_${sale.receipt_number}`,
+        isThermal: false,
+      });
+    }
   };
+
+  useEffect(() => {
+    if (!isOpen || !sale) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        e.stopPropagation();
+        handlePrint();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [isOpen, receiptType, sale, settings]);
+
+  if (!sale) return null;
 
   return (
     <Modal
@@ -72,35 +101,39 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
           </button>
         </div>
 
-        {/* Receipt Preview */}
-        <div className="bg-slate-100 p-4 rounded-xl max-h-[60vh] overflow-y-auto flex justify-center">
+        {/* Receipt Preview Stage with High-Contrast Paper Inspection Canvas */}
+        <div className="bg-slate-200/80 p-4 sm:p-6 rounded-2xl max-h-[68vh] overflow-auto flex justify-center border border-slate-200 shadow-inner">
           {receiptType === 'thermal' ? (
-            <div id="printable-thermal-receipt" className="flex justify-center w-full">
-              <ThermalReceipt
-                sale={sale}
-                settings={settings}
-                businessName={settings?.business_name}
-                phone={settings?.phone}
-                address={settings?.address}
-                currency={settings?.currency}
-                headerText={settings?.receipt_header}
-                footerText={settings?.receipt_footer}
-                printerType={settings?.receipt_printer_type}
-              />
+            <div className="flex justify-center w-full">
+              <div className="shadow-lg rounded-sm overflow-hidden bg-white print:shadow-none print:rounded-none">
+                <ThermalReceipt
+                  sale={sale}
+                  settings={settings}
+                  businessName={settings?.business_name}
+                  phone={settings?.phone}
+                  address={settings?.address}
+                  currency={settings?.currency}
+                  headerText={settings?.receipt_header}
+                  footerText={settings?.receipt_footer}
+                  printerType={settings?.receipt_printer_type}
+                />
+              </div>
             </div>
           ) : (
             <div className="w-full flex justify-center">
-              <PdfInvoiceReceipt
-                sale={sale}
-                settings={settings}
-                businessName={settings?.business_name}
-                phone={settings?.phone}
-                address={settings?.address}
-                currency={settings?.currency}
-                headerText={settings?.receipt_header}
-                footerText={settings?.receipt_footer}
-                documentTitle={settings?.invoice_title}
-              />
+              <div className="shadow-xl rounded-lg overflow-hidden bg-white print:shadow-none print:rounded-none">
+                <PdfInvoiceReceipt
+                  sale={sale}
+                  settings={settings}
+                  businessName={settings?.business_name}
+                  phone={settings?.phone}
+                  address={settings?.address}
+                  currency={settings?.currency}
+                  headerText={settings?.receipt_header}
+                  footerText={settings?.receipt_footer}
+                  documentTitle={settings?.invoice_title}
+                />
+              </div>
             </div>
           )}
         </div>

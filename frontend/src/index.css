@@ -20,6 +20,14 @@
     display: none !important;
   }
 
+  /* Modal backdrops must be completely hidden */
+  .fixed.inset-0.bg-slate-900\/40,
+  div[class*="backdrop-blur"],
+  div[class*="transition-opacity"] {
+    display: none !important;
+    opacity: 0 !important;
+  }
+
   body {
     background-color: #ffffff !important;
     color: #0f172a !important;
@@ -27,86 +35,59 @@
     -webkit-print-color-adjust: exact !important;
   }
 
-  /* Thermal Receipt Printing */
-  body:has(#printable-thermal-receipt) * {
-    visibility: hidden;
-  }
-  body:has(#printable-thermal-receipt) #printable-thermal-receipt,
-  body:has(#printable-thermal-receipt) #printable-thermal-receipt * {
-    visibility: visible;
-  }
-  body:has(#printable-thermal-receipt) #printable-thermal-receipt {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-  }
-
-  /* PDF / Standard A4 Invoice & Multi-Page Reports Printing */
   html, body {
     height: auto !important;
     overflow: visible !important;
     background: white !important;
   }
 
-  body:has(#printable-pdf-receipt) * {
-    visibility: hidden;
+  /* Shared A4 & Thermal Print Formatting Rules */
+  #printable-thermal-receipt {
+    width: 100% !important;
+    max-width: 80mm !important;
+    margin-left: 0 !important;
+    margin-right: auto !important;
   }
 
-  /* Release any fixed/scrolling modal ancestors during print */
-  body:has(#printable-pdf-receipt) *:has(#printable-pdf-receipt) {
-    position: static !important;
-    overflow: visible !important;
-    max-height: none !important;
-    height: auto !important;
-    min-height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-    box-shadow: none !important;
-    filter: none !important;
-    transform: none !important;
-  }
-
-  body:has(#printable-pdf-receipt) #printable-pdf-receipt,
-  body:has(#printable-pdf-receipt) #printable-pdf-receipt * {
-    visibility: visible;
-  }
-
-  body:has(#printable-pdf-receipt) #printable-pdf-receipt {
-    position: static !important;
-    display: block !important;
+  #printable-pdf-invoice,
+  #printable-pdf-quotation,
+  #printable-pdf-report,
+  #printable-pdf-receipt {
     width: 100% !important;
     max-width: 100% !important;
     min-width: 100% !important;
-    min-height: 0 !important;
-    height: auto !important;
     margin: 0 !important;
-    padding: 0 !important;
-    border: none !important;
     box-shadow: none !important;
-    overflow: visible !important;
-    break-after: auto !important;
-    page-break-after: auto !important;
+    border: none !important;
   }
 
+  #printable-pdf-invoice .pdf-content-body,
+  #printable-pdf-quotation .pdf-content-body,
+  #printable-pdf-report .pdf-content-body,
   #printable-pdf-receipt .pdf-content-body {
     display: block !important;
     width: 100% !important;
   }
 
+  #printable-pdf-invoice .pdf-footer-stamp,
+  #printable-pdf-quotation .pdf-footer-stamp,
+  #printable-pdf-report .pdf-footer-stamp,
   #printable-pdf-receipt .pdf-footer-stamp {
     margin-top: 2rem !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
 
+  #printable-pdf-invoice .overflow-x-auto,
+  #printable-pdf-quotation .overflow-x-auto,
+  #printable-pdf-report .overflow-x-auto,
   #printable-pdf-receipt .overflow-x-auto {
     overflow: visible !important;
   }
 
+  #printable-pdf-invoice table,
+  #printable-pdf-quotation table,
+  #printable-pdf-report table,
   #printable-pdf-receipt table {
     width: 100% !important;
     border-collapse: collapse !important;
@@ -114,64 +95,37 @@
     page-break-inside: auto !important;
   }
 
+  #printable-pdf-invoice thead,
+  #printable-pdf-quotation thead,
+  #printable-pdf-report thead,
   #printable-pdf-receipt thead {
     display: table-header-group !important;
   }
 
+  #printable-pdf-invoice tfoot,
+  #printable-pdf-quotation tfoot,
+  #printable-pdf-report tfoot,
   #printable-pdf-receipt tfoot {
     display: table-footer-group !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
 
+  #printable-pdf-invoice tbody tr,
+  #printable-pdf-quotation tbody tr,
+  #printable-pdf-report tbody tr,
   #printable-pdf-receipt tbody tr {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
 
-  #printable-pdf-receipt .print-avoid-break {
+  .print-avoid-break {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
 
-  /* Generic Printable Receipt Fallback */
-  body:has(#printable-receipt) * {
-    visibility: hidden;
-  }
-  body:has(#printable-receipt) #printable-receipt,
-  body:has(#printable-receipt) #printable-receipt * {
-    visibility: visible;
-  }
-  body:has(#printable-receipt) #printable-receipt {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-  }
-
-  /* Standard Report Document Printing (when #printable-report is active or standard print) */
-  #printable-report {
-    display: block !important;
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-
-  #printable-report table {
-    width: 100% !important;
-    border-collapse: collapse !important;
-  }
-
-  #printable-report th,
-  #printable-report td {
-    border: 1px solid #e2e8f0 !important;
-    padding: 6px 8px !important;
-  }
-
   @page {
-    margin: 10mm 8mm 12mm 8mm;
+    margin: 10mm 12mm 12mm 12mm;
     size: A4 portrait;
   }
 }

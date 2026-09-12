@@ -38,7 +38,8 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
 
   return (
     <div
-      className={`bg-white text-black font-mono text-xs p-4 mx-auto ${
+      id="printable-thermal-receipt"
+      className={`bg-white text-black font-mono text-xs p-4 mx-auto print:m-0 print:p-1 ${
         is58mm ? 'w-[58mm] max-w-[58mm] text-[10px]' : 'w-[80mm] max-w-[80mm]'
       }`}
       style={{

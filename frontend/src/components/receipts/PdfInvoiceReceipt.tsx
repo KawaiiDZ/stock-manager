@@ -99,7 +99,7 @@ export const PdfInvoiceReceipt: React.FC<PdfInvoiceReceiptProps> = ({
 
   return (
     <div
-      id="printable-pdf-receipt"
+      id="printable-pdf-invoice"
       className="bg-white text-slate-800 font-sans text-xs p-8 max-w-[210mm] min-w-[190mm] min-h-[285mm] mx-auto shadow-sm border border-slate-200 rounded-lg print:border-none print:shadow-none print:p-0 print:m-0 print:max-w-none flex flex-col justify-between"
       style={{ boxSizing: 'border-box' }}
     >
@@ -247,7 +247,7 @@ export const PdfInvoiceReceipt: React.FC<PdfInvoiceReceiptProps> = ({
                       )}
                     </div>
                   </td>
-                  <td className="py-2.5 px-3 text-right font-medium">
+                  <td className="py-2.5 px-3 text-right font-medium whitespace-nowrap">
                     {isFullyReturned ? (
                       <span>
                         <span className="line-through text-slate-400 mr-1">{origQty}</span>
@@ -262,13 +262,13 @@ export const PdfInvoiceReceipt: React.FC<PdfInvoiceReceiptProps> = ({
                       origQty
                     )}
                   </td>
-                  <td className="py-2.5 px-3 text-right">{formatCurrency(item.unit_price, currency)}</td>
-                  <td className="py-2.5 px-3 text-right text-slate-500">
+                  <td className="py-2.5 px-3 text-right whitespace-nowrap">{formatCurrency(item.unit_price, currency)}</td>
+                  <td className="py-2.5 px-3 text-right text-slate-500 whitespace-nowrap">
                     {Number(item.discount_amount || 0) > 0
                       ? `-${formatCurrency(item.discount_amount, currency)}`
                       : '-'}
                   </td>
-                  <td className="py-2.5 px-3 text-right font-bold">
+                  <td className="py-2.5 px-3 text-right font-bold whitespace-nowrap">
                     {isFullyReturned ? (
                       <span>
                         <span className="line-through text-slate-400 mr-1 text-[11px]">
@@ -314,55 +314,55 @@ export const PdfInvoiceReceipt: React.FC<PdfInvoiceReceiptProps> = ({
         <div className="w-80 bg-slate-50 border border-slate-200 rounded-lg p-3.5 space-y-2">
           <div className="flex justify-between text-slate-600">
             <span>Subtotal:</span>
-            <span className="font-medium text-slate-900">{formatCurrency(sale.subtotal, currency)}</span>
+            <span className="font-medium text-slate-900 whitespace-nowrap">{formatCurrency(sale.subtotal, currency)}</span>
           </div>
 
           {Number(sale.discount_amount || 0) > 0 && (
             <div className="flex justify-between text-emerald-700">
               <span>Discount:</span>
-              <span className="font-medium">-{formatCurrency(sale.discount_amount, currency)}</span>
+              <span className="font-medium whitespace-nowrap">-{formatCurrency(sale.discount_amount, currency)}</span>
             </div>
           )}
 
           {Number(sale.tax_amount || 0) > 0 && (
             <div className="flex justify-between text-slate-600">
               <span>Tax ({sale.tax_rate}%):</span>
-              <span className="font-medium text-slate-900">+{formatCurrency(sale.tax_amount, currency)}</span>
+              <span className="font-medium text-slate-900 whitespace-nowrap">+{formatCurrency(sale.tax_amount, currency)}</span>
             </div>
           )}
 
           <div className="flex justify-between font-black text-sm text-slate-900 pt-2 border-t border-slate-200">
             <span>Original Total:</span>
-            <span>{formatCurrency(sale.total_amount, currency)}</span>
+            <span className="whitespace-nowrap">{formatCurrency(sale.total_amount, currency)}</span>
           </div>
 
           {hasReturns && (
             <>
               <div className="flex justify-between text-rose-700 font-semibold text-xs">
                 <span>Less Returned Goods:</span>
-                <span>-{formatCurrency(returnedVal, currency)}</span>
+                <span className="whitespace-nowrap">-{formatCurrency(returnedVal, currency)}</span>
               </div>
               <div className="flex justify-between font-black text-sm text-emerald-800 pt-1.5 border-t border-dashed border-slate-300">
                 <span>Net Billable Total:</span>
-                <span>{formatCurrency(netBillableTotal, currency)}</span>
+                <span className="whitespace-nowrap">{formatCurrency(netBillableTotal, currency)}</span>
               </div>
             </>
           )}
 
           <div className="flex justify-between text-slate-700 pt-1 border-t border-slate-200/60 font-medium">
             <span>Paid Amount:</span>
-            <span>{formatCurrency(sale.paid_amount, currency)}</span>
+            <span className="whitespace-nowrap">{formatCurrency(sale.paid_amount, currency)}</span>
           </div>
 
           {dueAmount > 0 ? (
             <div className="flex justify-between font-bold text-rose-700 pt-1 border-t border-rose-200">
               <span>Balance Due:</span>
-              <span>{formatCurrency(dueAmount, currency)}</span>
+              <span className="whitespace-nowrap">{formatCurrency(dueAmount, currency)}</span>
             </div>
           ) : (
             <div className="flex justify-between text-emerald-700 font-semibold pt-1 border-t border-emerald-200 text-[11px]">
               <span>Balance:</span>
-              <span>
+              <span className="whitespace-nowrap">
                 {(sale.payment_status || '').toUpperCase() === 'RETURNED'
                   ? 'Rs. 0.00 (Fully Returned & Settled)'
                   : 'Rs. 0.00 (Cleared)'}

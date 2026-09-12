@@ -22,6 +22,7 @@ import {
 import { Button } from '../../components/common/Button';
 import { DateFilter, formatLocalDate } from '../../components/common/DateFilter';
 import { formatCurrency, formatMoney, formatDateTime } from '../../utils/format';
+import { printElement } from '../../utils/print';
 
 interface ReportsPageProps {
   settings: BusinessSettings | null;
@@ -128,14 +129,26 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
   };
 
   const handlePrint = () => {
-    const originalTitle = document.title;
     const dateStr = formatLocalDate(new Date());
-    document.title = `${currentReportName} - ${dateStr}`;
-    window.print();
-    setTimeout(() => {
-      document.title = originalTitle;
-    }, 1200);
+    printElement('printable-pdf-report', {
+      title: `${currentReportName} - ${dateStr}`,
+      isThermal: false,
+    });
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') {
+        const reportEl = document.getElementById('printable-pdf-report');
+        if (reportEl) {
+          e.preventDefault();
+          handlePrint();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentReportName]);
 
   // Calculations for Grand Totals and KPI Metrics per report
   const summaryMetrics = useMemo(() => {
@@ -398,7 +411,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
       {/* Printable Corporate A4 Document (Formatted Identically to A4 Receipts) */}
       {/* ========================================================================= */}
       <div
-        id="printable-pdf-receipt"
+        id="printable-pdf-report"
         className="bg-white text-slate-800 font-sans text-xs p-6 sm:p-8 max-w-[220mm] min-h-[285mm] mx-auto shadow-sm border border-slate-200 rounded-2xl print:border-none print:shadow-none print:p-0 print:m-0 print:max-w-none flex flex-col justify-between"
         style={{ boxSizing: 'border-box' }}
       >
@@ -502,25 +515,25 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                   <>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Invoiced Revenue</div>
-                      <div className="text-sm font-black text-slate-900">
+                      <div className="text-sm font-black text-slate-900 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.totalAmount, currency)}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Collected Cash</div>
-                      <div className="text-sm font-black text-emerald-700">
+                      <div className="text-sm font-black text-emerald-700 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.paidAmount, currency)}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Customer Due</div>
-                      <div className="text-sm font-black text-rose-700">
+                      <div className="text-sm font-black text-rose-700 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.dueAmount, currency)}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Realized Profit</div>
-                      <div className="text-sm font-black text-emerald-800">
+                      <div className="text-sm font-black text-emerald-800 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.realizedProfit, currency)}
                       </div>
                     </div>
@@ -532,23 +545,23 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                   <>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Total Units Sold</div>
-                      <div className="text-sm font-black text-slate-900">{summaryMetrics.totalQty} Units</div>
+                      <div className="text-sm font-black text-slate-900 whitespace-nowrap">{summaryMetrics.totalQty} Units</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Total Revenue</div>
-                      <div className="text-sm font-black text-slate-900">
+                      <div className="text-sm font-black text-slate-900 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.revenue, currency)}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Total FIFO Cost</div>
-                      <div className="text-sm font-black text-slate-600">
+                      <div className="text-sm font-black text-slate-600 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.totalCost, currency)}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Total Gross Profit</div>
-                      <div className="text-sm font-black text-emerald-800">
+                      <div className="text-sm font-black text-emerald-800 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.invoicedProfit, currency)}
                       </div>
                     </div>
@@ -560,23 +573,23 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                   <>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Purchases Count</div>
-                      <div className="text-sm font-black text-slate-900">{summaryMetrics.count} Orders</div>
+                      <div className="text-sm font-black text-slate-900 whitespace-nowrap">{summaryMetrics.count} Orders</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Total Purchase Cost</div>
-                      <div className="text-sm font-black text-slate-900">
+                      <div className="text-sm font-black text-slate-900 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.totalCost, currency)}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Paid to Suppliers</div>
-                      <div className="text-sm font-black text-emerald-700">
+                      <div className="text-sm font-black text-emerald-700 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.paid, currency)}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Outstanding Payables</div>
-                      <div className="text-sm font-black text-rose-700">
+                      <div className="text-sm font-black text-rose-700 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.due, currency)}
                       </div>
                     </div>
@@ -588,23 +601,23 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                   <>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Total Physical Units</div>
-                      <div className="text-sm font-black text-slate-900">{summaryMetrics.totalStock} Units</div>
+                      <div className="text-sm font-black text-slate-900 whitespace-nowrap">{summaryMetrics.totalStock} Units</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Valuation at Cost</div>
-                      <div className="text-sm font-black text-slate-900">
+                      <div className="text-sm font-black text-slate-900 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.totalValueCost, currency)}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Valuation at Retail</div>
-                      <div className="text-sm font-black text-emerald-700">
+                      <div className="text-sm font-black text-emerald-700 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.totalValueRetail, currency)}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Gross Profit Potential</div>
-                      <div className="text-sm font-black text-emerald-800">
+                      <div className="text-sm font-black text-emerald-800 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.potentialProfit, currency)}
                       </div>
                     </div>
@@ -616,19 +629,19 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                   <>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Movement Events</div>
-                      <div className="text-sm font-black text-slate-900">{summaryMetrics.count} Logs</div>
+                      <div className="text-sm font-black text-slate-900 whitespace-nowrap">{summaryMetrics.count} Logs</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Inflows Received</div>
-                      <div className="text-sm font-black text-emerald-700">+{summaryMetrics.inflows} Units</div>
+                      <div className="text-sm font-black text-emerald-700 whitespace-nowrap">+{summaryMetrics.inflows} Units</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Outflows Deducted</div>
-                      <div className="text-sm font-black text-rose-700">-{summaryMetrics.outflows} Units</div>
+                      <div className="text-sm font-black text-rose-700 whitespace-nowrap">-{summaryMetrics.outflows} Units</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Net Delta</div>
-                      <div className="text-sm font-black text-slate-900">{summaryMetrics.netQty} Units</div>
+                      <div className="text-sm font-black text-slate-900 whitespace-nowrap">{summaryMetrics.netQty} Units</div>
                     </div>
                   </>
                 )}
@@ -638,23 +651,23 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                   <>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Total Customers</div>
-                      <div className="text-sm font-black text-slate-900">{summaryMetrics.count} Accounts</div>
+                      <div className="text-sm font-black text-slate-900 whitespace-nowrap">{summaryMetrics.count} Accounts</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Total Billed</div>
-                      <div className="text-sm font-black text-slate-900">
+                      <div className="text-sm font-black text-slate-900 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.purchases, currency)}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Total Payments Received</div>
-                      <div className="text-sm font-black text-emerald-700">
+                      <div className="text-sm font-black text-emerald-700 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.payments, currency)}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Current Receivables Due</div>
-                      <div className="text-sm font-black text-rose-700">
+                      <div className="text-sm font-black text-rose-700 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.dues, currency)}
                       </div>
                     </div>
@@ -666,23 +679,23 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                   <>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Total Suppliers</div>
-                      <div className="text-sm font-black text-slate-900">{summaryMetrics.count} Vendors</div>
+                      <div className="text-sm font-black text-slate-900 whitespace-nowrap">{summaryMetrics.count} Vendors</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Total Procured</div>
-                      <div className="text-sm font-black text-slate-900">
+                      <div className="text-sm font-black text-slate-900 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.purchases, currency)}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Total Payments Made</div>
-                      <div className="text-sm font-black text-emerald-700">
+                      <div className="text-sm font-black text-emerald-700 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.payments, currency)}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Current Payables Due</div>
-                      <div className="text-sm font-black text-rose-700">
+                      <div className="text-sm font-black text-rose-700 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.dues, currency)}
                       </div>
                     </div>
@@ -694,23 +707,23 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                   <>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Total Invoices</div>
-                      <div className="text-sm font-black text-slate-900">{summaryMetrics.count} Bills</div>
+                      <div className="text-sm font-black text-slate-900 whitespace-nowrap">{summaryMetrics.count} Bills</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Total Billed</div>
-                      <div className="text-sm font-black text-slate-900">
+                      <div className="text-sm font-black text-slate-900 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.amount, currency)}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Total Settled</div>
-                      <div className="text-sm font-black text-emerald-700">
+                      <div className="text-sm font-black text-emerald-700 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.paid, currency)}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Outstanding Liabilities</div>
-                      <div className="text-sm font-black text-rose-700">
+                      <div className="text-sm font-black text-rose-700 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.due, currency)}
                       </div>
                     </div>
@@ -722,11 +735,11 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                   <>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Expense Entries</div>
-                      <div className="text-sm font-black text-slate-900">{summaryMetrics.count} Records</div>
+                      <div className="text-sm font-black text-slate-900 whitespace-nowrap">{summaryMetrics.count} Records</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-medium">Total Operating Outlay</div>
-                      <div className="text-sm font-black text-rose-700">
+                      <div className="text-sm font-black text-rose-700 whitespace-nowrap">
                         {formatCurrency(summaryMetrics.totalAmount, currency)}
                       </div>
                     </div>
@@ -752,15 +765,15 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-slate-50 border-y border-slate-300 text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <tr>
-                      <th className="py-2.5 px-3">Receipt #</th>
-                      <th className="py-2.5 px-3">Date</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Receipt #</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Date</th>
                       <th className="py-2.5 px-3">Customer</th>
-                      <th className="py-2.5 px-3 text-right">Total Amount</th>
-                      <th className="py-2.5 px-3 text-right">Paid</th>
-                      <th className="py-2.5 px-3 text-right">Due</th>
-                      <th className="py-2.5 px-3 text-right">Invoiced Profit</th>
-                      <th className="py-2.5 px-3 text-right">Realized Profit</th>
-                      <th className="py-2.5 px-3 text-center">Status</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Total Amount</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Paid</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Due</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Invoiced Profit</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Realized Profit</th>
+                      <th className="py-2.5 px-3 text-center whitespace-nowrap">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
@@ -768,27 +781,27 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                       const dueNum = Number(row.due_amount || 0);
                       return (
                         <tr key={i} className="hover:bg-slate-50/70">
-                          <td className="py-2.5 px-3 font-bold text-slate-900">{row.receipt_number}</td>
-                          <td className="py-2.5 px-3 text-slate-500">
+                          <td className="py-2.5 px-3 font-bold text-slate-900 whitespace-nowrap">{row.receipt_number}</td>
+                          <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap">
                             {formatDateTime(row.date, settings?.date_format)}
                           </td>
                           <td className="py-2.5 px-3 font-medium text-slate-800">{row.customer_name}</td>
-                          <td className="py-2.5 px-3 text-right font-bold text-slate-900">
+                          <td className="py-2.5 px-3 text-right font-bold text-slate-900 whitespace-nowrap">
                             {formatCurrency(row.total_amount, currency)}
                           </td>
-                          <td className="py-2.5 px-3 text-right text-emerald-700 font-semibold">
+                          <td className="py-2.5 px-3 text-right text-emerald-700 font-semibold whitespace-nowrap">
                             {formatCurrency(row.paid_amount, currency)}
                           </td>
-                          <td className="py-2.5 px-3 text-right text-rose-700 font-semibold">
+                          <td className="py-2.5 px-3 text-right text-rose-700 font-semibold whitespace-nowrap">
                             {dueNum > 0 ? formatCurrency(dueNum, currency) : '—'}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-medium text-slate-600">
+                          <td className="py-2.5 px-3 text-right font-medium text-slate-600 whitespace-nowrap">
                             {formatCurrency(row.gross_profit || 0, currency)}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-bold text-emerald-800">
+                          <td className="py-2.5 px-3 text-right font-bold text-emerald-800 whitespace-nowrap">
                             {formatCurrency(row.realized_profit || 0, currency)}
                           </td>
-                          <td className="py-2.5 px-3 text-center">
+                          <td className="py-2.5 px-3 text-center whitespace-nowrap">
                             <span
                               className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
                                 row.payment_status === 'PAID'
@@ -810,22 +823,22 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                   {summaryMetrics && (
                     <tfoot className="border-t-2 border-slate-800 bg-slate-50 font-black text-slate-900 text-xs">
                       <tr>
-                        <td colSpan={3} className="py-3 px-3 uppercase tracking-wider">
+                        <td colSpan={3} className="py-3 px-3 uppercase tracking-wider whitespace-nowrap">
                           Grand Total ({summaryMetrics.count} Sales)
                         </td>
-                        <td className="py-3 px-3 text-right">
+                        <td className="py-3 px-3 text-right whitespace-nowrap">
                           {formatCurrency(summaryMetrics.totalAmount, currency)}
                         </td>
-                        <td className="py-3 px-3 text-right text-emerald-800">
+                        <td className="py-3 px-3 text-right text-emerald-800 whitespace-nowrap">
                           {formatCurrency(summaryMetrics.paidAmount, currency)}
                         </td>
-                        <td className="py-3 px-3 text-right text-rose-800">
+                        <td className="py-3 px-3 text-right text-rose-800 whitespace-nowrap">
                           {formatCurrency(summaryMetrics.dueAmount, currency)}
                         </td>
-                        <td className="py-3 px-3 text-right">
+                        <td className="py-3 px-3 text-right whitespace-nowrap">
                           {formatCurrency(summaryMetrics.invoicedProfit, currency)}
                         </td>
-                        <td className="py-3 px-3 text-right text-emerald-900">
+                        <td className="py-3 px-3 text-right text-emerald-900 whitespace-nowrap">
                           {formatCurrency(summaryMetrics.realizedProfit, currency)}
                         </td>
                         <td></td>
@@ -840,43 +853,43 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-slate-50 border-y border-slate-300 text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <tr>
-                      <th className="py-2.5 px-3">Receipt #</th>
-                      <th className="py-2.5 px-3">Date</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Receipt #</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Date</th>
                       <th className="py-2.5 px-3">Product</th>
-                      <th className="py-2.5 px-3 text-right">Qty</th>
-                      <th className="py-2.5 px-3 text-right">Unit Price</th>
-                      <th className="py-2.5 px-3 text-right">Revenue</th>
-                      <th className="py-2.5 px-3 text-right">FIFO Cost</th>
-                      <th className="py-2.5 px-3 text-right">Invoiced Profit</th>
-                      <th className="py-2.5 px-3 text-right">Realized Profit</th>
-                      <th className="py-2.5 px-3 text-center">Status</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Qty</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Unit Price</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Revenue</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">FIFO Cost</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Invoiced Profit</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Realized Profit</th>
+                      <th className="py-2.5 px-3 text-center whitespace-nowrap">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
                     {reportData.map((row, i) => (
                       <tr key={i} className="hover:bg-slate-50/70">
-                        <td className="py-2.5 px-3 font-bold text-slate-900">{row.receipt_number}</td>
-                        <td className="py-2.5 px-3 text-slate-500">
+                        <td className="py-2.5 px-3 font-bold text-slate-900 whitespace-nowrap">{row.receipt_number}</td>
+                        <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap">
                           {formatDateTime(row.date, settings?.date_format)}
                         </td>
                         <td className="py-2.5 px-3 font-semibold text-slate-800">{row.product_name}</td>
-                        <td className="py-2.5 px-3 text-right font-medium">{row.quantity}</td>
-                        <td className="py-2.5 px-3 text-right text-slate-600">
+                        <td className="py-2.5 px-3 text-right font-medium whitespace-nowrap">{row.quantity}</td>
+                        <td className="py-2.5 px-3 text-right text-slate-600 whitespace-nowrap">
                           {formatCurrency(row.unit_price, currency)}
                         </td>
-                        <td className="py-2.5 px-3 text-right font-bold text-slate-900">
+                        <td className="py-2.5 px-3 text-right font-bold text-slate-900 whitespace-nowrap">
                           {formatCurrency(row.total_price, currency)}
                         </td>
-                        <td className="py-2.5 px-3 text-right text-slate-500">
+                        <td className="py-2.5 px-3 text-right text-slate-500 whitespace-nowrap">
                           {formatCurrency(row.total_cost, currency)}
                         </td>
-                        <td className="py-2.5 px-3 text-right font-medium text-slate-700">
+                        <td className="py-2.5 px-3 text-right font-medium text-slate-700 whitespace-nowrap">
                           {formatCurrency(row.gross_profit, currency)}
                         </td>
-                        <td className="py-2.5 px-3 text-right font-black text-emerald-700">
+                        <td className="py-2.5 px-3 text-right font-black text-emerald-700 whitespace-nowrap">
                           {formatCurrency(row.realized_profit || 0, currency)}
                         </td>
-                        <td className="py-2.5 px-3 text-center">
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
                           <span
                             className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
                               row.payment_status === 'PAID'
@@ -893,21 +906,21 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                   {summaryMetrics && (
                     <tfoot className="border-t-2 border-slate-800 bg-slate-50 font-black text-slate-900 text-xs">
                       <tr>
-                        <td colSpan={3} className="py-3 px-3 uppercase tracking-wider">
+                        <td colSpan={3} className="py-3 px-3 uppercase tracking-wider whitespace-nowrap">
                           Grand Total
                         </td>
-                        <td className="py-3 px-3 text-right">{summaryMetrics.totalQty}</td>
+                        <td className="py-3 px-3 text-right whitespace-nowrap">{summaryMetrics.totalQty}</td>
                         <td></td>
-                        <td className="py-3 px-3 text-right">
+                        <td className="py-3 px-3 text-right whitespace-nowrap">
                           {formatCurrency(summaryMetrics.revenue, currency)}
                         </td>
-                        <td className="py-3 px-3 text-right">
+                        <td className="py-3 px-3 text-right whitespace-nowrap">
                           {formatCurrency(summaryMetrics.totalCost, currency)}
                         </td>
-                        <td className="py-3 px-3 text-right">
+                        <td className="py-3 px-3 text-right whitespace-nowrap">
                           {formatCurrency(summaryMetrics.invoicedProfit, currency)}
                         </td>
-                        <td className="py-3 px-3 text-right text-emerald-900">
+                        <td className="py-3 px-3 text-right text-emerald-900 whitespace-nowrap">
                           {formatCurrency(summaryMetrics.realizedProfit, currency)}
                         </td>
                         <td></td>
@@ -922,13 +935,13 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-slate-50 border-y border-slate-300 text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <tr>
-                      <th className="py-2.5 px-3">Purchase #</th>
-                      <th className="py-2.5 px-3">Date</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Purchase #</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Date</th>
                       <th className="py-2.5 px-3">Supplier</th>
-                      <th className="py-2.5 px-3 text-right">Total Cost</th>
-                      <th className="py-2.5 px-3 text-right">Paid</th>
-                      <th className="py-2.5 px-3 text-right">Due</th>
-                      <th className="py-2.5 px-3 text-center">Status</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Total Cost</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Paid</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Due</th>
+                      <th className="py-2.5 px-3 text-center whitespace-nowrap">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
@@ -936,21 +949,21 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                       const dueNum = Number(row.due_amount || 0);
                       return (
                         <tr key={i} className="hover:bg-slate-50/70">
-                          <td className="py-2.5 px-3 font-bold text-slate-900">{row.purchase_number}</td>
-                          <td className="py-2.5 px-3 text-slate-500">
+                          <td className="py-2.5 px-3 font-bold text-slate-900 whitespace-nowrap">{row.purchase_number}</td>
+                          <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap">
                             {formatDateTime(row.date, settings?.date_format)}
                           </td>
                           <td className="py-2.5 px-3 font-medium text-slate-800">{row.supplier_name}</td>
-                          <td className="py-2.5 px-3 text-right font-bold text-slate-900">
+                          <td className="py-2.5 px-3 text-right font-bold text-slate-900 whitespace-nowrap">
                             {formatCurrency(row.total_amount, currency)}
                           </td>
-                          <td className="py-2.5 px-3 text-right text-emerald-700 font-semibold">
+                          <td className="py-2.5 px-3 text-right text-emerald-700 font-semibold whitespace-nowrap">
                             {formatCurrency(row.paid_amount, currency)}
                           </td>
-                          <td className="py-2.5 px-3 text-right text-rose-700 font-semibold">
+                          <td className="py-2.5 px-3 text-right text-rose-700 font-semibold whitespace-nowrap">
                             {dueNum > 0 ? formatCurrency(dueNum, currency) : '—'}
                           </td>
-                          <td className="py-2.5 px-3 text-center">
+                          <td className="py-2.5 px-3 text-center whitespace-nowrap">
                             <span
                               className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
                                 row.payment_status === 'PAID'
@@ -968,16 +981,16 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                   {summaryMetrics && (
                     <tfoot className="border-t-2 border-slate-800 bg-slate-50 font-black text-slate-900 text-xs">
                       <tr>
-                        <td colSpan={3} className="py-3 px-3 uppercase tracking-wider">
+                        <td colSpan={3} className="py-3 px-3 uppercase tracking-wider whitespace-nowrap">
                           Grand Total ({summaryMetrics.count} Purchases)
                         </td>
-                        <td className="py-3 px-3 text-right">
+                        <td className="py-3 px-3 text-right whitespace-nowrap">
                           {formatCurrency(summaryMetrics.totalCost, currency)}
                         </td>
-                        <td className="py-3 px-3 text-right text-emerald-800">
+                        <td className="py-3 px-3 text-right text-emerald-800 whitespace-nowrap">
                           {formatCurrency(summaryMetrics.paid, currency)}
                         </td>
-                        <td className="py-3 px-3 text-right text-rose-800">
+                        <td className="py-3 px-3 text-right text-rose-800 whitespace-nowrap">
                           {formatCurrency(summaryMetrics.due, currency)}
                         </td>
                         <td></td>
@@ -992,33 +1005,33 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-slate-50 border-y border-slate-300 text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <tr>
-                      <th className="py-2.5 px-3">Item #</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Item #</th>
                       <th className="py-2.5 px-3">Product Name</th>
                       <th className="py-2.5 px-3">Category</th>
-                      <th className="py-2.5 px-3 text-right">In Stock</th>
-                      <th className="py-2.5 px-3 text-right">Unit Cost</th>
-                      <th className="py-2.5 px-3 text-right">Retail Price</th>
-                      <th className="py-2.5 px-3 text-right">Valuation (Cost)</th>
-                      <th className="py-2.5 px-3 text-right">Valuation (Retail)</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">In Stock</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Unit Cost</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Retail Price</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Valuation (Cost)</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Valuation (Retail)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
                     {reportData.map((row, i) => (
                       <tr key={i} className="hover:bg-slate-50/70">
-                        <td className="py-2.5 px-3 font-mono font-semibold text-slate-600">{row.product_id}</td>
+                        <td className="py-2.5 px-3 font-mono font-semibold text-slate-600 whitespace-nowrap">{row.product_id}</td>
                         <td className="py-2.5 px-3 font-bold text-slate-900">{row.name}</td>
                         <td className="py-2.5 px-3 text-slate-500">{row.category_name || '—'}</td>
-                        <td className="py-2.5 px-3 text-right font-black text-slate-800">{row.current_stock}</td>
-                        <td className="py-2.5 px-3 text-right text-slate-600">
+                        <td className="py-2.5 px-3 text-right font-black text-slate-800 whitespace-nowrap">{row.current_stock}</td>
+                        <td className="py-2.5 px-3 text-right text-slate-600 whitespace-nowrap">
                           {formatCurrency(row.purchase_price, currency)}
                         </td>
-                        <td className="py-2.5 px-3 text-right text-slate-600">
+                        <td className="py-2.5 px-3 text-right text-slate-600 whitespace-nowrap">
                           {formatCurrency(row.selling_price, currency)}
                         </td>
-                        <td className="py-2.5 px-3 text-right font-bold text-slate-900">
+                        <td className="py-2.5 px-3 text-right font-bold text-slate-900 whitespace-nowrap">
                           {formatCurrency(row.stock_value_cost, currency)}
                         </td>
-                        <td className="py-2.5 px-3 text-right font-bold text-emerald-800">
+                        <td className="py-2.5 px-3 text-right font-bold text-emerald-800 whitespace-nowrap">
                           {formatCurrency(row.stock_value_retail, currency)}
                         </td>
                       </tr>
@@ -1027,16 +1040,16 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                   {summaryMetrics && (
                     <tfoot className="border-t-2 border-slate-800 bg-slate-50 font-black text-slate-900 text-xs">
                       <tr>
-                        <td colSpan={3} className="py-3 px-3 uppercase tracking-wider">
+                        <td colSpan={3} className="py-3 px-3 uppercase tracking-wider whitespace-nowrap">
                           Grand Total ({summaryMetrics.count} Products)
                         </td>
-                        <td className="py-3 px-3 text-right">{summaryMetrics.totalStock} Units</td>
+                        <td className="py-3 px-3 text-right whitespace-nowrap">{summaryMetrics.totalStock} Units</td>
                         <td></td>
                         <td></td>
-                        <td className="py-3 px-3 text-right">
+                        <td className="py-3 px-3 text-right whitespace-nowrap">
                           {formatCurrency(summaryMetrics.totalValueCost, currency)}
                         </td>
-                        <td className="py-3 px-3 text-right text-emerald-900">
+                        <td className="py-3 px-3 text-right text-emerald-900 whitespace-nowrap">
                           {formatCurrency(summaryMetrics.totalValueRetail, currency)}
                         </td>
                       </tr>
@@ -1050,29 +1063,29 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-slate-50 border-y border-slate-300 text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <tr>
-                      <th className="py-2.5 px-3">Date</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Date</th>
                       <th className="py-2.5 px-3">Product</th>
-                      <th className="py-2.5 px-3">Movement Type</th>
-                      <th className="py-2.5 px-3">Reference</th>
-                      <th className="py-2.5 px-3 text-right">Quantity Delta</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Movement Type</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Reference</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Quantity Delta</th>
                       <th className="py-2.5 px-3">Notes</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
                     {reportData.map((row, i) => (
                       <tr key={i} className="hover:bg-slate-50/70">
-                        <td className="py-2.5 px-3 text-slate-500">
+                        <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap">
                           {formatDateTime(row.date, settings?.date_format)}
                         </td>
                         <td className="py-2.5 px-3 font-bold text-slate-900">{row.product_name}</td>
-                        <td className="py-2.5 px-3 font-semibold text-slate-700">
+                        <td className="py-2.5 px-3 font-semibold text-slate-700 whitespace-nowrap">
                           <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-[10px]">
                             {row.movement_type}
                           </span>
                         </td>
-                        <td className="py-2.5 px-3 font-mono text-slate-600">{row.reference_id}</td>
+                        <td className="py-2.5 px-3 font-mono text-slate-600 whitespace-nowrap">{row.reference_id}</td>
                         <td
-                          className={`py-2.5 px-3 text-right font-black ${
+                          className={`py-2.5 px-3 text-right font-black whitespace-nowrap ${
                             Number(row.quantity) >= 0 ? 'text-emerald-700' : 'text-rose-700'
                           }`}
                         >
@@ -1085,10 +1098,10 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                   {summaryMetrics && (
                     <tfoot className="border-t-2 border-slate-800 bg-slate-50 font-black text-slate-900 text-xs">
                       <tr>
-                        <td colSpan={4} className="py-3 px-3 uppercase tracking-wider">
+                        <td colSpan={4} className="py-3 px-3 uppercase tracking-wider whitespace-nowrap">
                           Net Quantity Delta ({summaryMetrics.count} Movements)
                         </td>
-                        <td className="py-3 px-3 text-right">{summaryMetrics.netQty}</td>
+                        <td className="py-3 px-3 text-right whitespace-nowrap">{summaryMetrics.netQty}</td>
                         <td></td>
                       </tr>
                     </tfoot>
@@ -1101,31 +1114,31 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-slate-50 border-y border-slate-300 text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <tr>
-                      <th className="py-2.5 px-3">Cust ID</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Cust ID</th>
                       <th className="py-2.5 px-3">Customer Name</th>
-                      <th className="py-2.5 px-3">Phone</th>
-                      <th className="py-2.5 px-3 text-right">Total Purchases</th>
-                      <th className="py-2.5 px-3 text-right">Total Payments</th>
-                      <th className="py-2.5 px-3 text-right">Returns</th>
-                      <th className="py-2.5 px-3 text-right text-rose-800">Outstanding Balance Due</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Phone</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Total Purchases</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Total Payments</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Returns</th>
+                      <th className="py-2.5 px-3 text-right text-rose-800 whitespace-nowrap">Outstanding Balance Due</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
                     {reportData.map((row, i) => (
                       <tr key={i} className="hover:bg-slate-50/70">
-                        <td className="py-2.5 px-3 font-mono text-slate-600">{row.customer_id}</td>
+                        <td className="py-2.5 px-3 font-mono text-slate-600 whitespace-nowrap">{row.customer_id}</td>
                         <td className="py-2.5 px-3 font-bold text-slate-900">{row.name}</td>
-                        <td className="py-2.5 px-3 text-slate-500">{row.phone || '—'}</td>
-                        <td className="py-2.5 px-3 text-right font-medium text-slate-900">
+                        <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap">{row.phone || '—'}</td>
+                        <td className="py-2.5 px-3 text-right font-medium text-slate-900 whitespace-nowrap">
                           {formatCurrency(row.total_purchases, currency)}
                         </td>
-                        <td className="py-2.5 px-3 text-right text-emerald-700 font-semibold">
+                        <td className="py-2.5 px-3 text-right text-emerald-700 font-semibold whitespace-nowrap">
                           {formatCurrency(row.total_payments, currency)}
                         </td>
-                        <td className="py-2.5 px-3 text-right text-slate-500">
+                        <td className="py-2.5 px-3 text-right text-slate-500 whitespace-nowrap">
                           {formatCurrency(row.total_returns, currency)}
                         </td>
-                        <td className="py-2.5 px-3 text-right font-black text-rose-700">
+                        <td className="py-2.5 px-3 text-right font-black text-rose-700 whitespace-nowrap">
                           {formatCurrency(row.current_due, currency)}
                         </td>
                       </tr>
@@ -1134,19 +1147,19 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                   {summaryMetrics && (
                     <tfoot className="border-t-2 border-slate-800 bg-slate-50 font-black text-slate-900 text-xs">
                       <tr>
-                        <td colSpan={3} className="py-3 px-3 uppercase tracking-wider">
+                        <td colSpan={3} className="py-3 px-3 uppercase tracking-wider whitespace-nowrap">
                           Grand Total ({summaryMetrics.count} Accounts)
                         </td>
-                        <td className="py-3 px-3 text-right">
+                        <td className="py-3 px-3 text-right whitespace-nowrap">
                           {formatCurrency(summaryMetrics.purchases, currency)}
                         </td>
-                        <td className="py-3 px-3 text-right text-emerald-800">
+                        <td className="py-3 px-3 text-right text-emerald-800 whitespace-nowrap">
                           {formatCurrency(summaryMetrics.payments, currency)}
                         </td>
-                        <td className="py-3 px-3 text-right text-slate-500">
+                        <td className="py-3 px-3 text-right text-slate-500 whitespace-nowrap">
                           {formatCurrency(summaryMetrics.returns, currency)}
                         </td>
-                        <td className="py-3 px-3 text-right text-rose-800">
+                        <td className="py-3 px-3 text-right text-rose-800 whitespace-nowrap">
                           {formatCurrency(summaryMetrics.dues, currency)}
                         </td>
                       </tr>
@@ -1160,31 +1173,31 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-slate-50 border-y border-slate-300 text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <tr>
-                      <th className="py-2.5 px-3">Supp ID</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Supp ID</th>
                       <th className="py-2.5 px-3">Supplier Name</th>
-                      <th className="py-2.5 px-3">Phone</th>
-                      <th className="py-2.5 px-3 text-right">Total Purchases</th>
-                      <th className="py-2.5 px-3 text-right">Total Paid</th>
-                      <th className="py-2.5 px-3 text-right">Returns</th>
-                      <th className="py-2.5 px-3 text-right text-rose-800">Outstanding Payables Due</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Phone</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Total Purchases</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Total Paid</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Returns</th>
+                      <th className="py-2.5 px-3 text-right text-rose-800 whitespace-nowrap">Outstanding Payables Due</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
                     {reportData.map((row, i) => (
                       <tr key={i} className="hover:bg-slate-50/70">
-                        <td className="py-2.5 px-3 font-mono text-slate-600">{row.supplier_id}</td>
+                        <td className="py-2.5 px-3 font-mono text-slate-600 whitespace-nowrap">{row.supplier_id}</td>
                         <td className="py-2.5 px-3 font-bold text-slate-900">{row.name}</td>
-                        <td className="py-2.5 px-3 text-slate-500">{row.phone || '—'}</td>
-                        <td className="py-2.5 px-3 text-right font-medium text-slate-900">
+                        <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap">{row.phone || '—'}</td>
+                        <td className="py-2.5 px-3 text-right font-medium text-slate-900 whitespace-nowrap">
                           {formatCurrency(row.total_purchases, currency)}
                         </td>
-                        <td className="py-2.5 px-3 text-right text-emerald-700 font-semibold">
+                        <td className="py-2.5 px-3 text-right text-emerald-700 font-semibold whitespace-nowrap">
                           {formatCurrency(row.total_payments, currency)}
                         </td>
-                        <td className="py-2.5 px-3 text-right text-slate-500">
+                        <td className="py-2.5 px-3 text-right text-slate-500 whitespace-nowrap">
                           {formatCurrency(row.total_returns, currency)}
                         </td>
-                        <td className="py-2.5 px-3 text-right font-black text-rose-700">
+                        <td className="py-2.5 px-3 text-right font-black text-rose-700 whitespace-nowrap">
                           {formatCurrency(row.current_due, currency)}
                         </td>
                       </tr>
@@ -1193,19 +1206,19 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                   {summaryMetrics && (
                     <tfoot className="border-t-2 border-slate-800 bg-slate-50 font-black text-slate-900 text-xs">
                       <tr>
-                        <td colSpan={3} className="py-3 px-3 uppercase tracking-wider">
+                        <td colSpan={3} className="py-3 px-3 uppercase tracking-wider whitespace-nowrap">
                           Grand Total ({summaryMetrics.count} Vendors)
                         </td>
-                        <td className="py-3 px-3 text-right">
+                        <td className="py-3 px-3 text-right whitespace-nowrap">
                           {formatCurrency(summaryMetrics.purchases, currency)}
                         </td>
-                        <td className="py-3 px-3 text-right text-emerald-800">
+                        <td className="py-3 px-3 text-right text-emerald-800 whitespace-nowrap">
                           {formatCurrency(summaryMetrics.payments, currency)}
                         </td>
-                        <td className="py-3 px-3 text-right text-slate-500">
+                        <td className="py-3 px-3 text-right text-slate-500 whitespace-nowrap">
                           {formatCurrency(summaryMetrics.returns, currency)}
                         </td>
-                        <td className="py-3 px-3 text-right text-rose-800">
+                        <td className="py-3 px-3 text-right text-rose-800 whitespace-nowrap">
                           {formatCurrency(summaryMetrics.dues, currency)}
                         </td>
                       </tr>
@@ -1219,14 +1232,14 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-slate-50 border-y border-slate-300 text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <tr>
-                      <th className="py-2.5 px-3">Bill #</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Bill #</th>
                       <th className="py-2.5 px-3">Bill Title</th>
                       <th className="py-2.5 px-3">Category</th>
-                      <th className="py-2.5 px-3">Due Date</th>
-                      <th className="py-2.5 px-3 text-right">Amount</th>
-                      <th className="py-2.5 px-3 text-right">Paid</th>
-                      <th className="py-2.5 px-3 text-right text-rose-800">Remaining Due</th>
-                      <th className="py-2.5 px-3 text-center">Status</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Due Date</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Amount</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Paid</th>
+                      <th className="py-2.5 px-3 text-right text-rose-800 whitespace-nowrap">Remaining Due</th>
+                      <th className="py-2.5 px-3 text-center whitespace-nowrap">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
@@ -1234,22 +1247,22 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                       const dueNum = Number(row.due_amount || 0);
                       return (
                         <tr key={i} className="hover:bg-slate-50/70">
-                          <td className="py-2.5 px-3 font-bold text-slate-900">{row.bill_number}</td>
+                          <td className="py-2.5 px-3 font-bold text-slate-900 whitespace-nowrap">{row.bill_number}</td>
                           <td className="py-2.5 px-3 font-semibold text-slate-800">{row.name}</td>
                           <td className="py-2.5 px-3 text-slate-500">{row.category_name}</td>
-                          <td className="py-2.5 px-3 text-slate-500">
+                          <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap">
                             {formatDateTime(row.due_date, settings?.date_format)}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-bold text-slate-900">
+                          <td className="py-2.5 px-3 text-right font-bold text-slate-900 whitespace-nowrap">
                             {formatCurrency(row.amount, currency)}
                           </td>
-                          <td className="py-2.5 px-3 text-right text-emerald-700 font-semibold">
+                          <td className="py-2.5 px-3 text-right text-emerald-700 font-semibold whitespace-nowrap">
                             {formatCurrency(row.paid_amount, currency)}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-bold text-rose-700">
+                          <td className="py-2.5 px-3 text-right font-bold text-rose-700 whitespace-nowrap">
                             {dueNum > 0 ? formatCurrency(dueNum, currency) : '—'}
                           </td>
-                          <td className="py-2.5 px-3 text-center">
+                          <td className="py-2.5 px-3 text-center whitespace-nowrap">
                             <span
                               className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
                                 row.status === 'PAID'
@@ -1267,16 +1280,16 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                   {summaryMetrics && (
                     <tfoot className="border-t-2 border-slate-800 bg-slate-50 font-black text-slate-900 text-xs">
                       <tr>
-                        <td colSpan={4} className="py-3 px-3 uppercase tracking-wider">
+                        <td colSpan={4} className="py-3 px-3 uppercase tracking-wider whitespace-nowrap">
                           Grand Total ({summaryMetrics.count} Bills)
                         </td>
-                        <td className="py-3 px-3 text-right">
+                        <td className="py-3 px-3 text-right whitespace-nowrap">
                           {formatCurrency(summaryMetrics.amount, currency)}
                         </td>
-                        <td className="py-3 px-3 text-right text-emerald-800">
+                        <td className="py-3 px-3 text-right text-emerald-800 whitespace-nowrap">
                           {formatCurrency(summaryMetrics.paid, currency)}
                         </td>
-                        <td className="py-3 px-3 text-right text-rose-800">
+                        <td className="py-3 px-3 text-right text-rose-800 whitespace-nowrap">
                           {formatCurrency(summaryMetrics.due, currency)}
                         </td>
                         <td></td>
@@ -1291,37 +1304,37 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-slate-50 border-y border-slate-300 text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <tr>
-                      <th className="py-2.5 px-3">Expense #</th>
-                      <th className="py-2.5 px-3">Date</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Expense #</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Date</th>
                       <th className="py-2.5 px-3">Category</th>
                       <th className="py-2.5 px-3">Title / Details</th>
-                      <th className="py-2.5 px-3 text-right">Amount</th>
-                      <th className="py-2.5 px-3 text-right">Payment Method</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Amount</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Payment Method</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
                     {reportData.map((row, i) => (
                       <tr key={i} className="hover:bg-slate-50/70">
-                        <td className="py-2.5 px-3 font-bold text-slate-900">{row.expense_number}</td>
-                        <td className="py-2.5 px-3 text-slate-500">
+                        <td className="py-2.5 px-3 font-bold text-slate-900 whitespace-nowrap">{row.expense_number}</td>
+                        <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap">
                           {formatDateTime(row.date, settings?.date_format)}
                         </td>
                         <td className="py-2.5 px-3 text-slate-600 font-medium">{row.category_name}</td>
                         <td className="py-2.5 px-3 font-semibold text-slate-800">{row.title}</td>
-                        <td className="py-2.5 px-3 text-right font-black text-rose-700">
+                        <td className="py-2.5 px-3 text-right font-black text-rose-700 whitespace-nowrap">
                           {formatCurrency(row.amount, currency)}
                         </td>
-                        <td className="py-2.5 px-3 text-right text-slate-500">{row.payment_method}</td>
+                        <td className="py-2.5 px-3 text-right text-slate-500 whitespace-nowrap">{row.payment_method}</td>
                       </tr>
                     ))}
                   </tbody>
                   {summaryMetrics && (
                     <tfoot className="border-t-2 border-slate-800 bg-slate-50 font-black text-slate-900 text-xs">
                       <tr>
-                        <td colSpan={4} className="py-3 px-3 uppercase tracking-wider">
+                        <td colSpan={4} className="py-3 px-3 uppercase tracking-wider whitespace-nowrap">
                           Grand Total ({summaryMetrics.count} Expenses)
                         </td>
-                        <td className="py-3 px-3 text-right text-rose-800">
+                        <td className="py-3 px-3 text-right text-rose-800 whitespace-nowrap">
                           {formatCurrency(summaryMetrics.totalAmount, currency)}
                         </td>
                         <td></td>
