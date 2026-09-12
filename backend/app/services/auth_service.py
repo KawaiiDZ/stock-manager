@@ -86,10 +86,11 @@ def authenticate_user(db: Session, username: str, password: str) -> User:
     return user
 
 def verify_settings_pin(db: Session, pin: str) -> bool:
+    clean_pin = str(pin or "").strip()
     settings = db.query(BusinessSettings).filter(BusinessSettings.id == 1).first()
     if not settings or not settings.config_pin_hash:
-        return pin == "1234"
-    return verify_password(settings.config_pin_hash, pin)
+        return clean_pin == "1234"
+    return verify_password(settings.config_pin_hash, clean_pin)
 
 def change_user_password(db: Session, user_id: int, current_pass: str, new_pass: str) -> bool:
     clean_pass = (new_pass or "").strip()
@@ -103,14 +104,15 @@ def change_user_password(db: Session, user_id: int, current_pass: str, new_pass:
     return True
 
 def change_settings_pin(db: Session, current_pin: str, new_pin: str) -> bool:
-    clean_pin = (new_pin or "").strip()
+    clean_current = str(current_pin or "").strip()
+    clean_pin = str(new_pin or "").strip()
     if len(clean_pin) < 4 or not clean_pin.isdigit():
         raise BusinessRuleException("New PIN must be at least 4 numeric digits.")
 
     settings = db.query(BusinessSettings).filter(BusinessSettings.id == 1).first()
     if not settings:
         raise BusinessRuleException("Settings not found.")
-    if not verify_password(settings.config_pin_hash, current_pin):
+    if not verify_password(settings.config_pin_hash, clean_current):
         raise BusinessRuleException("Current PIN is incorrect.")
     settings.config_pin_hash = hash_password(clean_pin)
     db.commit()

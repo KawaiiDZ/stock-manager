@@ -3,6 +3,7 @@ from typing import List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 
 from backend.app.models.quotation import Quotation, QuotationItem
 from backend.app.models.product import Product
@@ -56,7 +57,7 @@ def _format_quotation_response(quotation: Quotation) -> QuotationResponse:
         items=items_dto
     )
 
-def create_quotation(db: Session, data: QuotationCreate) -> QuotationResponse:
+def _execute_create_quotation(db: Session, data: QuotationCreate) -> QuotationResponse:
     # 0. Check settings if quotations are enabled
     settings = db.query(BusinessSettings).filter(BusinessSettings.id == 1).first()
     if settings and getattr(settings, 'enable_quotations', True) is False:
@@ -165,6 +166,17 @@ def create_quotation(db: Session, data: QuotationCreate) -> QuotationResponse:
     db.commit()
     db.refresh(quotation)
     return get_quotation(db, quotation.id)
+
+def create_quotation(db: Session, data: QuotationCreate) -> QuotationResponse:
+    for attempt in range(3):
+        try:
+            return _execute_create_quotation(db, data)
+        except IntegrityError as e:
+            db.rollback()
+            err_str = f"{e.orig} {e}" if getattr(e, "orig", None) else str(e)
+            if ("quotation_number" in err_str or "UNIQUE constraint failed" in err_str) and attempt < 2:
+                continue
+            raise
 
 def get_quotation(db: Session, quotation_id: int) -> QuotationResponse:
     quotation = db.query(Quotation).options(

@@ -80,7 +80,8 @@ def create_sales_return(db: Session, data: SalesReturnCreate) -> SalesReturnResp
         if item_data.unit_price < Decimal("0.00"):
             raise BusinessRuleException(f"Unit price for {product.name} cannot be negative.")
 
-        # If return is tied to a sale, ensure returned quantity does not exceed remaining returnable units
+        # Calculate effective return unit price considering line discounts and order discounts
+        effective_unit_price = item_data.unit_price
         if original_sale:
             sale_item = next((si for si in original_sale.items if si.product_id == item_data.product_id), None)
             if not sale_item:
@@ -94,7 +95,14 @@ def create_sales_return(db: Session, data: SalesReturnCreate) -> SalesReturnResp
                     f"Cannot return {item_data.quantity} units of '{product.name}'. Only {max_returnable} unit(s) remaining returnable on receipt {original_sale.receipt_number}."
                 )
 
-        line_return_amount = item_data.quantity * item_data.unit_price
+            # Net unit price paid on original sale item after line discount
+            base_net_price = (sale_item.total_price / sale_item.quantity) if sale_item.quantity > Decimal("0.00") else sale_item.unit_price
+            # Proportional adjustment if sale had an order-level discount
+            order_ratio = (original_sale.total_amount / original_sale.subtotal) if (original_sale.subtotal and original_sale.subtotal > Decimal("0.00")) else Decimal("1.00")
+            max_net_return_price = (base_net_price * order_ratio).quantize(Decimal("0.01"))
+            effective_unit_price = min(item_data.unit_price, max_net_return_price)
+
+        line_return_amount = (item_data.quantity * effective_unit_price).quantize(Decimal("0.01"))
         total_return_amount += line_return_amount
 
         # Increase current stock
@@ -126,21 +134,31 @@ def create_sales_return(db: Session, data: SalesReturnCreate) -> SalesReturnResp
         processed_items.append({
             "product_id": product.id,
             "quantity": item_data.quantity,
-            "unit_price": item_data.unit_price,
+            "unit_price": effective_unit_price,
             "total_amount": line_return_amount
         })
 
     # 4. Financial Refund & Debt Cancellation Formula (Section 29)
+    is_walk_in = customer.customer_id == "C-000001" or customer.name.strip().lower() == "walk-in customer"
     if original_sale:
         prev_returns = db.query(SalesReturn).filter(SalesReturn.sale_id == original_sale.id).all()
         prev_cash_refunded = sum((pr.cash_refund_amount for pr in prev_returns), Decimal("0.00"))
+        prev_balance_credit = sum((pr.balance_credit_amount for pr in prev_returns), Decimal("0.00"))
+        
         remaining_refundable_cash = max(Decimal("0.00"), original_sale.paid_amount - prev_cash_refunded)
+        remaining_debt_on_sale = max(Decimal("0.00"), original_sale.total_amount - original_sale.paid_amount - prev_balance_credit)
 
         cash_refund = min(total_return_amount, remaining_refundable_cash)
-        balance_credit = total_return_amount - cash_refund
+        unfunded_return = max(Decimal("0.00"), total_return_amount - cash_refund)
+
+        # Balance credit can only reduce the remaining debt on THIS sale.
+        # Walk-in customer (C-000001) cannot carry any balance credit.
+        if is_walk_in:
+            balance_credit = Decimal("0.00")
+        else:
+            balance_credit = min(remaining_debt_on_sale, unfunded_return)
     else:
         # For manual returns without receipt:
-        is_walk_in = customer.customer_id == "C-000001" or customer.name.strip().lower() == "walk-in customer"
         if is_walk_in:
             cash_refund = total_return_amount
             balance_credit = Decimal("0.00")

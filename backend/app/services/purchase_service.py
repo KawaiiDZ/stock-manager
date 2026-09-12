@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 
 def _normalize_datetime_range(start_date: Optional[datetime], end_date: Optional[datetime]):
+    if start_date is not None and end_date is not None and start_date > end_date:
+        start_date, end_date = end_date, start_date
     if end_date is not None and isinstance(end_date, datetime):
         if end_date.time() == time.min:
             end_date = datetime.combine(end_date.date(), time.max)

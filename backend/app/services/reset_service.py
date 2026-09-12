@@ -10,6 +10,7 @@ from backend.app.models.customer import Customer, CustomerPayment
 from backend.app.models.supplier import Supplier, SupplierPayment
 from backend.app.models.bills import Bill, BillPayment
 from backend.app.models.expenses import Expense
+from backend.app.models.quotation import Quotation, QuotationItem
 from backend.app.services.auth_service import verify_settings_pin
 
 def reset_database_data(db: Session, confirm_pin: str, wipe_mode: str = "inventory_only") -> dict:
@@ -26,13 +27,15 @@ def reset_database_data(db: Session, confirm_pin: str, wipe_mode: str = "invento
         db.execute(text("PRAGMA foreign_keys = OFF;"))
 
         # 2. Delete in strict foreign-key dependency order
-        # Sales item batches and return items first
+        # Sales item batches, return items, and quotation items first
         db.query(SaleItemBatch).delete(synchronize_session=False)
         db.query(SalesReturnItem).delete(synchronize_session=False)
         db.query(SalesReturn).delete(synchronize_session=False)
         db.query(SalePayment).delete(synchronize_session=False)
         db.query(SaleItem).delete(synchronize_session=False)
         db.query(Sale).delete(synchronize_session=False)
+        db.query(QuotationItem).delete(synchronize_session=False)
+        db.query(Quotation).delete(synchronize_session=False)
 
         # Purchases and Inventory
         db.query(PurchaseReturnItem).delete(synchronize_session=False)

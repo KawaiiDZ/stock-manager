@@ -54,6 +54,8 @@ def list_expenses(
     skip: int = 0,
     limit: int = 200
 ) -> List[ExpenseResponse]:
+    if start_date is not None and end_date is not None and start_date > end_date:
+        start_date, end_date = end_date, start_date
     q = db.query(Expense).options(joinedload(Expense.category))
     if category_id:
         q = q.filter(Expense.category_id == category_id)

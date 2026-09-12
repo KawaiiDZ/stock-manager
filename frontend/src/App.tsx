@@ -21,6 +21,7 @@ import { ReportsPage } from './pages/Reports/ReportsPage';
 import { SettingsPage } from './pages/Settings/SettingsPage';
 import { QuotationsPage } from './pages/Sales/QuotationsPage';
 import { SetupWizardModal } from './components/wizard/SetupWizardModal';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 import { setGlobalFormattingPreferences } from './utils/format';
 
@@ -175,72 +176,74 @@ export const App: React.FC = () => {
         />
 
         <main className="flex-1 overflow-y-auto p-6 md:p-8">
-          {currentTab === 'dashboard' && (
-            <DashboardPage
-              settings={settings}
-              onNavigate={(tab) => setCurrentTab(tab)}
-            />
-          )}
+          <ErrorBoundary key={currentTab}>
+            {currentTab === 'dashboard' && (
+              <DashboardPage
+                settings={settings}
+                onNavigate={(tab) => setCurrentTab(tab)}
+              />
+            )}
 
-          {currentTab === 'new_sale' && (
-            <NewSalePage
-              settings={settings}
-              initialProduct={preLoadedSellProduct}
-            />
-          )}
+            {currentTab === 'new_sale' && (
+              <NewSalePage
+                settings={settings}
+                initialProduct={preLoadedSellProduct}
+              />
+            )}
 
-          {currentTab === 'sales_history' && (
-            <SalesHistoryPage
-              settings={settings}
-              onNavigateToReturn={handleNavigateToReturn}
-            />
-          )}
+            {currentTab === 'sales_history' && (
+              <SalesHistoryPage
+                settings={settings}
+                onNavigateToReturn={handleNavigateToReturn}
+              />
+            )}
 
-          {currentTab === 'quotations' && (
-            <QuotationsPage
-              settings={settings}
-              onNavigateToNewSale={() => {
-                setPreLoadedSellProduct(null);
-                setCurrentTab('new_sale');
-              }}
-              onQuotationConverted={loadSettingsAndBadges}
-            />
-          )}
+            {currentTab === 'quotations' && (
+              <QuotationsPage
+                settings={settings}
+                onNavigateToNewSale={() => {
+                  setPreLoadedSellProduct(null);
+                  setCurrentTab('new_sale');
+                }}
+                onQuotationConverted={loadSettingsAndBadges}
+              />
+            )}
 
-          {currentTab === 'returns' && (
-            <SalesReturnsPage settings={settings} initialSaleId={returnSaleId} />
-          )}
+            {currentTab === 'returns' && (
+              <SalesReturnsPage settings={settings} initialSaleId={returnSaleId} />
+            )}
 
-          {currentTab === 'products' && (
-            <ProductsPage
-              settings={settings}
-              onSellProduct={handleSellProductFromCatalog}
-            />
-          )}
+            {currentTab === 'products' && (
+              <ProductsPage
+                settings={settings}
+                onSellProduct={handleSellProductFromCatalog}
+              />
+            )}
 
-          {currentTab === 'stock_movements' && (
-            <StockMovementsPage settings={settings} />
-          )}
+            {currentTab === 'stock_movements' && (
+              <StockMovementsPage settings={settings} />
+            )}
 
-          {currentTab === 'purchases' && <PurchasesPage settings={settings} />}
+            {currentTab === 'purchases' && <PurchasesPage settings={settings} />}
 
-          {currentTab === 'customers' && <CustomersPage settings={settings} />}
+            {currentTab === 'customers' && <CustomersPage settings={settings} />}
 
-          {currentTab === 'suppliers' && <SuppliersPage settings={settings} />}
+            {currentTab === 'suppliers' && <SuppliersPage settings={settings} />}
 
-          {currentTab === 'bills' && <BillsPage settings={settings} />}
+            {currentTab === 'bills' && <BillsPage settings={settings} />}
 
-          {currentTab === 'expenses' && <ExpensesPage settings={settings} />}
+            {currentTab === 'expenses' && <ExpensesPage settings={settings} />}
 
-          {currentTab === 'reports' && <ReportsPage settings={settings} />}
+            {currentTab === 'reports' && <ReportsPage settings={settings} />}
 
-          {currentTab === 'settings' && (
-            <SettingsPage
-              settings={settings}
-              onSettingsUpdated={loadSettingsAndBadges}
-              onOpenWizard={() => setShowWizard(true)}
-            />
-          )}
+            {currentTab === 'settings' && (
+              <SettingsPage
+                settings={settings}
+                onSettingsUpdated={loadSettingsAndBadges}
+                onOpenWizard={() => setShowWizard(true)}
+              />
+            )}
+          </ErrorBoundary>
         </main>
       </div>
 

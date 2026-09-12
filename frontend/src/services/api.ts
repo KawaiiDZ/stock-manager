@@ -40,7 +40,22 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     try {
       const errorJson = await response.json();
       if (errorJson && errorJson.detail) {
-        errorDetail = errorJson.detail;
+        if (typeof errorJson.detail === 'string') {
+          errorDetail = errorJson.detail;
+        } else if (Array.isArray(errorJson.detail)) {
+          errorDetail = errorJson.detail
+            .map((item: any) => {
+              if (typeof item === 'string') return item;
+              if (item && item.msg) {
+                const loc = Array.isArray(item.loc) ? item.loc.filter((l: any) => l !== 'body').join(' -> ') : '';
+                return loc ? `${loc}: ${item.msg}` : item.msg;
+              }
+              return JSON.stringify(item);
+            })
+            .join(' | ');
+        } else if (typeof errorJson.detail === 'object') {
+          errorDetail = JSON.stringify(errorJson.detail);
+        }
       }
     } catch {
       errorDetail = response.statusText || errorDetail;

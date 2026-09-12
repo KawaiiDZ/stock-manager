@@ -20,6 +20,8 @@ from backend.app.services.customer_service import list_customers
 from backend.app.services.supplier_service import list_suppliers
 
 def _normalize_datetime_range(start_date: Optional[datetime], end_date: Optional[datetime]):
+    if start_date is not None and end_date is not None and start_date > end_date:
+        start_date, end_date = end_date, start_date
     if end_date is not None and isinstance(end_date, datetime):
         if end_date.time() == time.min:
             end_date = datetime.combine(end_date.date(), time.max)
@@ -245,6 +247,8 @@ def get_bills_report(db: Session) -> List[BillsReportRow]:
     ]
 
 def get_expenses_report(db: Session, start_date: Optional[date] = None, end_date: Optional[date] = None) -> List[ExpensesReportRow]:
+    if start_date is not None and end_date is not None and start_date > end_date:
+        start_date, end_date = end_date, start_date
     q = db.query(Expense).options(joinedload(Expense.category))
     if start_date:
         q = q.filter(Expense.expense_date >= start_date)

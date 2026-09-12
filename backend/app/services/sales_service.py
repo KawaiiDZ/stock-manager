@@ -3,8 +3,11 @@ from typing import List, Optional
 from datetime import datetime, time
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
 
 def _normalize_datetime_range(start_date: Optional[datetime], end_date: Optional[datetime]):
+    if start_date is not None and end_date is not None and start_date > end_date:
+        start_date, end_date = end_date, start_date
     if end_date is not None and isinstance(end_date, datetime):
         if end_date.time() == time.min:
             end_date = datetime.combine(end_date.date(), time.max)
@@ -136,7 +139,7 @@ def _format_sale_response(sale: Sale) -> SaleResponse:
         payments=payments_dto
     )
 
-def create_sale(db: Session, data: SaleCreate) -> SaleResponse:
+def _execute_create_sale(db: Session, data: SaleCreate) -> SaleResponse:
     if not data.items:
         raise BusinessRuleException("Cannot complete a sale with no items.")
 
@@ -378,6 +381,17 @@ def create_sale(db: Session, data: SaleCreate) -> SaleResponse:
     db.commit()
     db.refresh(sale)
     return get_sale(db, sale.id)
+
+def create_sale(db: Session, data: SaleCreate) -> SaleResponse:
+    for attempt in range(3):
+        try:
+            return _execute_create_sale(db, data)
+        except IntegrityError as e:
+            db.rollback()
+            err_str = f"{e.orig} {e}" if getattr(e, "orig", None) else str(e)
+            if ("receipt_number" in err_str or "UNIQUE constraint failed" in err_str) and attempt < 2:
+                continue
+            raise
 
 def get_sale(db: Session, sale_id: int) -> SaleResponse:
     sale = db.query(Sale).options(

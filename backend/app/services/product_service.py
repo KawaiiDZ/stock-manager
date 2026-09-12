@@ -7,6 +7,7 @@ from backend.app.models.product import ProductCategory, Product, ProductCustomFi
 from backend.app.models.inventory import InventoryBatch, InventoryMovement
 from backend.app.models.sales import SaleItem, SalesReturnItem
 from backend.app.models.purchase import PurchaseItem, PurchaseReturnItem
+from backend.app.models.quotation import QuotationItem
 from backend.app.schemas.product import (
     ProductCreate, ProductUpdate, CategoryCreate, CustomFieldCreate, CustomFieldUpdate,
     CustomFieldResponse, CustomValueDto, StockAdjustmentRequest, BulkProductsResponse
@@ -63,9 +64,10 @@ def delete_category(db: Session, cat_id: int) -> None:
         has_sales_returns = db.query(SalesReturnItem).filter(SalesReturnItem.product_id == p.id).first() is not None
         has_purchases = db.query(PurchaseItem).filter(PurchaseItem.product_id == p.id).first() is not None
         has_purchase_returns = db.query(PurchaseReturnItem).filter(PurchaseReturnItem.product_id == p.id).first() is not None
+        has_quotations = db.query(QuotationItem).filter(QuotationItem.product_id == p.id).first() is not None
 
-        if has_sales or has_sales_returns or has_purchases or has_purchase_returns:
-            # Products with transaction history cannot be hard-deleted due to foreign keys and invoice integrity.
+        if has_sales or has_sales_returns or has_purchases or has_purchase_returns or has_quotations:
+            # Products with transaction or quotation history cannot be hard-deleted due to foreign keys and invoice integrity.
             # Deactivate them, zero their stock, unlink from category, and delete custom values.
             p.is_active = False
             p.current_stock = Decimal("0.00")
@@ -554,16 +556,17 @@ def delete_product_permanent(db: Session, product_id: int) -> None:
     if not product:
         raise EntityNotFoundException("Product", str(product_id))
 
-    # Check for historical transactions (sales, purchases, returns)
+    # Check for historical transactions or quotations (sales, purchases, returns, quotations)
     has_sales = db.query(SaleItem).filter(SaleItem.product_id == product_id).first() is not None
     has_sales_returns = db.query(SalesReturnItem).filter(SalesReturnItem.product_id == product_id).first() is not None
     has_purchases = db.query(PurchaseItem).filter(PurchaseItem.product_id == product_id).first() is not None
     has_purchase_returns = db.query(PurchaseReturnItem).filter(PurchaseReturnItem.product_id == product_id).first() is not None
+    has_quotations = db.query(QuotationItem).filter(QuotationItem.product_id == product_id).first() is not None
 
-    if has_sales or has_sales_returns or has_purchases or has_purchase_returns:
+    if has_sales or has_sales_returns or has_purchases or has_purchase_returns or has_quotations:
         raise BusinessRuleException(
-            f"Cannot permanently delete '{product.name}' because it has existing transaction history "
-            f"(invoices, purchases, or returns). It must remain deactivated to preserve historical accounting records."
+            f"Cannot permanently delete '{product.name}' because it has existing transaction history or quotations "
+            f"(invoices, purchases, returns, or quotes). It must remain deactivated to preserve historical accounting records."
         )
 
     # Clean up custom field values, inventory movements, and inventory batches
