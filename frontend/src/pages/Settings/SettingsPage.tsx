@@ -28,7 +28,7 @@ import { Modal } from '../../components/common/Modal';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { SchemaBuilder } from './SchemaBuilder';
 import { SetupWizardModal } from '../../components/wizard/SetupWizardModal';
-import { STANDARD_DATE_FORMATS, setGlobalFormattingPreferences, formatDate } from '../../utils/format';
+import { STANDARD_DATE_FORMATS, setGlobalFormattingPreferences, formatDate, formatCurrency } from '../../utils/format';
 
 interface SettingsPageProps {
   settings: BusinessSettings | null;
@@ -211,6 +211,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setGlobalFormattingPreferences({
         dateFormat,
         formatPricesWithCommas,
+        currency: currency.trim() || 'Rs.',
       });
       setSuccessMsg('Settings saved successfully!');
       onSettingsUpdated();
@@ -602,13 +603,69 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               value={bizAddress}
               onChange={(e) => setBizAddress(e.target.value)}
             />
-            <Input
-              label="Currency Symbol *"
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              hint="e.g. Rs., PKR, $"
-              required
-            />
+            {/* Currency Selector with Presets & Live Preview */}
+            <div className="md:col-span-2 p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                    Currency Symbol & Code *
+                  </label>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Choose your primary store currency. Defaults to <strong className="text-emerald-700 font-bold">Rs.</strong> with options for custom currencies.
+                  </p>
+                </div>
+
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 shadow-sm text-xs font-bold text-slate-800">
+                  <span className="text-slate-400">Live Preview:</span>
+                  <span className="text-emerald-700">{formatCurrency(1250000.0, currency.trim() || 'Rs.')}</span>
+                </div>
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {[
+                  { code: 'Rs.', label: 'Rs. (Rupee - Default)' },
+                  { code: 'PKR', label: 'PKR (Pakistani Rupee)' },
+                  { code: '₹', label: '₹ (INR / Indian Rupee)' },
+                  { code: '$', label: '$ (USD / Dollar)' },
+                  { code: 'AED', label: 'AED (Dirham)' },
+                  { code: 'SAR', label: 'SAR (Riyal)' },
+                  { code: '€', label: '€ (Euro)' },
+                  { code: '£', label: '£ (Pound)' },
+                  { code: 'OMR', label: 'OMR (Omani Rial)' },
+                  { code: 'KWD', label: 'KWD (Kuwaiti Dinar)' },
+                  { code: 'BDT', label: 'BDT (Taka)' },
+                ].map((preset) => {
+                  const isSelected = currency.trim() === preset.code;
+                  return (
+                    <button
+                      key={preset.code}
+                      type="button"
+                      onClick={() => setCurrency(preset.code)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                        isSelected
+                          ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-600/30'
+                          : 'bg-white text-slate-700 border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Custom Input for any custom string */}
+              <div className="pt-2 max-w-xs">
+                <Input
+                  label="Custom Currency Code / Symbol"
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value)}
+                  placeholder="e.g. Rs., PKR, $, QAR"
+                  hint="Type any custom currency symbol or ISO code"
+                  required
+                />
+              </div>
+            </div>
 
             {/* Date & Number Formatting Preferences */}
             <div className="pt-3 border-t border-slate-100 space-y-3">

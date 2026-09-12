@@ -347,3 +347,33 @@ def delete_quotation(db: Session, quotation_id: int):
 
     db.delete(quotation)
     db.commit()
+
+def revise_quotation(db: Session, quotation_id: int, data: QuotationCreate) -> QuotationResponse:
+    old_quotation = db.query(Quotation).filter(Quotation.id == quotation_id).first()
+    if not old_quotation:
+        raise EntityNotFoundException('Quotation', str(quotation_id))
+    if old_quotation.status == 'APPROVED':
+        raise BusinessRuleException('Cannot revise an approved quotation that has already been converted to an invoice.')
+    if old_quotation.status == 'SUPERSEDED':
+        raise BusinessRuleException('Cannot revise a quotation that has already been superseded by a newer agreement.')
+
+    # Ensure notes link back to old quotation for full agreement audit trail
+    rev_tag = f"[Revised from {old_quotation.quotation_number}]"
+    if not data.notes or rev_tag not in data.notes:
+        data.notes = f"{rev_tag} {data.notes or ''}".strip()
+
+    for attempt in range(3):
+        try:
+            new_quotation = _execute_create_quotation(db, data)
+            old_quotation.status = 'SUPERSEDED'
+            old_quotation.rejection_reason = f"Superseded by revised agreement {new_quotation.quotation_number}"
+            db.commit()
+            db.refresh(old_quotation)
+            return new_quotation
+        except IntegrityError as e:
+            db.rollback()
+            err_str = f"{e.orig} {e}" if getattr(e, "orig", None) else str(e)
+            if ("quotation_number" in err_str or "UNIQUE constraint failed" in err_str) and attempt < 2:
+                continue
+            raise
+

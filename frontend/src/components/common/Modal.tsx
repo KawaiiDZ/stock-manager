@@ -7,7 +7,8 @@ interface ModalProps {
   title: string;
   subtitle?: string;
   children: React.ReactNode;
-  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl' | '6xl' | '7xl' | 'full';
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl' | '5xl' | '6xl' | '7xl' | 'full';
+  bodyClassName?: string;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -17,6 +18,7 @@ export const Modal: React.FC<ModalProps> = ({
   subtitle,
   children,
   maxWidth = 'md',
+  bodyClassName,
 }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -35,6 +37,7 @@ export const Modal: React.FC<ModalProps> = ({
     xl: 'max-w-xl',
     '2xl': 'max-w-2xl',
     '4xl': 'max-w-4xl',
+    '5xl': 'max-w-5xl',
     '6xl': 'max-w-6xl',
     '7xl': 'max-w-7xl',
     full: 'max-w-[95vw]',
@@ -62,7 +65,7 @@ export const Modal: React.FC<ModalProps> = ({
               <X className="h-5 w-5" />
             </button>
           </div>
-          <div className="px-6 py-5 max-h-[80vh] overflow-y-auto">{children}</div>
+          <div className={bodyClassName || "px-6 py-5 max-h-[80vh] overflow-y-auto"}>{children}</div>
         </div>
       </div>
     </div>

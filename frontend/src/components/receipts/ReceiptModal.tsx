@@ -70,11 +70,12 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
       onClose={onClose}
       title="Sale Receipt & Invoice"
       subtitle={`Receipt ${sale.receipt_number}`}
-      maxWidth={receiptType === 'pdf' ? '4xl' : 'md'}
+      maxWidth={receiptType === 'pdf' ? '5xl' : 'lg'}
+      bodyClassName="p-0 flex flex-col h-[88vh] max-h-[880px]"
     >
-      <div className="space-y-4">
-        {/* Receipt Format Switcher */}
-        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+      {/* 1. Format Switcher Bar (Fixed Top) */}
+      <div className="px-6 pt-3 pb-3 bg-white shrink-0 border-b border-slate-100">
+        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 max-w-md mx-auto">
           <button
             type="button"
             className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition ${
@@ -100,75 +101,75 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             Standard PDF / A4 Invoice
           </button>
         </div>
+      </div>
 
-        {/* Receipt Preview Stage with High-Contrast Paper Inspection Canvas */}
-        <div className="bg-slate-200/80 p-4 sm:p-6 rounded-2xl max-h-[68vh] overflow-auto flex justify-center border border-slate-200 shadow-inner">
-          {receiptType === 'thermal' ? (
-            <div className="flex justify-center w-full">
-              <div className="shadow-lg rounded-sm overflow-hidden bg-white print:shadow-none print:rounded-none">
-                <ThermalReceipt
-                  sale={sale}
-                  settings={settings}
-                  businessName={settings?.business_name}
-                  phone={settings?.phone}
-                  address={settings?.address}
-                  currency={settings?.currency}
-                  headerText={settings?.receipt_header}
-                  footerText={settings?.receipt_footer}
-                  printerType={settings?.receipt_printer_type}
-                />
-              </div>
+      {/* 2. Scrollable Inspection Canvas (Full Viewport Height) */}
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto bg-slate-200/90 p-4 sm:p-6 flex flex-col items-center shadow-inner overscroll-contain">
+        {receiptType === 'thermal' ? (
+          <div className="py-2 my-auto sm:my-0">
+            <div className="shadow-2xl rounded-sm overflow-visible bg-white print:shadow-none print:rounded-none">
+              <ThermalReceipt
+                sale={sale}
+                settings={settings}
+                businessName={settings?.business_name}
+                phone={settings?.phone}
+                address={settings?.address}
+                currency={settings?.currency}
+                headerText={settings?.receipt_header}
+                footerText={settings?.receipt_footer}
+                printerType={settings?.receipt_printer_type}
+              />
             </div>
-          ) : (
-            <div className="w-full flex justify-center">
-              <div className="shadow-xl rounded-lg overflow-hidden bg-white print:shadow-none print:rounded-none">
-                <PdfInvoiceReceipt
-                  sale={sale}
-                  settings={settings}
-                  businessName={settings?.business_name}
-                  phone={settings?.phone}
-                  address={settings?.address}
-                  currency={settings?.currency}
-                  headerText={settings?.receipt_header}
-                  footerText={settings?.receipt_footer}
-                  documentTitle={settings?.invoice_title}
-                />
-              </div>
+          </div>
+        ) : (
+          <div className="w-full max-w-full flex justify-center py-2">
+            <div className="shadow-2xl rounded-xl overflow-visible bg-white print:shadow-none print:rounded-none max-w-full">
+              <PdfInvoiceReceipt
+                sale={sale}
+                settings={settings}
+                businessName={settings?.business_name}
+                phone={settings?.phone}
+                address={settings?.address}
+                currency={settings?.currency}
+                headerText={settings?.receipt_header}
+                footerText={settings?.receipt_footer}
+                documentTitle={settings?.invoice_title}
+              />
             </div>
-          )}
-        </div>
+          </div>
+        )}
+      </div>
 
-        {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row gap-3 pt-2">
+      {/* 3. Action Footer (Fixed Bottom) */}
+      <div className="px-6 py-3.5 bg-white shrink-0 border-t border-slate-200 flex flex-col sm:flex-row gap-3">
+        <Button
+          variant="primary"
+          size="lg"
+          className="flex-1 font-bold text-base bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20"
+          icon={<Printer className="h-5 w-5" />}
+          onClick={handlePrint}
+        >
+          {receiptType === 'thermal' ? 'Print Thermal Receipt' : 'Print / Save as PDF'}
+        </Button>
+
+        {onNewSale ? (
           <Button
-            variant="primary"
+            variant="outline"
             size="lg"
-            className="flex-1 font-bold text-base"
-            icon={<Printer className="h-5 w-5" />}
-            onClick={handlePrint}
+            className="flex-1 font-semibold"
+            icon={<Plus className="h-5 w-5" />}
+            onClick={() => {
+              onClose();
+              onNewSale();
+            }}
           >
-            {receiptType === 'thermal' ? 'Print Thermal Receipt' : 'Print / Save as PDF'}
+            Next Sale
           </Button>
-
-          {onNewSale ? (
-            <Button
-              variant="outline"
-              size="lg"
-              className="flex-1"
-              icon={<Plus className="h-5 w-5" />}
-              onClick={() => {
-                onClose();
-                onNewSale();
-              }}
-            >
-              Next Sale
-            </Button>
-          ) : (
-            <Button variant="secondary" size="lg" className="flex-1" onClick={onClose}>
-              Close
-            </Button>
-          )}
-        </div>
+        ) : (
+          <Button variant="secondary" size="lg" className="flex-1 font-semibold" onClick={onClose}>
+            Close
+          </Button>
+        )}
       </div>
     </Modal>
   );

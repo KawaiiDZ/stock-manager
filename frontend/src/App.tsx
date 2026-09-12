@@ -53,6 +53,7 @@ export const App: React.FC = () => {
         setGlobalFormattingPreferences({
           dateFormat: bizSettings.date_format,
           formatPricesWithCommas: bizSettings.format_prices_with_commas,
+          currency: bizSettings.currency,
         });
       }
       setUrgentBillsCount(billsAttention.length);
@@ -75,6 +76,7 @@ export const App: React.FC = () => {
         setGlobalFormattingPreferences({
           dateFormat: s.date_format,
           formatPricesWithCommas: s.format_prices_with_commas,
+          currency: s.currency,
         });
       }
     }).catch(() => {});

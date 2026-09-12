@@ -307,7 +307,9 @@ export const SetupWizardModal: React.FC<SetupWizardModalProps> = ({
                     onChange={(e) => setCurrency(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
                   >
-                    <option value="Rs.">Rs. (Rupee)</option>
+                    <option value="Rs.">Rs. (Rupee - Default)</option>
+                    <option value="PKR">PKR (Pakistani Rupee)</option>
+                    <option value="₹">₹ (INR / Indian Rupee)</option>
                     <option value="$">$ (USD / Dollar)</option>
                     <option value="AED">AED (UAE Dirham)</option>
                     <option value="SAR">SAR (Saudi Riyal)</option>

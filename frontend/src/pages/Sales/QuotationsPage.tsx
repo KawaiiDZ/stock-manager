@@ -18,13 +18,16 @@ import {
   RefreshCw,
   Eye,
   Check,
-  X
+  X,
+  Edit,
+  RotateCcw
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Modal } from '../../components/common/Modal';
 import { QuotationModal } from '../../components/receipts/QuotationModal';
 import { ReceiptModal } from '../../components/receipts/ReceiptModal';
+import { ReviseQuotationModal } from '../../components/quotations/ReviseQuotationModal';
 
 interface QuotationsPageProps {
   settings: BusinessSettings | null;
@@ -44,6 +47,9 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
 
   // Quotation viewing/printing
   const [previewQuotation, setPreviewQuotation] = useState<Quotation | null>(null);
+
+  // Agreement Revision Modal state
+  const [revisingQuotation, setRevisingQuotation] = useState<Quotation | null>(null);
 
   // Approval / Conversion State
   const [approvingQuotation, setApprovingQuotation] = useState<Quotation | null>(null);
@@ -316,6 +322,17 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
           </button>
           <button
             type="button"
+            onClick={() => setStatusFilter('SUPERSEDED')}
+            className={`px-3.5 py-1.5 rounded-lg transition ${
+              statusFilter === 'SUPERSEDED'
+                ? 'bg-purple-700 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Superseded
+          </button>
+          <button
+            type="button"
             onClick={() => setStatusFilter('ALL')}
             className={`px-3.5 py-1.5 rounded-lg transition ${
               statusFilter === 'ALL'
@@ -383,6 +400,7 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
                   const isPending = q.status === 'PENDING';
                   const isApproved = q.status === 'APPROVED';
                   const isRejected = q.status === 'REJECTED';
+                  const isSuperseded = q.status === 'SUPERSEDED';
 
                   return (
                     <tr key={q.id} className="hover:bg-slate-50/70 transition">
@@ -392,6 +410,11 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
                         {isApproved && q.sale_id && (
                           <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
                             Invoice Linked
+                          </span>
+                        )}
+                        {isSuperseded && (
+                          <span className="text-[10px] text-purple-700 font-semibold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                            Superseded
                           </span>
                         )}
                       </td>
@@ -449,6 +472,12 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
                             DISAPPROVED
                           </span>
                         )}
+                        {isSuperseded && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-300" title={q.rejection_reason || 'Superseded by revised agreement'}>
+                            <RotateCcw className="h-3 w-3" />
+                            SUPERSEDED
+                          </span>
+                        )}
                       </td>
 
                       {/* Actions */}
@@ -465,6 +494,20 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
                           >
                             A4
                           </Button>
+
+                          {/* Edit / Revise Agreement Button */}
+                          {!isApproved && !isSuperseded && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              icon={<Edit className="h-3.5 w-3.5 text-indigo-600" />}
+                              onClick={() => setRevisingQuotation(q)}
+                              title="Revise Quotation (Supersedes current agreement and creates revised quotation)"
+                              className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-bold text-xs"
+                            >
+                              Edit
+                            </Button>
+                          )}
 
                           {isPending && (
                             <>
@@ -497,7 +540,7 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
                             </>
                           )}
 
-                          {!isApproved && (
+                          {!isApproved && !isSuperseded && (
                             <button
                               type="button"
                               onClick={() => handleDeleteQuotation(q)}
@@ -820,6 +863,22 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
         }}
         sale={completedSale}
         settings={settings}
+      />
+
+      {/* 5. Agreement Revision Modal */}
+      <ReviseQuotationModal
+        isOpen={Boolean(revisingQuotation)}
+        onClose={() => setRevisingQuotation(null)}
+        quotation={revisingQuotation}
+        settings={settings}
+        onRevised={(newQ) => {
+          setNotification({
+            type: 'success',
+            message: `Quotation ${revisingQuotation?.quotation_number} was superseded. New revised quotation ${newQ.quotation_number} has been created!`,
+          });
+          loadQuotations();
+          setPreviewQuotation(newQ);
+        }}
       />
     </div>
   );

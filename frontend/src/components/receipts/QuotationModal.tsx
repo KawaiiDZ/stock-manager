@@ -48,48 +48,47 @@ export const QuotationModal: React.FC<QuotationModalProps> = ({
       onClose={onClose}
       title="Commercial Quotation"
       subtitle={`Quotation ${quotation.quotation_number}`}
-      maxWidth="4xl"
+      maxWidth="5xl"
+      bodyClassName="p-0 flex flex-col h-[88vh] max-h-[880px]"
     >
-      <div className="space-y-4">
-        {/* Printable View Stage with High-Contrast Paper Inspection Canvas */}
-        <div className="bg-slate-200/80 p-4 sm:p-6 rounded-2xl max-h-[68vh] overflow-auto flex justify-center border border-slate-200 shadow-inner">
-          <div className="w-full flex justify-center">
-            <div className="shadow-xl rounded-lg overflow-hidden bg-white print:shadow-none print:rounded-none">
-              <PdfQuotationReceipt
-                quotation={quotation}
-                settings={settings}
-                businessName={settings?.business_name}
-                phone={settings?.phone}
-                address={settings?.address}
-                currency={settings?.currency}
-                headerText={settings?.receipt_header}
-                footerText={settings?.receipt_footer}
-              />
-            </div>
+      {/* 1. Scrollable Inspection Canvas (Full Viewport Height) */}
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto bg-slate-200/90 p-4 sm:p-6 flex flex-col items-center shadow-inner overscroll-contain">
+        <div className="w-full max-w-full flex justify-center py-2">
+          <div className="shadow-2xl rounded-xl overflow-visible bg-white print:shadow-none print:rounded-none max-w-full">
+            <PdfQuotationReceipt
+              quotation={quotation}
+              settings={settings}
+              businessName={settings?.business_name}
+              phone={settings?.phone}
+              address={settings?.address}
+              currency={settings?.currency}
+              headerText={settings?.receipt_header}
+              footerText={settings?.receipt_footer}
+            />
           </div>
         </div>
+      </div>
 
-        {/* Action Controls */}
-        <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-            <FileText className="h-4 w-4 text-indigo-600" />
-            <span>Standard A4 printable format</span>
-          </div>
+      {/* 2. Action Controls (Fixed Bottom) */}
+      <div className="px-6 py-3.5 bg-white shrink-0 border-t border-slate-200 flex justify-between items-center">
+        <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+          <FileText className="h-4 w-4 text-indigo-600" />
+          <span>Standard A4 commercial format</span>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="secondary" onClick={onClose}>
-              Close
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              icon={<Printer className="h-4 w-4" />}
-              onClick={handlePrint}
-              className="font-bold bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20"
-            >
-              Print Quotation
-            </Button>
-          </div>
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="secondary" onClick={onClose} className="font-semibold">
+            Close
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            icon={<Printer className="h-4 w-4" />}
+            onClick={handlePrint}
+            className="font-bold bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20"
+          >
+            Print Quotation
+          </Button>
         </div>
       </div>
     </Modal>

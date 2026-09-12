@@ -25,9 +25,28 @@ export const getGlobalFormatWithCommas = (): boolean => {
   }
 };
 
+export const getGlobalCurrency = (): string => {
+  try {
+    return localStorage.getItem('stock_manager_currency') || 'Rs.';
+  } catch {
+    return 'Rs.';
+  }
+};
+
+export const setGlobalCurrency = (currency: string) => {
+  try {
+    if (currency && currency.trim()) {
+      localStorage.setItem('stock_manager_currency', currency.trim());
+    }
+  } catch {
+    // Ignore localStorage failures
+  }
+};
+
 export const setGlobalFormattingPreferences = (prefs: {
   dateFormat?: string;
   formatPricesWithCommas?: boolean;
+  currency?: string;
 }) => {
   try {
     if (prefs.dateFormat) {
@@ -35,6 +54,9 @@ export const setGlobalFormattingPreferences = (prefs: {
     }
     if (prefs.formatPricesWithCommas !== undefined) {
       localStorage.setItem('stock_manager_format_commas', String(prefs.formatPricesWithCommas));
+    }
+    if (prefs.currency && prefs.currency.trim()) {
+      localStorage.setItem('stock_manager_currency', prefs.currency.trim());
     }
   } catch {
     // Ignore localStorage failures
@@ -58,10 +80,11 @@ export const formatMoney = (
 
 export const formatCurrency = (
   val: number | string | undefined | null,
-  currency = 'Rs.',
+  currency?: string,
   useCommas?: boolean
 ): string => {
-  return `${currency} ${formatMoney(val, useCommas)}`;
+  const curr = currency !== undefined && currency !== null && currency !== '' ? currency : getGlobalCurrency();
+  return `${curr} ${formatMoney(val, useCommas)}`;
 };
 
 export const formatQty = (val: number | string | undefined | null): string => {

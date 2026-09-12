@@ -347,6 +347,8 @@ export const api = {
     request<Quotation[]>(`/quotations?${status ? `status=${encodeURIComponent(status)}&` : ''}${search ? `search=${encodeURIComponent(search)}&` : ''}`),
   createQuotation: (data: QuotationCreate) =>
     request<Quotation>('/quotations', { method: 'POST', body: JSON.stringify(data) }),
+  reviseQuotation: (id: number, data: QuotationCreate) =>
+    request<Quotation>(`/quotations/${id}/revise`, { method: 'POST', body: JSON.stringify(data) }),
   getQuotation: (id: number) =>
     request<Quotation>(`/quotations/${id}`),
   checkQuotationConversion: (id: number) =>

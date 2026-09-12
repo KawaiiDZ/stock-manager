@@ -11,7 +11,7 @@ from backend.app.schemas.sales import SaleResponse
 from backend.app.services.quotation_service import (
     create_quotation, get_quotation, list_quotations,
     check_quotation_conversion, convert_quotation_to_sale,
-    reject_quotation, delete_quotation
+    reject_quotation, delete_quotation, revise_quotation
 )
 
 router = APIRouter(prefix="/quotations", tags=["Quotations"])
@@ -45,6 +45,10 @@ def convert_to_sale(id: int, request: QuotationConvertRequest, db: Session = Dep
 @router.post("/{id}/reject", response_model=QuotationResponse)
 def disapprove_quotation(id: int, request: QuotationRejectRequest, db: Session = Depends(get_db)):
     return reject_quotation(db, id, request)
+
+@router.post("/{id}/revise", response_model=QuotationResponse, status_code=status.HTTP_201_CREATED)
+def revise_existing_quotation(id: int, data: QuotationCreate, db: Session = Depends(get_db)):
+    return revise_quotation(db, id, data)
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def remove_quotation(id: int, db: Session = Depends(get_db)):

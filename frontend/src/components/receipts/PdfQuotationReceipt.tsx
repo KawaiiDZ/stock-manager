@@ -1,7 +1,7 @@
 import React from 'react';
 import { Quotation, BusinessSettings } from '../../types';
 import { formatCurrency, formatDateTime } from '../../utils/format';
-import { FileText, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import { FileText, CheckCircle2, AlertCircle, Clock, RotateCcw } from 'lucide-react';
 
 export interface PdfQuotationReceiptProps {
   quotation: Quotation;
@@ -47,6 +47,14 @@ export const PdfQuotationReceipt: React.FC<PdfQuotationReceiptProps> = ({
         </span>
       );
     }
+    if (status === 'SUPERSEDED') {
+      return (
+        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-300" title={quotation.rejection_reason || 'Superseded by revised agreement'}>
+          <RotateCcw className="h-3.5 w-3.5 text-purple-600" />
+          SUPERSEDED / REVISED
+        </span>
+      );
+    }
     if (status === 'REJECTED') {
       return (
         <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300">
@@ -66,7 +74,7 @@ export const PdfQuotationReceipt: React.FC<PdfQuotationReceiptProps> = ({
   return (
     <div
       id="printable-pdf-quotation"
-      className="bg-white text-slate-800 font-sans text-xs p-8 max-w-[210mm] min-w-[190mm] min-h-[285mm] mx-auto shadow-sm border border-slate-200 rounded-lg print:border-none print:shadow-none print:p-0 print:m-0 print:max-w-none flex flex-col justify-between"
+      className="bg-white text-slate-800 font-sans text-xs p-8 max-w-[210mm] min-w-[190mm] min-h-[285mm] h-auto mx-auto shadow-sm border border-slate-200 rounded-lg print:border-none print:shadow-none print:p-0 print:m-0 print:max-w-none flex flex-col justify-between"
       style={{ boxSizing: 'border-box' }}
     >
       <div className="pdf-content-body flex-1">
@@ -215,6 +223,14 @@ export const PdfQuotationReceipt: React.FC<PdfQuotationReceiptProps> = ({
       {/* 5. Summary & Terms */}
       <div className="flex justify-between items-start gap-8 pt-4 border-t border-slate-200 print-avoid-break">
         <div className="flex-1 space-y-3">
+          {quotation.rejection_reason && (
+            <div className={`p-3 rounded-md border text-xs ${quotation.status === 'SUPERSEDED' ? 'bg-purple-50 border-purple-200 text-purple-900' : 'bg-rose-50 border-rose-200 text-rose-900'}`}>
+              <span className="font-bold block mb-0.5">
+                {quotation.status === 'SUPERSEDED' ? 'Superseded Agreement Notice:' : 'Disapproval Reason:'}
+              </span>
+              <p className="leading-snug">{quotation.rejection_reason}</p>
+            </div>
+          )}
           {quotation.notes && (
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-md">
               <span className="font-semibold text-slate-700 block mb-0.5">Quotation Notes:</span>
