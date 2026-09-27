@@ -1,4 +1,4 @@
-# Offline Inventory, Sales, Billing & Business Management Application (v2.0.0)
+# Offline Inventory, Sales, Billing & Business Management Application (v2.1.0)
 
 A desktop-first, offline-first business management application designed for local retail shops and small businesses.
 
@@ -15,12 +15,20 @@ Built with **React**, **FastAPI**, **SQLAlchemy**, and **SQLite**.
   - Configurable visibility toggles: *Main Table Column, POS Live Search Indexing, Thermal Receipt Item, Mandatory field*
 - **Fast Bulk Product Entry**:
   - Spreadsheet grid with dynamic columns matching active custom attributes
-- **High-Speed POS / New Sale**:
-  - Multi-attribute live product search (name, barcode, SKU, brand, model, color, IMEI, etc.) & USB barcode scanner detection
+- **High-Speed POS / New Sale & Barcode Scanning**:
+  - Multi-attribute live product search (name, barcode, SKU, brand, model, color, IMEI, etc.)
+  - Native USB barcode scanner auto-detection with quick-add modal for unregistered barcodes
   - Instant price override for individual sales without changing catalog defaults
   - Item-level & sale-level discounts and tax calculation
   - Walk-in customer default (`C-000001`) with credit/partial payment support
   - 1-Click thermal receipt printing (58mm, 80mm ESC/POS, and Standard A4 layout)
+- **Barcode Generator & Sticker Label Printing**:
+  - Code-128 barcode generation for products with auto-ID or custom codes
+  - Configurable label sticker printing sheet (single labels, full sheet, custom quantities)
+- **Commercial Quotations System**:
+  - Formal price quotes with expiration tracking, terms & conditions, and itemized discounts
+  - Quotation revision workflow with automatic superseding and price difference indicators
+  - 1-Click conversion to sale with instant inventory allocation
 - **FIFO Inventory & Costing**:
   - Strict FIFO (First-In, First-Out) stock batch consumption
   - Accurate gross profit calculation (`Sale Revenue - FIFO COGS`)
@@ -39,6 +47,11 @@ Built with **React**, **FastAPI**, **SQLAlchemy**, and **SQLite**.
   - Live Daily KPIs: Today's Sales Revenue, Today's Gross Profit, Customer Dues, Supplier Payables
   - Monthly interactive sales bar chart with clickable day drill-down modal
   - 9 Tabbed Reports with date filter presets (Today, Yesterday, This Week, This Month, Custom)
+- **WhatsApp-Style Google Drive Cloud Backup**:
+  - Restricted Google OAuth 2.0 integration confined to hidden app data (`drive.appdata` scope)
+  - Scheduled automated backups (Daily, Every 6 Hours, Weekly, Manual) when online
+  - Rolling retention of the last 3 cloud backups with detailed metadata (record counts, store name, size)
+  - Safe isolated sandbox restore engine with automatic fallback rollback on failure
 - **Local Backup & Recovery + Reset Zone**:
   - 1-Click snapshot backup to `Backups/`
   - Automated pre-restore safety rollback checkpoint

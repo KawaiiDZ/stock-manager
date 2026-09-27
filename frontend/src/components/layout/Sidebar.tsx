@@ -274,10 +274,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
                 Ready & Offline
               </span>
-              <span className="text-[10px] whitespace-nowrap">v2.0.0</span>
+              <span className="text-[10px] whitespace-nowrap">v2.1.0</span>
             </>
           ) : (
-            <div className="w-full flex justify-center py-0.5" title="Ready & Offline (v2.0.0)">
+            <div className="w-full flex justify-center py-0.5" title="Ready & Offline (v2.1.0)">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
             </div>
           )}
