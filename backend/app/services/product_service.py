@@ -198,6 +198,14 @@ def delete_custom_field(db: Session, field_id: int) -> bool:
     db.commit()
     return True
 
+def reorder_custom_fields(db: Session, field_ids: List[int]) -> List[CustomFieldResponse]:
+    for order, f_id in enumerate(field_ids):
+        field = db.query(ProductCustomField).filter(ProductCustomField.id == f_id).first()
+        if field:
+            field.display_order = order
+    db.commit()
+    return list_custom_fields(db, active_only=False)
+
 # Products
 def _format_product_response(product: Product) -> dict:
     custom_vals = []

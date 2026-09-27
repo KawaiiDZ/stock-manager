@@ -49,7 +49,7 @@ export const QuotationModal: React.FC<QuotationModalProps> = ({
       title="Commercial Quotation"
       subtitle={`Quotation ${quotation.quotation_number}`}
       maxWidth="5xl"
-      bodyClassName="p-0 flex flex-col flex-1 min-h-0 overflow-hidden h-[76vh] sm:h-[80vh] max-h-[720px]"
+      bodyClassName="p-0 flex flex-col flex-1 min-h-0 overflow-hidden h-[70vh] sm:h-[74vh] max-h-[600px]"
     >
       {/* 1. Scrollable Inspection Canvas (Full Viewport Height) */}
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto bg-slate-200/90 p-4 sm:p-6 flex flex-col items-center shadow-inner overscroll-contain">

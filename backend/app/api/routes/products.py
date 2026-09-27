@@ -6,7 +6,7 @@ from backend.app.core.database import get_db
 from backend.app.schemas.product import (
     ProductCreate, ProductUpdate, ProductResponse,
     CategoryCreate, CategoryResponse,
-    CustomFieldCreate, CustomFieldUpdate, CustomFieldResponse,
+    CustomFieldCreate, CustomFieldUpdate, CustomFieldResponse, CustomFieldReorderRequest,
     StockAdjustmentRequest, BulkProductsResponse
 )
 from backend.app.services import product_service
@@ -43,6 +43,10 @@ def get_custom_fields(
 @router.post("/custom-fields", response_model=CustomFieldResponse, status_code=status.HTTP_201_CREATED)
 def create_custom_field(data: CustomFieldCreate, db: Session = Depends(get_db)):
     return product_service.create_custom_field(db, data)
+
+@router.put("/custom-fields/reorder/batch", response_model=List[CustomFieldResponse])
+def reorder_custom_fields(data: CustomFieldReorderRequest, db: Session = Depends(get_db)):
+    return product_service.reorder_custom_fields(db, data.field_ids)
 
 @router.put("/custom-fields/{field_id}", response_model=CustomFieldResponse)
 def update_custom_field(field_id: int, data: CustomFieldUpdate, db: Session = Depends(get_db)):

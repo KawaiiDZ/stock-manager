@@ -72,7 +72,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
       title="Sale Receipt & Invoice"
       subtitle={`Receipt ${sale.receipt_number}`}
       maxWidth={receiptType === 'pdf' ? '5xl' : 'xl'}
-      bodyClassName="p-0 flex flex-col flex-1 min-h-0 overflow-hidden h-[76vh] sm:h-[80vh] max-h-[720px]"
+      bodyClassName="p-0 flex flex-col flex-1 min-h-0 overflow-hidden h-[70vh] sm:h-[74vh] max-h-[600px]"
     >
       {/* 1. Format Switcher Bar (Fixed Top) */}
       <div className="px-6 py-2.5 bg-white shrink-0 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -136,7 +136,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
       {/* 2. Scrollable Inspection Canvas (Full Viewport Height) */}
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto bg-slate-200/90 p-4 sm:p-5 flex flex-col items-center justify-start shadow-inner overscroll-contain">
         {receiptType === 'thermal' ? (
-          <div className="py-2 flex justify-center w-full">
+          <div className="py-2 flex justify-center w-full my-auto">
             <div className="shadow-xl rounded-lg overflow-hidden bg-white border border-slate-300/80 print:shadow-none print:rounded-none print:border-none">
               <ThermalReceipt
                 sale={sale}

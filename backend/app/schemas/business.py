@@ -95,7 +95,7 @@ class ApplyPresetRequest(BaseModel):
 
 class ResetDataRequest(BaseModel):
     confirm_pin: str
-    wipe_mode: Optional[str] = "inventory_only"  # "inventory_only" or "all_data"
+    wipe_mode: Optional[str] = "inventory_only"  # "sales_only", "inventory_only", or "all_data"
 
 class ResetDataResponse(BaseModel):
     success: bool

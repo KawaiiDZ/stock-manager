@@ -40,6 +40,9 @@ class CustomFieldUpdate(BaseModel):
     display_order: Optional[int] = None
     is_active: Optional[bool] = None
 
+class CustomFieldReorderRequest(BaseModel):
+    field_ids: List[int]
+
 class CustomFieldResponse(BaseModel):
     id: int
     category_id: Optional[int] = None

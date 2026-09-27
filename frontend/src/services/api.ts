@@ -164,6 +164,11 @@ export const api = {
   updateCustomField: (id: number, data: Partial<CustomField>) =>
     request<CustomField>(`/custom-fields/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCustomField: (id: number) => request<{ message: string }>(`/custom-fields/${id}`, { method: 'DELETE' }),
+  reorderCustomFields: (fieldIds: number[]) =>
+    request<CustomField[]>('/custom-fields/reorder/batch', {
+      method: 'PUT',
+      body: JSON.stringify({ field_ids: fieldIds }),
+    }),
 
   // Stock Movements & Batches
   getMovements: (params?: { product_id?: number; movement_type?: string; skip?: number; limit?: number }) => {
@@ -359,7 +364,7 @@ export const api = {
 
 
   // Data & Inventory Reset
-  resetData: (data: { confirm_pin: string; wipe_mode?: 'inventory_only' | 'all_data' }) =>
+  resetData: (data: { confirm_pin: string; wipe_mode?: 'sales_only' | 'inventory_only' | 'all_data' }) =>
     request<{ success: boolean; wipe_mode: string; deleted_products_count: number; message: string }>('/settings/reset-data', {
       method: 'POST',
       body: JSON.stringify(data),

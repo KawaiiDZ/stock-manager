@@ -15,6 +15,7 @@ import {
   Sparkles,
   Sliders,
   Check,
+  ArrowUp,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -113,6 +114,26 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Floating Back to Top Button
+  const [showBackToTop, setShowBackToTop] = useState(false);
+
+  useEffect(() => {
+    const mainEl = document.querySelector('main');
+    if (!mainEl) return;
+    const handleScroll = () => {
+      setShowBackToTop(mainEl.scrollTop > 250);
+    };
+    mainEl.addEventListener('scroll', handleScroll, { passive: true });
+    return () => mainEl.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    const mainEl = document.querySelector('main');
+    if (mainEl) {
+      mainEl.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -341,7 +362,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
   }, [products]);
 
   const restockFilteredProducts = useMemo(() => {
-    return products.filter((p) => {
+    const filtered = products.filter((p) => {
       if (!p.is_active || Number(p.current_stock || 0) > 0) return false;
       if (selectedCategory && p.category_id !== selectedCategory) return false;
       if (search.trim()) {
@@ -355,10 +376,14 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
       }
       return true;
     });
+    return [...filtered].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
   }, [products, selectedCategory, search]);
 
-  // Group products into dedicated category tables
+  // Group products into dedicated category tables (arranged alphabetically A-Z inside each category)
   const categoryGroups = useMemo(() => {
+    const sortAlphabetically = (items: Product[]) =>
+      [...items].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
     if (selectedCategory) {
       const cat = categories.find((c) => c.id === selectedCategory);
       const catProds = products.filter((p) => p.category_id === selectedCategory);
@@ -366,7 +391,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
         {
           id: selectedCategory,
           name: cat ? cat.name : 'Category',
-          products: catProds,
+          products: sortAlphabetically(catProds),
         },
       ];
     }
@@ -382,7 +407,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
         groups.push({
           id: cat.id,
           name: cat.name,
-          products: catProds,
+          products: sortAlphabetically(catProds),
         });
       }
     });
@@ -393,7 +418,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
       groups.push({
         id: null,
         name: 'General / Uncategorized',
-        products: uncategorized,
+        products: sortAlphabetically(uncategorized),
       });
     }
 
@@ -1362,6 +1387,19 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
           </div>
           <span>{scanToast}</span>
         </div>
+      )}
+
+      {/* Floating Back to Top Button */}
+      {showBackToTop && (
+        <button
+          type="button"
+          onClick={scrollToTop}
+          className="fixed bottom-8 right-8 z-40 p-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-200 flex items-center justify-center group focus:outline-none focus:ring-4 focus:ring-emerald-200 border border-emerald-500/30 animate-in fade-in zoom-in-90"
+          title="Back to Top"
+          aria-label="Back to Top"
+        >
+          <ArrowUp className="h-5 w-5 group-hover:-translate-y-0.5 transition-transform" />
+        </button>
       )}
     </div>
   );

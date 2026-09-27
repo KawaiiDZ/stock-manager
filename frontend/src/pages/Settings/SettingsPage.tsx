@@ -24,6 +24,7 @@ import {
   Barcode,
   Eye,
   Receipt,
+  RotateCcw,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -125,7 +126,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
   // Reset / Wipe Data State
   const [showResetModal, setShowResetModal] = useState(false);
-  const [resetWipeMode, setResetWipeMode] = useState<'inventory_only' | 'all_data'>('inventory_only');
+  const [resetWipeMode, setResetWipeMode] = useState<'sales_only' | 'inventory_only' | 'all_data'>('sales_only');
   const [resetPin, setResetPin] = useState('');
   const [resetError, setResetError] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
@@ -566,7 +567,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     }
   };
 
-  const handleOpenResetModal = (mode: 'inventory_only' | 'all_data') => {
+  const handleOpenResetModal = (mode: 'sales_only' | 'inventory_only' | 'all_data') => {
     setResetWipeMode(mode);
     setResetPin('');
     setResetError(null);
@@ -1958,20 +1959,54 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Option 1: Inventory & Sales Wipe (Recommended for Testing) */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Option 1: Reset Sales & Records (Retains Stock & Products) */}
+            <div className="bg-white rounded-3xl border-2 border-indigo-200/90 p-6 shadow-sm flex flex-col justify-between space-y-5">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-indigo-700">
+                    <RotateCcw className="h-5 w-5" />
+                    <h3 className="font-black text-base">Reset Sales & Records</h3>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Retains Stock
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Purges all <strong>sales receipts, sale items, payments, returns, quotations, and customer payments</strong>.
+                  Safely restores all consumed inventory back to your in-stock counts.
+                </p>
+                <div className="p-3 rounded-2xl bg-indigo-50/70 border border-indigo-100 text-[11px] text-indigo-900 font-semibold space-y-1">
+                  <div>• Retains 100% of Products & Categories</div>
+                  <div>• Restores Consumed Stock Batches to Pre-Sale Count</div>
+                  <div>• Retains Purchases, Suppliers, Bills & Expenses</div>
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                onClick={() => handleOpenResetModal('sales_only')}
+                className="w-full font-bold bg-indigo-600 hover:bg-indigo-700 shadow-sm"
+              >
+                Reset Sales & Records Only
+              </Button>
+            </div>
+
+            {/* Option 2: Inventory & Sales Wipe */}
             <div className="bg-white rounded-3xl border-2 border-amber-200/80 p-6 shadow-sm flex flex-col justify-between space-y-5">
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-amber-700">
                   <Trash2 className="h-5 w-5" />
-                  <h3 className="font-black text-base">Wipe Inventory & Sales Data</h3>
+                  <h3 className="font-black text-base">Wipe Inventory & Sales</h3>
                 </div>
                 <p className="text-xs text-slate-600 leading-relaxed">
                   Deletes all <strong>products, stock batches, movements, sales receipts, and purchase orders</strong>.
                   Resets customer/supplier dues to zero.
                 </p>
                 <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 font-semibold space-y-1">
-                  <div>• Keeps your Business Profile & Currency</div>
+                  <div>• Keeps Business Profile & Currency</div>
                   <div>• Keeps Custom Table Columns & Attributes</div>
                   <div>• Keeps Product Categories</div>
                 </div>
@@ -1988,19 +2023,19 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               </Button>
             </div>
 
-            {/* Option 2: Full Factory Reset */}
+            {/* Option 3: Full Factory Reset */}
             <div className="bg-white rounded-3xl border-2 border-rose-200/80 p-6 shadow-sm flex flex-col justify-between space-y-5">
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-rose-700">
                   <AlertTriangle className="h-5 w-5" />
-                  <h3 className="font-black text-base">Factory Reset Everything</h3>
+                  <h3 className="font-black text-base">Factory Reset All</h3>
                 </div>
                 <p className="text-xs text-slate-600 leading-relaxed">
                   Completely wipes <strong>all inventory, sales, purchases, customers, suppliers, bills, and expenses</strong>.
-                  Returns the database to a blank slate.
+                  Returns database to a blank slate.
                 </p>
                 <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-[11px] text-rose-900 font-semibold">
-                  This action is permanent and cannot be undone. Create a backup first if needed.
+                  Permanent action. Create a backup first if needed.
                 </div>
               </div>
 
@@ -2022,7 +2057,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       <Modal
         isOpen={showResetModal}
         onClose={() => setShowResetModal(false)}
-        title={resetWipeMode === 'inventory_only' ? 'Confirm Inventory Wipe' : 'Confirm Factory Reset'}
+        title={
+          resetWipeMode === 'sales_only'
+            ? 'Confirm Sales & Records Reset'
+            : resetWipeMode === 'inventory_only'
+            ? 'Confirm Inventory Wipe'
+            : 'Confirm Factory Reset'
+        }
         subtitle="Please enter your Configuration PIN to authorize this reset action."
         maxWidth="md"
       >
@@ -2033,9 +2074,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               Warning: Irreversible Action
             </div>
             <div>
-              {resetWipeMode === 'inventory_only'
-                ? 'All products, stock counts, sales receipts, and purchases will be permanently deleted.'
-                : 'All system transactions, products, customers, suppliers, bills, and expenses will be permanently wiped.'}
+              {resetWipeMode === 'sales_only' && (
+                <span>
+                  All sales receipts, sale items, payments, returns, quotations, and customer payments will be deleted.
+                  <strong> All products, categories, purchase records, and original stock counts will be safely preserved.</strong>
+                </span>
+              )}
+              {resetWipeMode === 'inventory_only' && (
+                <span>All products, stock counts, sales receipts, and purchases will be permanently deleted.</span>
+              )}
+              {resetWipeMode === 'all_data' && (
+                <span>All system transactions, products, customers, suppliers, bills, and expenses will be permanently wiped.</span>
+              )}
             </div>
           </div>
 
@@ -2072,12 +2122,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             </Button>
             <Button
               type="submit"
-              variant="danger"
+              variant={resetWipeMode === 'sales_only' ? 'primary' : 'danger'}
               loading={resetting}
               disabled={!resetPin}
-              className="font-bold px-5"
+              className={`font-bold px-5 ${resetWipeMode === 'sales_only' ? 'bg-indigo-600 hover:bg-indigo-700' : ''}`}
             >
-              Confirm & Wipe Data Now
+              {resetWipeMode === 'sales_only' ? 'Confirm & Reset Sales Data' : 'Confirm & Wipe Data Now'}
             </Button>
           </div>
         </form>

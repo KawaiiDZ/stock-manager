@@ -20,6 +20,9 @@ import {
   Store,
   Tag,
   Zap,
+  GripVertical,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -66,6 +69,85 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
 
   // Edit field modal
   const [editingField, setEditingField] = useState<CustomField | null>(null);
+
+  // Drag-and-drop reordering state
+  const [draggedFieldId, setDraggedFieldId] = useState<number | null>(null);
+  const [dragOverFieldId, setDragOverFieldId] = useState<number | null>(null);
+  const [reordering, setReordering] = useState(false);
+
+  const handleReorderSubset = async (newOrderedSubset: CustomField[]) => {
+    const subsetIds = new Set(newOrderedSubset.map((f) => f.id));
+    const otherFields = customFields.filter((f) => !subsetIds.has(f.id));
+    const updatedSubset = newOrderedSubset.map((f, idx) => ({ ...f, display_order: idx }));
+    const combined = [...updatedSubset, ...otherFields];
+
+    setCustomFields(combined);
+
+    try {
+      setReordering(true);
+      const allOrderedIds = combined.map((f) => f.id);
+      const res = await api.reorderCustomFields(allOrderedIds);
+      if (res) {
+        setCustomFields(res);
+        onSchemaUpdated?.();
+      }
+    } catch (err: any) {
+      console.error('Failed to save attribute order:', err);
+      setErrorMsg(err.detail || 'Failed to save attribute order');
+    } finally {
+      setReordering(false);
+    }
+  };
+
+  const handleDragStart = (e: React.DragEvent, id: number) => {
+    setDraggedFieldId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(id));
+  };
+
+  const handleDragOver = (e: React.DragEvent, id: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverFieldId !== id) {
+      setDragOverFieldId(id);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: number, visibleList: CustomField[]) => {
+    e.preventDefault();
+    setDragOverFieldId(null);
+    if (!draggedFieldId || draggedFieldId === targetId) {
+      setDraggedFieldId(null);
+      return;
+    }
+
+    const currentIndex = visibleList.findIndex((f) => f.id === draggedFieldId);
+    const targetIndex = visibleList.findIndex((f) => f.id === targetId);
+    if (currentIndex === -1 || targetIndex === -1) {
+      setDraggedFieldId(null);
+      return;
+    }
+
+    const items = [...visibleList];
+    const [draggedItem] = items.splice(currentIndex, 1);
+    items.splice(targetIndex, 0, draggedItem);
+
+    setDraggedFieldId(null);
+    handleReorderSubset(items);
+  };
+
+  const handleMove = (id: number, direction: 'up' | 'down', visibleList: CustomField[]) => {
+    const currentIndex = visibleList.findIndex((f) => f.id === id);
+    if (currentIndex === -1) return;
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= visibleList.length) return;
+
+    const items = [...visibleList];
+    const [movedItem] = items.splice(currentIndex, 1);
+    items.splice(targetIndex, 0, movedItem);
+
+    handleReorderSubset(items);
+  };
 
   useEffect(() => {
     loadData();
@@ -368,8 +450,9 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                 <Sliders className="h-4 w-4 text-emerald-600" />
                 Configured Attributes ({customFields.length})
               </span>
-              <span className="text-[11px] text-slate-400">
-                Schemas adapt dynamically per category
+              <span className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                {reordering && <span className="text-emerald-600 font-semibold animate-pulse">Saving order...</span>}
+                <span>Drag handle or use arrows to rearrange</span>
               </span>
             </div>
 
@@ -524,42 +607,87 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                 );
               }
 
-              return filteredFields.map((cf) => {
+              return filteredFields.map((cf, idx) => {
                 const isGlobal = !cf.category_id;
+                const isDragging = draggedFieldId === cf.id;
+                const isOver = dragOverFieldId === cf.id;
+
                 return (
                   <div
                     key={cf.id}
-                    className="p-4 hover:bg-slate-50/60 transition flex items-center justify-between gap-3 text-xs"
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, cf.id)}
+                    onDragOver={(e) => handleDragOver(e, cf.id)}
+                    onDragEnd={() => {
+                      setDraggedFieldId(null);
+                      setDragOverFieldId(null);
+                    }}
+                    onDrop={(e) => handleDrop(e, cf.id, filteredFields)}
+                    className={`p-3.5 sm:p-4 hover:bg-slate-50/80 transition flex items-center justify-between gap-3 text-xs border-b border-slate-100 last:border-b-0 select-none ${
+                      isDragging ? 'opacity-40 bg-slate-100 scale-[0.99] border-dashed border-2 border-emerald-400' : ''
+                    } ${isOver && !isDragging ? 'border-t-2 border-emerald-500 bg-emerald-50/60' : ''}`}
                   >
-                    <div className="space-y-1.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-bold text-slate-900 text-sm">{cf.name}</span>
-                        <span
-                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                            isGlobal
-                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          }`}
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {/* Drag handle & arrow controls */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <div
+                          className="p-1 rounded-md text-slate-300 hover:text-slate-600 hover:bg-slate-100 cursor-grab active:cursor-grabbing transition"
+                          title="Drag up or down to reorder attribute"
                         >
-                          {isGlobal ? 'Global' : (cf.category_name || 'Category')}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-mono uppercase font-semibold">
-                          {cf.field_type}
-                        </span>
-                        {cf.is_required && (
-                          <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[10px] font-bold">
-                            Required
+                          <GripVertical className="h-4 w-4" />
+                        </div>
+                        <div className="flex flex-col -space-y-1">
+                          <button
+                            type="button"
+                            onClick={() => handleMove(cf.id, 'up', filteredFields)}
+                            disabled={idx === 0 || reordering}
+                            className="p-0.5 rounded text-slate-300 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-20 disabled:hover:bg-transparent transition"
+                            title="Move up"
+                          >
+                            <ChevronUp className="h-3 w-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMove(cf.id, 'down', filteredFields)}
+                            disabled={idx === filteredFields.length - 1 || reordering}
+                            className="p-0.5 rounded text-slate-300 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-20 disabled:hover:bg-transparent transition"
+                            title="Move down"
+                          >
+                            <ChevronDown className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-bold text-slate-900 text-sm truncate">{cf.name}</span>
+                          <span
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                              isGlobal
+                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            }`}
+                          >
+                            {isGlobal ? 'Global' : (cf.category_name || 'Category')}
                           </span>
+                          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-mono uppercase font-semibold">
+                            {cf.field_type}
+                          </span>
+                          {cf.is_required && (
+                            <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[10px] font-bold">
+                              Required
+                            </span>
+                          )}
+                        </div>
+                        {cf.options && (
+                          <div className="text-[11px] text-slate-500 font-mono truncate max-w-md">
+                            Options: {cf.options}
+                          </div>
                         )}
                       </div>
-                      {cf.options && (
-                        <div className="text-[11px] text-slate-500 font-mono truncate max-w-md">
-                          Options: {cf.options}
-                        </div>
-                      )}
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                       {/* Badges */}
                       <div className="hidden sm:flex items-center gap-1">
                         <span
