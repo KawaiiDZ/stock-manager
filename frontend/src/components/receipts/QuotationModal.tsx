@@ -49,7 +49,7 @@ export const QuotationModal: React.FC<QuotationModalProps> = ({
       title="Commercial Quotation"
       subtitle={`Quotation ${quotation.quotation_number}`}
       maxWidth="5xl"
-      bodyClassName="p-0 flex flex-col h-[88vh] max-h-[880px]"
+      bodyClassName="p-0 flex flex-col flex-1 min-h-0 overflow-hidden h-[76vh] sm:h-[80vh] max-h-[720px]"
     >
       {/* 1. Scrollable Inspection Canvas (Full Viewport Height) */}
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto bg-slate-200/90 p-4 sm:p-6 flex flex-col items-center shadow-inner overscroll-contain">
@@ -70,7 +70,7 @@ export const QuotationModal: React.FC<QuotationModalProps> = ({
       </div>
 
       {/* 2. Action Controls (Fixed Bottom) */}
-      <div className="px-6 py-3.5 bg-white shrink-0 border-t border-slate-200 flex justify-between items-center">
+      <div className="px-6 py-3 bg-white shrink-0 border-t border-slate-200 flex justify-between items-center">
         <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
           <FileText className="h-4 w-4 text-indigo-600" />
           <span>Standard A4 commercial format</span>

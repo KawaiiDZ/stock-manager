@@ -393,7 +393,7 @@ export const GoogleBackupCard: React.FC<GoogleBackupCardProps> = ({ onSuccess, o
                   onChange={(e) => handleFrequencyChange(e.target.value as any)}
                   className="bg-white border border-slate-200 rounded-xl px-2.5 py-1 text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 >
-                  <option value="daily">Daily (WhatsApp Standard)</option>
+                  <option value="daily">Daily</option>
                   <option value="6h">Every 6 Hours</option>
                   <option value="weekly">Weekly</option>
                   <option value="manual">Manual Only</option>
