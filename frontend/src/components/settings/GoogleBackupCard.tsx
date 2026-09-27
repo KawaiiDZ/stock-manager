@@ -543,9 +543,31 @@ export const GoogleBackupCard: React.FC<GoogleBackupCardProps> = ({ onSuccess, o
 
             <div className="divide-y divide-slate-100 border border-slate-100 rounded-2xl overflow-hidden bg-white">
               {status.cloud_backups.length === 0 ? (
-                <div className="p-8 text-center text-slate-400 text-xs">
-                  No cloud backups stored in Google Drive yet. Click "Backup to Cloud Now" to generate your first backup.
-                </div>
+                status.last_error_message ? (
+                  <div className="p-6 text-center space-y-2 bg-amber-50/40">
+                    <div className="text-amber-700 font-bold text-xs flex items-center justify-center gap-1.5">
+                      <AlertTriangle className="h-4 w-4" />
+                      <span>Could not retrieve cloud backups from Google Drive</span>
+                    </div>
+                    <p className="text-slate-500 text-xs max-w-md mx-auto leading-relaxed">
+                      {status.last_error_message}
+                    </p>
+                    <div>
+                      <button
+                        type="button"
+                        onClick={fetchStatus}
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-white px-3.5 py-1.5 rounded-xl border border-emerald-300 shadow-xs hover:bg-emerald-50 transition mt-1"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Try Again
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-8 text-center text-slate-400 text-xs">
+                    No cloud backups stored in Google Drive yet. Click "Backup to Cloud Now" to generate your first backup.
+                  </div>
+                )
               ) : (
                 status.cloud_backups.map((cb, idx) => (
                   <div

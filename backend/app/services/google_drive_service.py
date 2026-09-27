@@ -80,7 +80,15 @@ def _format_network_error(e: Exception, action: str = "communicating with Google
         return f"Unable to reach Google servers (DNS resolution failed while {action}). Please verify your internet connection or network firewall."
     if "ConnectTimeout" in err_str or "timeout" in err_str.lower():
         return f"Connection timed out while {action}. Please check your internet connectivity."
+    if "UNEXPECTED_EOF_WHILE_READING" in err_str or "EOF occurred" in err_str:
+        return f"Connection interrupted while {action}. Please try again."
     return f"Network error while {action}: {e}"
+
+def create_httpx_client(timeout: float = 15.0) -> httpx.Client:
+    """Creates an httpx client configured with robust connection retries."""
+    transport = httpx.HTTPTransport(retries=3)
+    return httpx.Client(transport=transport, timeout=timeout)
+
 
 def get_effective_credentials(cfg: GoogleBackupSettings) -> Tuple[str, str]:
     """Retrieve Client ID and Client Secret from custom settings or environment/config."""
@@ -119,7 +127,7 @@ def exchange_auth_code(code: str, redirect_uri: str, db: Session) -> GoogleBacku
         raise BusinessRuleException("Both Google Client ID and Client Secret are required for authentication.")
 
     try:
-        with httpx.Client(timeout=15.0) as client:
+        with create_httpx_client(timeout=15.0) as client:
             token_resp = client.post(
                 GOOGLE_TOKEN_URL,
                 data={
@@ -187,7 +195,7 @@ def get_valid_access_token(cfg: GoogleBackupSettings, db: Session) -> str:
         raise BusinessRuleException("Google Client ID or Secret missing; cannot refresh access token.")
 
     try:
-        with httpx.Client(timeout=15.0) as client:
+        with create_httpx_client(timeout=15.0) as client:
             refresh_resp = client.post(
                 GOOGLE_TOKEN_URL,
                 data={
@@ -222,7 +230,7 @@ def get_valid_access_token(cfg: GoogleBackupSettings, db: Session) -> str:
         raise BusinessRuleException(err_msg)
 
 
-def list_cloud_backups(db: Session) -> List[GoogleDriveFileItem]:
+def list_cloud_backups(db: Session, raise_on_error: bool = False) -> List[GoogleDriveFileItem]:
     """List backups stored in the hidden Google Drive appDataFolder, sorted newest to oldest."""
     cfg = get_or_create_google_settings(db)
     if not cfg.refresh_token:
@@ -232,10 +240,12 @@ def list_cloud_backups(db: Session) -> List[GoogleDriveFileItem]:
         token = get_valid_access_token(cfg, db)
     except Exception as e:
         logger.warning(f"Could not get valid token to list cloud backups: {e}")
+        if raise_on_error:
+            raise
         return []
 
     try:
-        with httpx.Client(timeout=15.0) as client:
+        with create_httpx_client(timeout=15.0) as client:
             resp = client.get(
                 GOOGLE_DRIVE_FILES_URL,
                 headers={"Authorization": f"Bearer {token}"},
@@ -249,6 +259,8 @@ def list_cloud_backups(db: Session) -> List[GoogleDriveFileItem]:
             )
             if resp.status_code != 200:
                 logger.warning(f"Failed to query Google Drive files: {resp.text}")
+                if raise_on_error:
+                    raise BusinessRuleException(f"Google Drive query failed: {resp.text}")
                 return []
 
             files = resp.json().get("files", [])
@@ -279,7 +291,7 @@ def list_cloud_backups(db: Session) -> List[GoogleDriveFileItem]:
 def prune_older_backups(keep_count: int, token: str) -> int:
     """Enforce strict rolling retention (keep last 3 backups). Delete any excess older files in appDataFolder."""
     try:
-        with httpx.Client(timeout=15.0) as client:
+        with create_httpx_client(timeout=15.0) as client:
             resp = client.get(
                 GOOGLE_DRIVE_FILES_URL,
                 headers={"Authorization": f"Bearer {token}"},
@@ -326,7 +338,7 @@ def upload_backup_file_to_drive(file_path: Path, token: str) -> dict:
         "name": file_name,
         "parents": ["appDataFolder"],
     }
-    with httpx.Client(timeout=30.0) as client:
+    with create_httpx_client(timeout=30.0) as client:
         init_resp = client.post(
             f"{GOOGLE_DRIVE_UPLOAD_URL}?uploadType=resumable",
             headers={
@@ -482,7 +494,7 @@ def execute_google_backup(db: Session) -> dict:
 
 def download_cloud_backup_file(file_id: str, token: str) -> Path:
     """Downloads a backup file from Google Drive appDataFolder to the local Backups directory."""
-    with httpx.Client(timeout=30.0) as client:
+    with create_httpx_client(timeout=30.0) as client:
         meta_resp = client.get(
             f"{GOOGLE_DRIVE_FILES_URL}/{file_id}",
             headers={"Authorization": f"Bearer {token}"},
@@ -651,15 +663,22 @@ def get_google_backup_status(db: Session) -> GoogleBackupStatusResponse:
     quota_used_formatted = None
     quota_limit_formatted = None
     is_quota_exceeded = False
+    active_error = cfg.last_error_message
 
     if is_connected:
-        cloud_backups = list_cloud_backups(db)
-        # Ensure only strictly 3 are presented
-        cloud_backups = cloud_backups[:3]
+        try:
+            cloud_backups = list_cloud_backups(db, raise_on_error=True)
+            cloud_backups = cloud_backups[:3]
+            # If successfully fetched backups, clear transient network error from status
+            if active_error and ("Unable to reach Google servers" in active_error or "Connection interrupted" in active_error):
+                active_error = None
+        except Exception as e:
+            active_error = getattr(e, "detail", str(e))
+            logger.warning(f"Could not retrieve Google Drive backups: {e}")
 
         try:
             token = get_valid_access_token(cfg, db)
-            with httpx.Client(timeout=4.0) as client:
+            with create_httpx_client(timeout=5.0) as client:
                 about_resp = client.get(
                     "https://www.googleapis.com/drive/v3/about?fields=storageQuota",
                     headers={"Authorization": f"Bearer {token}"},
@@ -689,7 +708,7 @@ def get_google_backup_status(db: Session) -> GoogleBackupStatusResponse:
         last_backup_status=cfg.last_backup_status,
         last_backup_size_bytes=cfg.last_backup_size_bytes,
         last_backup_size_formatted=_format_size(cfg.last_backup_size_bytes or 0),
-        last_error_message=cfg.last_error_message,
+        last_error_message=active_error,
         cloud_backups=cloud_backups,
         has_custom_credentials=bool(cfg.custom_client_id and cfg.custom_client_secret),
         client_id_configured=bool(client_id),
