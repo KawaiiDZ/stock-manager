@@ -42,6 +42,14 @@ def seed_initial_data(db: Session):
             enable_quotations=True,
             invoice_terms="1. Goods once sold will be accepted for return within 7 days in original condition.\n2. Warranty claims require presenting this invoice.\n3. Thank you for your business!",
             quotation_terms="1. This quotation is an estimate and valid for 15 days from issue date.\n2. Stock is subject to physical availability upon confirmation.\n3. This document does not constitute a tax invoice until approved.",
+            enable_barcode_scanner=True,
+            enable_barcode_printer=True,
+            barcode_label_size="50x25mm",
+            barcode_label_show_business_name=True,
+            barcode_label_show_product_name=True,
+            barcode_label_show_price=True,
+            barcode_label_show_sku=True,
+            barcode_label_custom_text="",
             config_pin_hash=hash_password("1234")  # Default PIN 1234
         )
         db.add(default_settings)
@@ -64,6 +72,22 @@ def seed_initial_data(db: Session):
             settings.invoice_terms = "1. Goods once sold will be accepted for return within 7 days in original condition.\n2. Warranty claims require presenting this invoice.\n3. Thank you for your business!"
         if not getattr(settings, "quotation_terms", None):
             settings.quotation_terms = "1. This quotation is an estimate and valid for 15 days from issue date.\n2. Stock is subject to physical availability upon confirmation.\n3. This document does not constitute a tax invoice until approved."
+        if getattr(settings, "enable_barcode_scanner", None) is None:
+            settings.enable_barcode_scanner = True
+        if getattr(settings, "enable_barcode_printer", None) is None:
+            settings.enable_barcode_printer = True
+        if not getattr(settings, "barcode_label_size", None):
+            settings.barcode_label_size = "50x25mm"
+        if getattr(settings, "barcode_label_show_business_name", None) is None:
+            settings.barcode_label_show_business_name = True
+        if getattr(settings, "barcode_label_show_product_name", None) is None:
+            settings.barcode_label_show_product_name = True
+        if getattr(settings, "barcode_label_show_price", None) is None:
+            settings.barcode_label_show_price = True
+        if getattr(settings, "barcode_label_show_sku", None) is None:
+            settings.barcode_label_show_sku = True
+        if getattr(settings, "barcode_label_custom_text", None) is None:
+            settings.barcode_label_custom_text = ""
 
     # 3. Default Walk-in Customer
     walk_in = db.query(Customer).filter(Customer.customer_id == "C-000001").first()
@@ -87,7 +111,7 @@ def authenticate_user(db: Session, username: str, password: str) -> User:
 
 def verify_settings_pin(db: Session, pin: str) -> bool:
     clean_pin = str(pin or "").strip()
-    settings = db.query(BusinessSettings).filter(BusinessSettings.id == 1).first()
+    settings = db.query(BusinessSettings).filter(BusinessSettings.id == 1).first() or db.query(BusinessSettings).first()
     if not settings or not settings.config_pin_hash:
         return clean_pin == "1234"
     return verify_password(settings.config_pin_hash, clean_pin)
@@ -97,6 +121,8 @@ def change_user_password(db: Session, user_id: int, current_pass: str, new_pass:
     if len(clean_pass) < 4:
         raise BusinessRuleException("New password must be at least 4 characters long.")
     user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        user = db.query(User).filter(User.username == "admin").first() or db.query(User).first()
     if not user or not verify_password(user.password_hash, current_pass):
         raise BusinessRuleException("Current password does not match.")
     user.password_hash = hash_password(clean_pass)
@@ -109,7 +135,7 @@ def change_settings_pin(db: Session, current_pin: str, new_pin: str) -> bool:
     if len(clean_pin) < 4 or not clean_pin.isdigit():
         raise BusinessRuleException("New PIN must be at least 4 numeric digits.")
 
-    settings = db.query(BusinessSettings).filter(BusinessSettings.id == 1).first()
+    settings = db.query(BusinessSettings).filter(BusinessSettings.id == 1).first() or db.query(BusinessSettings).first()
     if not settings:
         raise BusinessRuleException("Settings not found.")
     if not verify_password(settings.config_pin_hash, clean_current):

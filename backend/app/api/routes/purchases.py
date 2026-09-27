@@ -1,6 +1,7 @@
 from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends
+from decimal import Decimal
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from backend.app.core.database import get_db
 from backend.app.schemas.purchase import (
@@ -41,3 +42,13 @@ def add_purchase(data: PurchaseCreate, db: Session = Depends(get_db)):
 @router.get("/{id}", response_model=PurchaseResponse)
 def get_single_purchase(id: int, db: Session = Depends(get_db)):
     return get_purchase(db, id)
+
+@router.post("/{id}/payments", response_model=PurchaseResponse)
+def add_purchase_payment(
+    id: int,
+    amount: Decimal = Query(..., gt=0),
+    payment_method: str = "Cash",
+    db: Session = Depends(get_db)
+):
+    from backend.app.services.purchase_service import record_additional_purchase_payment
+    return record_additional_purchase_payment(db, id, amount, payment_method)

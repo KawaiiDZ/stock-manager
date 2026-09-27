@@ -1,6 +1,6 @@
 from decimal import Decimal
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
@@ -57,7 +57,7 @@ def _format_quotation_response(quotation: Quotation) -> QuotationResponse:
         items=items_dto
     )
 
-def _execute_create_quotation(db: Session, data: QuotationCreate) -> QuotationResponse:
+def _execute_create_quotation(db: Session, data: QuotationCreate, supersede_quotation_id: Optional[int] = None) -> QuotationResponse:
     # 0. Check settings if quotations are enabled
     settings = db.query(BusinessSettings).filter(BusinessSettings.id == 1).first()
     if settings and getattr(settings, 'enable_quotations', True) is False:
@@ -122,7 +122,7 @@ def _execute_create_quotation(db: Session, data: QuotationCreate) -> QuotationRe
             raise BusinessRuleException(f'Discount for {product.name} cannot be negative.')
 
         line_gross = item_in.quantity * item_in.unit_price
-        line_total = max(Decimal('0.00'), line_gross - item_in.discount_amount)
+        line_total = max(Decimal('0.00'), line_gross - item_in.discount_amount).quantize(Decimal('0.01'))
         subtotal += line_total
 
         quotation_items.append(QuotationItem(
@@ -162,6 +162,13 @@ def _execute_create_quotation(db: Session, data: QuotationCreate) -> QuotationRe
     for qi in quotation_items:
         qi.quotation_id = quotation.id
         db.add(qi)
+
+    if supersede_quotation_id:
+        old_q = db.query(Quotation).filter(Quotation.id == supersede_quotation_id).first()
+        if old_q:
+            old_q.status = 'SUPERSEDED'
+            old_q.rejection_reason = f"Superseded by revised agreement {quote_number}"
+            db.add(old_q)
 
     db.commit()
     db.refresh(quotation)
@@ -320,7 +327,7 @@ def convert_quotation_to_sale(db: Session, quotation_id: int, request: Quotation
 
     quotation.status = 'APPROVED'
     quotation.sale_id = sale_response.id
-    quotation.converted_at = datetime.utcnow()
+    quotation.converted_at = datetime.now(timezone.utc)
     db.commit()
 
     return sale_response
@@ -364,12 +371,7 @@ def revise_quotation(db: Session, quotation_id: int, data: QuotationCreate) -> Q
 
     for attempt in range(3):
         try:
-            new_quotation = _execute_create_quotation(db, data)
-            old_quotation.status = 'SUPERSEDED'
-            old_quotation.rejection_reason = f"Superseded by revised agreement {new_quotation.quotation_number}"
-            db.commit()
-            db.refresh(old_quotation)
-            return new_quotation
+            return _execute_create_quotation(db, data, supersede_quotation_id=quotation_id)
         except IntegrityError as e:
             db.rollback()
             err_str = f"{e.orig} {e}" if getattr(e, "orig", None) else str(e)

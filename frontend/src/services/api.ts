@@ -7,8 +7,10 @@ import {
   Expense, ExpenseCategory,
   DashboardKPIs, MonthlySalesData, DaySalesDetail,
   BusinessSettings, BackupFile, LoginResponse, IndustryPreset,
-  Quotation, QuotationCreate, QuotationConversionCheckResponse, QuotationConvertRequest
+  Quotation, QuotationCreate, QuotationConversionCheckResponse, QuotationConvertRequest,
+  GoogleDriveFileItem, GoogleBackupStatusResponse, GoogleBackupSettingsUpdate, GoogleBackupActionResponse
 } from '../types';
+
 
 const API_BASE = '/api';
 
@@ -107,7 +109,8 @@ export const api = {
     return request<Product[]>(`/products?${sp.toString()}`);
   },
   getProduct: (id: number) => request<Product>(`/products/${id}`),
-  getProductByBarcode: (barcode: string) => request<Product | null>(`/products/barcode/${barcode}`),
+  getProductByBarcode: (barcode: string) => request<Product | null>(`/products/barcode/${encodeURIComponent(barcode.trim())}`),
+  generateBarcode: () => request<{ barcode: string }>('/products/generate-barcode'),
   createProduct: (data: {
     name: string;
     sku?: string;
@@ -256,6 +259,8 @@ export const api = {
   createPurchaseReturn: (data: any) => request<any>('/returns/purchase', { method: 'POST', body: JSON.stringify(data) }),
   getPurchaseReturns: () => request<any[]>('/returns/purchases'),
   createPurchase: (data: any) => request<Purchase>('/purchases', { method: 'POST', body: JSON.stringify(data) }),
+  addPurchasePayment: (id: number, amount: number, paymentMethod = 'Cash') =>
+    request<Purchase>(`/purchases/${id}/payments?amount=${amount}&payment_method=${encodeURIComponent(paymentMethod)}`, { method: 'POST' }),
 
   // Bills & Expenses
   getBillCategories: (activeOnly = true) => request<BillCategory[]>(`/bill-categories?active_only=${activeOnly}`),
@@ -315,7 +320,8 @@ export const api = {
   createBackup: () => request<{ success: boolean; message: string; filename: string }>('/backup/create', { method: 'POST' }),
   listBackups: () => request<BackupFile[]>('/backup/list'),
   getBackups: () => request<BackupFile[]>('/backup/list'),
-  restoreBackup: (filename: string) => request<{ success: boolean; message: string }>('/backup/restore', { method: 'POST', body: JSON.stringify({ filename }) }),
+  restoreBackup: (filename: string, confirm_pin?: string) =>
+    request<{ success: boolean; message: string }>('/backup/restore', { method: 'POST', body: JSON.stringify({ filename, confirm_pin }) }),
   downloadBackupUrl: (filename: string) => `/api/backup/download/${encodeURIComponent(filename)}`,
   uploadBackup: async (file: File): Promise<BackupFile> => {
     const formData = new FormData();
@@ -334,6 +340,23 @@ export const api = {
     }
     return res.json();
   },
+
+  // Google Drive Cloud Backup (WhatsApp-Style)
+  getGoogleBackupStatus: () => request<GoogleBackupStatusResponse>('/backup/google/status'),
+  getGoogleAuthUrl: (redirectUri?: string) =>
+    request<{ auth_url: string }>(`/backup/google/auth-url${redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : ''}`),
+  updateGoogleBackupSettings: (data: GoogleBackupSettingsUpdate) =>
+    request<GoogleBackupStatusResponse>('/backup/google/settings', { method: 'POST', body: JSON.stringify(data) }),
+  disconnectGoogleBackup: () =>
+    request<{ success: boolean; message: string }>('/backup/google/disconnect', { method: 'POST' }),
+  triggerGoogleBackup: () =>
+    request<GoogleBackupActionResponse>('/backup/google/trigger', { method: 'POST' }),
+  restoreGoogleBackup: (fileId: string, confirm_pin?: string) =>
+    request<{ success: boolean; message: string }>(`/backup/google/restore/${encodeURIComponent(fileId)}`, {
+      method: 'POST',
+      body: JSON.stringify({ confirm_pin }),
+    }),
+
 
   // Data & Inventory Reset
   resetData: (data: { confirm_pin: string; wipe_mode?: 'inventory_only' | 'all_data' }) =>

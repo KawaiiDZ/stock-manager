@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../services/api';
-import { Category, BusinessSettings, CustomField } from '../../types';
-import { Plus, Trash2, Layers, AlertCircle, Sparkles } from 'lucide-react';
+import { Category, BusinessSettings, CustomField, Product } from '../../types';
+import { Plus, Trash2, Layers, AlertCircle, Sparkles, Barcode } from 'lucide-react';
 import { Modal } from '../../components/common/Modal';
 import { Button } from '../../components/common/Button';
+import { BarcodePrintModal } from '../../components/barcode/BarcodePrintModal';
 import { formatCurrency } from '../../utils/format';
 
 interface BulkAddProductsModalProps {
@@ -67,6 +68,8 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [createdBatchProducts, setCreatedBatchProducts] = useState<Product[]>([]);
+  const [showBatchBarcodeModal, setShowBatchBarcodeModal] = useState(false);
 
   // Sync initial category when opening modal
   useEffect(() => {
@@ -220,8 +223,8 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
     0
   );
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent, printBarcodes: boolean = false) => {
+    if (e) e.preventDefault();
     if (validRows.length === 0) {
       setErrorMsg('Please enter at least 1 product name.');
       return;
@@ -283,9 +286,15 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
         };
       });
 
-      await api.bulkCreateProducts(payload);
+      const res = await api.bulkCreateProducts(payload);
       onProductsAdded();
-      onClose();
+
+      if (printBarcodes && res.products && res.products.length > 0) {
+        setCreatedBatchProducts(res.products);
+        setShowBatchBarcodeModal(true);
+      } else {
+        onClose();
+      }
       // Reset rows
       setRows([emptyRow()]);
     } catch (err: any) {
@@ -735,10 +744,23 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+          <div className="flex flex-wrap items-center justify-end gap-3 pt-3 border-t border-slate-100">
             <Button type="button" variant="secondary" onClick={handleRequestClose}>
               Cancel
             </Button>
+            {settings?.enable_barcode_printer !== false && (
+              <Button
+                type="button"
+                variant="secondary"
+                icon={<Barcode className="h-4 w-4 text-emerald-600" />}
+                onClick={() => handleSubmit(undefined, true)}
+                loading={loading}
+                disabled={validRows.length === 0}
+                className="font-bold border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+              >
+                Save & Print Barcodes
+              </Button>
+            )}
             <Button
               type="submit"
               variant="primary"
@@ -787,6 +809,18 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
           </div>
         </div>
       </Modal>
+
+      {/* Batch Barcode Print Modal */}
+      <BarcodePrintModal
+        isOpen={showBatchBarcodeModal}
+        onClose={() => {
+          setShowBatchBarcodeModal(false);
+          onClose();
+        }}
+        settings={settings}
+        products={createdBatchProducts}
+        initialCopies={1}
+      />
     </>
   );
 };

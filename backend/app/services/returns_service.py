@@ -163,8 +163,14 @@ def create_sales_return(db: Session, data: SalesReturnCreate) -> SalesReturnResp
             cash_refund = total_return_amount
             balance_credit = Decimal("0.00")
         else:
-            cash_refund = Decimal("0.00")
-            balance_credit = total_return_amount
+            from backend.app.services.customer_service import get_customer_due
+            cust_due = get_customer_due(db, customer.id)
+            if cust_due > Decimal("0.00"):
+                balance_credit = min(cust_due, total_return_amount)
+                cash_refund = max(Decimal("0.00"), total_return_amount - balance_credit)
+            else:
+                balance_credit = Decimal("0.00")
+                cash_refund = total_return_amount
 
     # 5. Create SalesReturn record
     sales_return = SalesReturn(
@@ -322,7 +328,7 @@ def create_purchase_return(db: Session, data: PurchaseReturnCreate) -> PurchaseR
                 requested=float(item_data.quantity)
             )
 
-        line_return_amount = item_data.quantity * item_data.unit_cost
+        line_return_amount = (item_data.quantity * item_data.unit_cost).quantize(Decimal("0.01"))
         total_return_amount += line_return_amount
 
         # Reduce stock

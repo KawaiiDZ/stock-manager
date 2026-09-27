@@ -11,6 +11,7 @@ from backend.app.models.bills import BillCategory, Bill, BillPayment
 from backend.app.models.expenses import ExpenseCategory, Expense
 
 from backend.app.models.quotation import Quotation, QuotationItem
+from backend.app.models.google_backup import GoogleBackupSettings
 
 __all__ = [
     "Base",
@@ -44,4 +45,6 @@ __all__ = [
     "Expense",
     "Quotation",
     "QuotationItem",
+    "GoogleBackupSettings",
 ]
+

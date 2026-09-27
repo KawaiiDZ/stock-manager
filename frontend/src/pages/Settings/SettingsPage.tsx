@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../services/api';
-import { BusinessSettings, CustomField, BackupFile } from '../../types';
+import { BusinessSettings, CustomField, BackupFile, Sale } from '../../types';
 import {
   Settings as SettingsIcon,
   Lock,
@@ -21,6 +21,9 @@ import {
   Image,
   Calendar,
   FileText,
+  Barcode,
+  Eye,
+  Receipt,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -28,7 +31,11 @@ import { Modal } from '../../components/common/Modal';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { SchemaBuilder } from './SchemaBuilder';
 import { SetupWizardModal } from '../../components/wizard/SetupWizardModal';
+import { BarcodePrintModal } from '../../components/barcode/BarcodePrintModal';
+import { ReceiptModal } from '../../components/receipts/ReceiptModal';
+import { STANDARD_LABEL_SIZES, generateBarcodeSvg, parseLabelDimensions } from '../../utils/barcode';
 import { STANDARD_DATE_FORMATS, setGlobalFormattingPreferences, formatDate, formatCurrency } from '../../utils/format';
+import { GoogleBackupCard } from '../../components/settings/GoogleBackupCard';
 
 interface SettingsPageProps {
   settings: BusinessSettings | null;
@@ -49,7 +56,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
   // Settings tab
   const [activeTab, setActiveTab] = useState<
-    'business' | 'tax' | 'custom_fields' | 'printer' | 'backup' | 'security' | 'danger_zone'
+    'business' | 'tax' | 'custom_fields' | 'printer' | 'barcode' | 'backup' | 'security' | 'danger_zone'
   >('business');
 
   // Business Form State
@@ -81,6 +88,19 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [receiptFooter, setReceiptFooter] = useState(settings?.receipt_footer || '');
   const [printerType, setPrinterType] = useState(settings?.receipt_printer_type || '80mm');
 
+  // Barcode & Scanner State
+  const [enableBarcodeScanner, setEnableBarcodeScanner] = useState(settings?.enable_barcode_scanner ?? true);
+  const [enableBarcodePrinter, setEnableBarcodePrinter] = useState(settings?.enable_barcode_printer ?? true);
+  const [barcodeLabelSize, setBarcodeLabelSize] = useState(settings?.barcode_label_size || '50x25mm');
+  const [barcodeLabelShowBusinessName, setBarcodeLabelShowBusinessName] = useState(settings?.barcode_label_show_business_name ?? true);
+  const [barcodeLabelShowProductName, setBarcodeLabelShowProductName] = useState(settings?.barcode_label_show_product_name ?? true);
+  const [barcodeLabelShowPrice, setBarcodeLabelShowPrice] = useState(settings?.barcode_label_show_price ?? true);
+  const [barcodeLabelShowSku, setBarcodeLabelShowSku] = useState(settings?.barcode_label_show_sku ?? true);
+  const [barcodeLabelCustomText, setBarcodeLabelCustomText] = useState(settings?.barcode_label_custom_text || '');
+  const [customLabelWidthMm, setCustomLabelWidthMm] = useState(50);
+  const [customLabelHeightMm, setCustomLabelHeightMm] = useState(25);
+  const [showTestBarcodeModal, setShowTestBarcodeModal] = useState(false);
+
   // Custom Fields
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [showAddCfModal, setShowAddCfModal] = useState(false);
@@ -92,6 +112,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [loadingBackups, setLoadingBackups] = useState(false);
   const [uploadingBackup, setUploadingBackup] = useState(false);
   const [selectedRestoreBackup, setSelectedRestoreBackup] = useState<string | null>(null);
+  const [restoreLocalPin, setRestoreLocalPin] = useState<string>('');
+  const [restoreLocalError, setRestoreLocalError] = useState<string | null>(null);
+  const [restoringLocal, setRestoringLocal] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Passwords / PIN
@@ -106,6 +129,77 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [resetPin, setResetPin] = useState('');
   const [resetError, setResetError] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
+
+  // Test Receipt Modal State
+  const [showTestReceiptModal, setShowTestReceiptModal] = useState(false);
+
+  // Realistic sample sale object for test receipt printing and preview
+  const sampleTestSale: Sale = {
+    id: 0,
+    receipt_number: 'RCP-TEST-9001',
+    customer_id: 0,
+    customer_name: 'Walk-in Customer (Test)',
+    subtotal: 3500,
+    discount_amount: 250,
+    tax_rate: Number(settings?.default_tax_rate || 0),
+    tax_amount: Math.round(((3250 * Number(settings?.default_tax_rate || 0)) / 100) * 100) / 100,
+    total_amount: 3250 + Math.round(((3250 * Number(settings?.default_tax_rate || 0)) / 100) * 100) / 100,
+    paid_amount: 3250 + Math.round(((3250 * Number(settings?.default_tax_rate || 0)) / 100) * 100) / 100,
+    due_amount: 0,
+    total_cost: 2100,
+    gross_profit: 1150,
+    payment_status: 'PAID',
+    items: [
+      {
+        id: 1,
+        product_id: 101,
+        product_name: 'Premium Wireless Optical Mouse',
+        quantity: 2,
+        unit_price: 1200,
+        discount_amount: 100,
+        total_price: 2300,
+        unit_cost: 800,
+        total_cost: 1600,
+        gross_profit: 700,
+        returned_quantity: 0,
+      },
+      {
+        id: 2,
+        product_id: 102,
+        product_name: 'Type-C Braided Fast Charging Cable (1.5m)',
+        quantity: 1,
+        unit_price: 800,
+        discount_amount: 50,
+        total_price: 750,
+        unit_cost: 400,
+        total_cost: 400,
+        gross_profit: 350,
+        returned_quantity: 0,
+      },
+      {
+        id: 3,
+        product_id: 103,
+        product_name: 'Anti-Glare Screen Cleaner Spray 100ml',
+        quantity: 1,
+        unit_price: 450,
+        discount_amount: 100,
+        total_price: 350,
+        unit_cost: 250,
+        total_cost: 250,
+        gross_profit: 100,
+        returned_quantity: 0,
+      },
+    ],
+    payments: [
+      {
+        id: 1,
+        amount: 3250 + Math.round(((3250 * Number(settings?.default_tax_rate || 0)) / 100) * 100) / 100,
+        payment_method: 'Cash',
+        created_at: new Date().toISOString(),
+      },
+    ],
+    created_at: new Date().toISOString(),
+  };
 
   // Alerts
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -135,6 +229,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setEnableQuotations(settings.enable_quotations ?? true);
       setInvoiceTerms(settings.invoice_terms || '1. Goods once sold will be accepted for return within 7 days in original condition.\n2. Warranty claims require presenting this invoice.\n3. Thank you for your business!');
       setQuotationTerms(settings.quotation_terms || '1. This quotation is an estimate and valid for 15 days from issue date.\n2. Stock is subject to physical availability upon confirmation.\n3. This document does not constitute a tax invoice until approved.');
+      setEnableBarcodeScanner(settings.enable_barcode_scanner ?? true);
+      setEnableBarcodePrinter(settings.enable_barcode_printer ?? true);
+      const bSize = settings.barcode_label_size || '50x25mm';
+      setBarcodeLabelSize(bSize);
+      const parsedDim = parseLabelDimensions(bSize);
+      setCustomLabelWidthMm(parsedDim.widthMm);
+      setCustomLabelHeightMm(parsedDim.heightMm);
+      setBarcodeLabelShowBusinessName(settings.barcode_label_show_business_name ?? true);
+      setBarcodeLabelShowProductName(settings.barcode_label_show_product_name ?? true);
+      setBarcodeLabelShowPrice(settings.barcode_label_show_price ?? true);
+      setBarcodeLabelShowSku(settings.barcode_label_show_sku ?? true);
+      setBarcodeLabelCustomText(settings.barcode_label_custom_text || '');
     }
   }, [settings]);
 
@@ -207,6 +313,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         enable_quotations: enableQuotations,
         invoice_terms: invoiceTerms,
         quotation_terms: quotationTerms,
+        enable_barcode_scanner: enableBarcodeScanner,
+        enable_barcode_printer: enableBarcodePrinter,
+        barcode_label_size: barcodeLabelSize === 'custom' ? `${customLabelWidthMm}x${customLabelHeightMm}mm` : barcodeLabelSize,
+        barcode_label_show_business_name: barcodeLabelShowBusinessName,
+        barcode_label_show_product_name: barcodeLabelShowProductName,
+        barcode_label_show_price: barcodeLabelShowPrice,
+        barcode_label_show_sku: barcodeLabelShowSku,
+        barcode_label_custom_text: barcodeLabelCustomText.trim(),
       });
       setGlobalFormattingPreferences({
         dateFormat,
@@ -402,17 +516,23 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     }
   };
 
-  const handleConfirmRestore = async () => {
+  const handleConfirmRestore = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!selectedRestoreBackup) return;
     try {
-      const res = await api.restoreBackup(selectedRestoreBackup);
+      setRestoringLocal(true);
+      setRestoreLocalError(null);
+      const res = await api.restoreBackup(selectedRestoreBackup, restoreLocalPin);
       alert(res.message);
       setSelectedRestoreBackup(null);
       window.location.reload();
     } catch (err: any) {
-      alert(err.detail || 'Failed to restore backup');
+      setRestoreLocalError(err.detail || 'Failed to restore backup');
+    } finally {
+      setRestoringLocal(false);
     }
   };
+
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -512,6 +632,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     );
   }
 
+  const currentBarcodeDim =
+    barcodeLabelSize === 'custom'
+      ? { widthMm: customLabelWidthMm, heightMm: customLabelHeightMm }
+      : parseLabelDimensions(barcodeLabelSize);
+
   return (
     <div className="space-y-6 pb-12">
       {/* Header */}
@@ -563,7 +688,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           { id: 'tax', label: 'Tax Settings', icon: <Percent className="h-4 w-4" /> },
           { id: 'custom_fields', label: 'Custom Product Fields', icon: <Sliders className="h-4 w-4" /> },
           { id: 'printer', label: 'Receipt & Printer', icon: <Printer className="h-4 w-4" /> },
-          { id: 'backup', label: 'Local Backup & Restore', icon: <Database className="h-4 w-4" /> },
+          { id: 'barcode', label: 'Barcodes & Scanners', icon: <Barcode className="h-4 w-4" /> },
+          { id: 'backup', label: 'Backup & Cloud Sync', icon: <Database className="h-4 w-4" /> },
           { id: 'security', label: 'Security & PIN', icon: <KeyRound className="h-4 w-4" /> },
           { id: 'danger_zone', label: 'Wipe / Reset Data', icon: <Trash2 className="h-4 w-4 text-rose-500" /> },
         ].map((tab) => (
@@ -1296,98 +1422,469 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Print Test Receipt Diagnostic Tool */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
+                    <Printer className="h-5 w-5" />
+                  </div>
+                  <h3 className="font-bold text-slate-800 text-base">Print Test Receipt</h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                    Diagnostic Tool
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1 max-w-xl">
+                  Test your connected thermal receipt printer or standard A4 printer using realistic sample retail items, discounts, tax, and a scannable Code-128 barcode before going live.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowTestReceiptModal(true)}
+                  className="font-bold flex items-center gap-1.5"
+                >
+                  <Eye className="h-4 w-4" />
+                  Preview Test Receipt
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setShowTestReceiptModal(true)}
+                  className="font-bold flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20"
+                >
+                  <Printer className="h-4 w-4" />
+                  Print Test Receipt
+                </Button>
+              </div>
+            </div>
+
+            {/* Test Receipt Feature Highlights & Roll Sizing */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                <Receipt className="h-3.5 w-3.5 text-emerald-600" />
+                Sample Test Sale Details
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-slate-600">
+                <div className="bg-white p-3 rounded-xl border border-slate-200">
+                  <div className="text-[10px] text-slate-400 font-bold uppercase">Sample Receipt #</div>
+                  <div className="font-mono font-bold text-slate-800 mt-0.5">RCP-TEST-9001</div>
+                  <div className="text-[10px] text-emerald-600 mt-1">Includes Code-128 Barcode</div>
+                </div>
+                <div className="bg-white p-3 rounded-xl border border-slate-200">
+                  <div className="text-[10px] text-slate-400 font-bold uppercase">Items & Discounts</div>
+                  <div className="font-bold text-slate-800 mt-0.5">3 Items (4 Units)</div>
+                  <div className="text-[10px] text-slate-500 mt-1">Tests item-level discount lines</div>
+                </div>
+                <div className="bg-white p-3 rounded-xl border border-slate-200">
+                  <div className="text-[10px] text-slate-400 font-bold uppercase">Supported Widths</div>
+                  <div className="font-bold text-slate-800 mt-0.5">80mm, 58mm & A4</div>
+                  <div className="text-[10px] text-slate-500 mt-1">Quick-switch inside preview</div>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Tip: Thermal receipts feature an automatic paper cutter feed margin at the bottom so your printer's blade doesn't clip your footer or barcode.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Barcodes & Scanners */}
+      {activeTab === 'barcode' && (
+        <div className="max-w-4xl space-y-6">
+          <form onSubmit={handleSaveSettings} className="space-y-6">
+            {/* 1. Barcode Scanner Configuration Card */}
+            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                <div>
+                  <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                    <Barcode className="h-5 w-5 text-emerald-600" />
+                    <span>Hardware Barcode Scanner Support</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Connect any standard USB or Bluetooth handheld barcode scanner (HID keyboard emulation).
+                  </p>
+                </div>
+
+                {/* Master Toggle */}
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={enableBarcodeScanner}
+                    onChange={(e) => setEnableBarcodeScanner(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                  <span className="ml-2.5 text-xs font-bold text-slate-700">
+                    {enableBarcodeScanner ? 'Enabled' : 'Disabled'}
+                  </span>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+                  <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    <span>Point of Sale (POS) Instant Scan</span>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Scanning any product barcode, SKU, or Product ID instantly finds the product and adds it to the active sales cart (or increments quantity).
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+                  <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    <span>Inventory Catalog Quick Filter</span>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Scanning in the inventory list automatically populates the search filter and isolates the item for rapid edits, stock updates, or label reprinting.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Thermal Barcode Printer & Label Layout Card */}
+            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                <div>
+                  <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                    <Printer className="h-5 w-5 text-emerald-600" />
+                    <span>Barcode Printer & Label Generation</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Configure roll sticker sizes and custom metadata for thermal label printers (Zebra, Xprinter, TSC, Dymo).
+                  </p>
+                </div>
+
+                {/* Master Toggle */}
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={enableBarcodePrinter}
+                    onChange={(e) => setEnableBarcodePrinter(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                  <span className="ml-2.5 text-xs font-bold text-slate-700">
+                    {enableBarcodePrinter ? 'Enabled' : 'Disabled'}
+                  </span>
+                </label>
+              </div>
+
+              {enableBarcodePrinter && (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                  {/* Left Column: Roll Sizing & Options */}
+                  <div className="lg:col-span-7 space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                        Standard Roll Label Size *
+                      </label>
+                      <select
+                        value={barcodeLabelSize}
+                        onChange={(e) => setBarcodeLabelSize(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 shadow-sm"
+                      >
+                        {STANDARD_LABEL_SIZES.map((preset) => (
+                          <option key={preset.key} value={preset.key}>
+                            {preset.name} - {preset.description}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {barcodeLabelSize === 'custom' && (
+                      <div className="grid grid-cols-2 gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">Custom Width (mm)</label>
+                          <input
+                            type="number"
+                            min="20"
+                            max="150"
+                            value={customLabelWidthMm}
+                            onChange={(e) => setCustomLabelWidthMm(Number(e.target.value))}
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">Custom Height (mm)</label>
+                          <input
+                            type="number"
+                            min="15"
+                            max="150"
+                            value={customLabelHeightMm}
+                            onChange={(e) => setCustomLabelHeightMm(Number(e.target.value))}
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 font-bold"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Metadata Content Checkboxes */}
+                    <div className="pt-2 border-t border-slate-100 space-y-2.5">
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                        Label Sticker Contents
+                      </label>
+                      <div className="grid grid-cols-2 gap-2 text-xs font-semibold text-slate-700">
+                        <label className="flex items-center gap-2 cursor-pointer p-2 rounded-xl bg-slate-50 border border-slate-200/80 hover:bg-slate-100 transition">
+                          <input
+                            type="checkbox"
+                            checked={barcodeLabelShowBusinessName}
+                            onChange={(e) => setBarcodeLabelShowBusinessName(e.target.checked)}
+                            className="rounded text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span>Business Name</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer p-2 rounded-xl bg-slate-50 border border-slate-200/80 hover:bg-slate-100 transition">
+                          <input
+                            type="checkbox"
+                            checked={barcodeLabelShowProductName}
+                            onChange={(e) => setBarcodeLabelShowProductName(e.target.checked)}
+                            className="rounded text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span>Product Name</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer p-2 rounded-xl bg-slate-50 border border-slate-200/80 hover:bg-slate-100 transition">
+                          <input
+                            type="checkbox"
+                            checked={barcodeLabelShowPrice}
+                            onChange={(e) => setBarcodeLabelShowPrice(e.target.checked)}
+                            className="rounded text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span>Price ({currency})</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer p-2 rounded-xl bg-slate-50 border border-slate-200/80 hover:bg-slate-100 transition">
+                          <input
+                            type="checkbox"
+                            checked={barcodeLabelShowSku}
+                            onChange={(e) => setBarcodeLabelShowSku(e.target.checked)}
+                            className="rounded text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span>SKU / Code</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Custom Text / Warranty */}
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                        Custom Small Text / Notice (Printed at bottom)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Non-refundable if tag removed • 1 Year Warranty"
+                        value={barcodeLabelCustomText}
+                        onChange={(e) => setBarcodeLabelCustomText(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 shadow-sm focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Right Column: Live Scaled Preview & Test Print Button */}
+                  <div className="lg:col-span-5 flex flex-col items-center justify-between p-5 rounded-3xl bg-slate-100/90 border border-slate-200 space-y-4">
+                    <div className="w-full flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-wider">
+                      <span className="flex items-center gap-1.5">
+                        <Eye className="h-3.5 w-3.5 text-emerald-600" />
+                        Live Label Preview
+                      </span>
+                      <span className="text-[11px] px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-700">
+                        {currentBarcodeDim.widthMm}×{currentBarcodeDim.heightMm}mm
+                      </span>
+                    </div>
+
+                    {/* Scaled Preview Box */}
+                    <div
+                      style={{
+                        width: `${Math.min(240, currentBarcodeDim.widthMm * 4.4)}px`,
+                        aspectRatio: `${currentBarcodeDim.widthMm} / ${currentBarcodeDim.heightMm}`,
+                      }}
+                      className="bg-white rounded-lg border-2 border-dashed border-slate-300 shadow-md p-2 flex flex-col items-center justify-between text-center overflow-hidden transition-all duration-200 select-none"
+                    >
+                      {barcodeLabelShowBusinessName && (
+                        <div className="text-[10px] font-black uppercase tracking-wider text-slate-900 truncate w-full px-1">
+                          {bizName || 'My Shop'}
+                        </div>
+                      )}
+
+                      {barcodeLabelShowProductName && (
+                        <div className="text-[11px] font-bold text-slate-800 truncate w-full px-1 leading-tight">
+                          Sample Product Name
+                        </div>
+                      )}
+
+                      <div
+                        className="w-full flex justify-center my-0.5 overflow-hidden"
+                        dangerouslySetInnerHTML={{
+                          __html: generateBarcodeSvg('STOCKFLOW-PREVIEW', {
+                            height: Math.max(22, currentBarcodeDim.heightMm * 1.1),
+                            barWidth: 1.5,
+                            includeText: true,
+                            fontSize: 9,
+                          }),
+                        }}
+                      />
+
+                      <div className="w-full flex items-center justify-between px-1 text-[10px] font-bold text-slate-900 leading-tight">
+                        {barcodeLabelShowSku ? (
+                          <span className="text-slate-500 text-[9px] truncate max-w-[45%]">
+                            SKU-SAMPLE
+                          </span>
+                        ) : <span />}
+
+                        {barcodeLabelShowPrice && (
+                          <span className="text-slate-900 font-black">
+                            {formatCurrency(1999, currency)}
+                          </span>
+                        )}
+                      </div>
+
+                      {barcodeLabelCustomText.trim() && (
+                        <div className="text-[8px] font-medium text-slate-500 truncate w-full leading-none mt-0.5">
+                          {barcodeLabelCustomText.trim()}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Prominent Test Label Print Button */}
+                    <div className="w-full pt-2 border-t border-slate-200 flex flex-col gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        icon={<Printer className="h-4 w-4 text-emerald-600" />}
+                        onClick={() => setShowTestBarcodeModal(true)}
+                        className="w-full bg-white hover:bg-emerald-50 border-emerald-300 text-emerald-800 font-bold shadow-sm justify-center py-2.5"
+                      >
+                        Print Test Label
+                      </Button>
+                      <p className="text-[11px] text-slate-400 text-center leading-tight">
+                        Prints a test sticker with message <strong>"Thank you for using StockFlow"</strong> to check thermal roll alignment.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Save Button */}
+            <div className="flex justify-end">
+              <Button type="submit" variant="primary" loading={saving} className="px-6 font-bold shadow-md shadow-emerald-700/15">
+                Save Barcode Settings
+              </Button>
+            </div>
+          </form>
         </div>
       )}
 
       {/* Tab: Backup & Restore */}
       {activeTab === 'backup' && (
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm max-w-3xl space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h3 className="font-bold text-slate-800 text-base">Database Backup & Recovery</h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Create local snapshots of your database in the Backups folder and restore safely
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="file"
-                ref={fileInputRef}
-                accept=".db"
-                className="hidden"
-                onChange={handleUploadBackup}
-              />
-              <Button
-                variant="outline"
-                size="md"
-                icon={<Upload className="h-4 w-4" />}
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadingBackup}
-              >
-                {uploadingBackup ? 'Importing...' : 'Import Backup (.db)'}
-              </Button>
-              <Button
-                variant="primary"
-                size="md"
-                icon={<Database className="h-4 w-4" />}
-                onClick={handleCreateBackup}
-              >
-                Backup Now
-              </Button>
-            </div>
-          </div>
+        <div className="max-w-3xl space-y-6">
+          {/* Cloud Backup (WhatsApp-Style Google Drive) */}
+          <GoogleBackupCard
+            onSuccess={(msg) => setSuccessMsg(msg)}
+            onError={(err) => setErrorMsg(err)}
+          />
 
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                Saved Local Backups ({backups.length})
-              </h4>
-              <button
-                onClick={loadBackups}
-                className="text-xs text-emerald-600 hover:underline flex items-center gap-1 font-semibold"
-              >
-                <RefreshCw className="h-3 w-3" /> Refresh List
-              </button>
+          {/* Local Database Backup & Recovery */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="font-bold text-slate-800 text-base">Local Database Snapshots</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Create offline snapshots of your database in the local Backups folder or import .db files
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept=".db"
+                  className="hidden"
+                  onChange={handleUploadBackup}
+                />
+                <Button
+                  variant="outline"
+                  size="md"
+                  icon={<Upload className="h-4 w-4" />}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingBackup}
+                >
+                  {uploadingBackup ? 'Importing...' : 'Import Backup (.db)'}
+                </Button>
+                <Button
+                  variant="primary"
+                  size="md"
+                  icon={<Database className="h-4 w-4" />}
+                  onClick={handleCreateBackup}
+                >
+                  Backup Now
+                </Button>
+              </div>
             </div>
 
-            <div className="divide-y divide-slate-100 border border-slate-100 rounded-2xl overflow-hidden">
-              {loadingBackups ? (
-                <div className="p-8 text-center text-slate-400 text-xs">Scanning backups folder...</div>
-              ) : backups.length === 0 ? (
-                <div className="p-8 text-center text-slate-400 text-xs">
-                  No local backups found. Click "Backup Now" or "Import Backup (.db)" to manage backups.
-                </div>
-              ) : (
-                backups.map((b) => (
-                  <div key={b.filename} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white hover:bg-slate-50">
-                    <div>
-                      <div className="font-mono font-bold text-slate-800 text-xs">{b.filename}</div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">
-                        {new Date(b.created_at).toLocaleString()} • {b.size_formatted}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  Saved Local Backups ({backups.length})
+                </h4>
+                <button
+                  onClick={loadBackups}
+                  className="text-xs text-emerald-600 hover:underline flex items-center gap-1 font-semibold"
+                >
+                  <RefreshCw className="h-3 w-3" /> Refresh List
+                </button>
+              </div>
+
+              <div className="divide-y divide-slate-100 border border-slate-100 rounded-2xl overflow-hidden">
+                {loadingBackups ? (
+                  <div className="p-8 text-center text-slate-400 text-xs">Scanning backups folder...</div>
+                ) : backups.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400 text-xs">
+                    No local backups found. Click "Backup Now" or "Import Backup (.db)" to manage backups.
+                  </div>
+                ) : (
+                  backups.map((b) => (
+                    <div key={b.filename} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white hover:bg-slate-50">
+                      <div>
+                        <div className="font-mono font-bold text-slate-800 text-xs">{b.filename}</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">
+                          {new Date(b.created_at).toLocaleString()} • {b.size_formatted}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={api.downloadBackupUrl(b.filename)}
+                          download={b.filename}
+                          className="inline-flex items-center gap-1.5 text-xs py-1.5 px-3 font-semibold text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-xl transition"
+                          title="Download backup file to USB or disk"
+                        >
+                          <Download className="h-3.5 w-3.5 text-slate-500" />
+                          <span>Download</span>
+                        </a>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedRestoreBackup(b.filename);
+                            setRestoreLocalPin('');
+                            setRestoreLocalError(null);
+                          }}
+                          className="text-xs py-1 px-3 font-semibold text-rose-700 hover:bg-rose-50 border-rose-200"
+                        >
+                          Restore This Backup
+                        </Button>
+
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <a
-                        href={api.downloadBackupUrl(b.filename)}
-                        download={b.filename}
-                        className="inline-flex items-center gap-1.5 text-xs py-1.5 px-3 font-semibold text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-xl transition"
-                        title="Download backup file to USB or disk"
-                      >
-                        <Download className="h-3.5 w-3.5 text-slate-500" />
-                        <span>Download</span>
-                      </a>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedRestoreBackup(b.filename)}
-                        className="text-xs py-1 px-3 font-semibold text-rose-700 hover:bg-rose-50 border-rose-200"
-                      >
-                        Restore This Backup
-                      </Button>
-                    </div>
-                  </div>
-                ))
-              )}
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1627,16 +2124,101 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </form>
       </Modal>
 
-      {/* Restore Safety Confirm Dialog (Section 62) */}
-      <ConfirmDialog
-        isOpen={Boolean(selectedRestoreBackup)}
-        onClose={() => setSelectedRestoreBackup(null)}
-        onConfirm={handleConfirmRestore}
-        title="Restore Database from Backup?"
-        message={`A pre-restore safety checkpoint will be saved automatically before restoring from '${selectedRestoreBackup}'. The application will reload after restoration.`}
-        confirmText="Yes, Restore Now"
-        variant="danger"
+      {/* Restore Safety Modal with Server-Side PIN Verification */}
+      {selectedRestoreBackup && (
+        <Modal
+          isOpen={true}
+          onClose={() => {
+            setSelectedRestoreBackup(null);
+            setRestoreLocalPin('');
+            setRestoreLocalError(null);
+          }}
+          title="Restore Database from Local Backup"
+        >
+          <form onSubmit={handleConfirmRestore} className="space-y-4">
+            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs space-y-2">
+              <div className="flex items-center gap-2 font-bold">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                <span>Critical Operation: Database Restore</span>
+              </div>
+              <p className="leading-relaxed">
+                Restoring will replace the active database with the local snapshot from:
+                <br />
+                <span className="font-mono font-bold">{selectedRestoreBackup}</span>.
+              </p>
+              <div className="p-2 rounded-xl bg-amber-100/60 font-semibold text-[11px]">
+                🛡️ Automatic Safety Rollback: A local checkpoint of your current database will be saved before restoring,
+                ensuring zero data loss if you need to revert.
+              </div>
+            </div>
+
+            {restoreLocalError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                {restoreLocalError}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                Enter Configuration PIN to Authorize
+              </label>
+              <input
+                type="password"
+                maxLength={8}
+                value={restoreLocalPin}
+                onChange={(e) => setRestoreLocalPin(e.target.value)}
+                placeholder="Enter 4-digit PIN"
+                className="w-full text-center text-lg font-mono tracking-widest px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500"
+                autoFocus
+                required
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setSelectedRestoreBackup(null);
+                  setRestoreLocalPin('');
+                  setRestoreLocalError(null);
+                }}
+                disabled={restoringLocal}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="danger"
+                disabled={restoringLocal || !restoreLocalPin}
+              >
+                {restoringLocal ? 'Restoring Database...' : 'Confirm & Restore'}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+
+      {/* Test Barcode Print Modal */}
+      <BarcodePrintModal
+        isOpen={showTestBarcodeModal}
+        onClose={() => setShowTestBarcodeModal(false)}
+        settings={settings}
+        products={[]}
+        isTestMode={true}
+        initialCopies={1}
       />
+
+      {/* Test Receipt Modal */}
+      {showTestReceiptModal && (
+        <ReceiptModal
+          isOpen={showTestReceiptModal}
+          onClose={() => setShowTestReceiptModal(false)}
+          sale={sampleTestSale}
+          settings={settings}
+        />
+      )}
     </div>
   );
 };

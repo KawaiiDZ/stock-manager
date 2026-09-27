@@ -30,6 +30,14 @@ class BusinessSettingsResponse(BaseModel):
     enable_quotations: bool = True
     invoice_terms: str = "1. Goods once sold will be accepted for return within 7 days in original condition.\n2. Warranty claims require presenting this invoice.\n3. Thank you for your business!"
     quotation_terms: str = "1. This quotation is an estimate and valid for 15 days from issue date.\n2. Stock is subject to physical availability upon confirmation.\n3. This document does not constitute a tax invoice until approved."
+    enable_barcode_scanner: bool = True
+    enable_barcode_printer: bool = True
+    barcode_label_size: str = "50x25mm"
+    barcode_label_show_business_name: bool = True
+    barcode_label_show_product_name: bool = True
+    barcode_label_show_price: bool = True
+    barcode_label_show_sku: bool = True
+    barcode_label_custom_text: str = ""
 
     class Config:
         from_attributes = True
@@ -60,6 +68,14 @@ class BusinessSettingsUpdate(BaseModel):
     enable_quotations: Optional[bool] = None
     invoice_terms: Optional[str] = None
     quotation_terms: Optional[str] = None
+    enable_barcode_scanner: Optional[bool] = None
+    enable_barcode_printer: Optional[bool] = None
+    barcode_label_size: Optional[str] = None
+    barcode_label_show_business_name: Optional[bool] = None
+    barcode_label_show_product_name: Optional[bool] = None
+    barcode_label_show_price: Optional[bool] = None
+    barcode_label_show_sku: Optional[bool] = None
+    barcode_label_custom_text: Optional[str] = None
 
 class PresetTemplateResponse(BaseModel):
     key: str

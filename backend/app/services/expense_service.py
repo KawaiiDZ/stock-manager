@@ -19,7 +19,7 @@ def list_expense_categories(db: Session, active_only: bool = True) -> List[Expen
 def create_expense_category(db: Session, data: ExpenseCategoryCreate) -> ExpenseCategoryResponse:
     if not data.name or not data.name.strip():
         raise BusinessRuleException("Expense category name cannot be empty.")
-    existing = db.query(ExpenseCategory).filter(ExpenseCategory.name == data.name.strip()).first()
+    existing = db.query(ExpenseCategory).filter(ExpenseCategory.name.ilike(data.name.strip())).first()
     if existing:
         if not existing.is_active:
             existing.is_active = True

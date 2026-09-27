@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
 import { Purchase, Product, BusinessSettings } from '../../types';
-import { Truck, Plus, Search, Eye, Calendar } from 'lucide-react';
+import { Truck, Plus, Search, Eye, Calendar, DollarSign, AlertCircle } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Modal } from '../../components/common/Modal';
@@ -27,6 +27,13 @@ export const PurchasesPage: React.FC<PurchasesPageProps> = ({ settings }) => {
   // Detail Modal
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
 
+  // Payment Modal
+  const [paymentPurchase, setPaymentPurchase] = useState<Purchase | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [paymentMethod, setPaymentMethod] = useState<string>('Cash');
+  const [submittingPayment, setSubmittingPayment] = useState<boolean>(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
   const currency = settings?.currency || 'Rs.';
 
   const loadData = async () => {
@@ -51,6 +58,33 @@ export const PurchasesPage: React.FC<PurchasesPageProps> = ({ settings }) => {
 
   const handleOpenNewPurchase = () => {
     setShowNewModal(true);
+  };
+
+  const handleSavePurchasePayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!paymentPurchase || paymentAmount <= 0) return;
+
+    if (paymentAmount > Number(paymentPurchase.due_amount || 0)) {
+      setPaymentError(
+        `Payment amount cannot exceed remaining due of ${formatCurrency(
+          paymentPurchase.due_amount,
+          currency
+        )}`
+      );
+      return;
+    }
+
+    setSubmittingPayment(true);
+    setPaymentError(null);
+    try {
+      await api.addPurchasePayment(paymentPurchase.id, paymentAmount, paymentMethod);
+      setPaymentPurchase(null);
+      loadData();
+    } catch (err: any) {
+      setPaymentError(err.detail || 'Failed to record purchase payment.');
+    } finally {
+      setSubmittingPayment(false);
+    }
   };
 
   return (
@@ -143,13 +177,30 @@ export const PurchasesPage: React.FC<PurchasesPageProps> = ({ settings }) => {
                         <Badge status={po.payment_status} />
                       </td>
                       <td className="py-4 px-6 text-right">
-                        <button
-                          onClick={() => setSelectedPurchase(po)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
-                          title="View Purchase Details"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {dueNum > 0 && (
+                            <button
+                              onClick={() => {
+                                setPaymentPurchase(po);
+                                setPaymentAmount(dueNum);
+                                setPaymentMethod('Cash');
+                                setPaymentError(null);
+                              }}
+                              className="px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition flex items-center gap-1"
+                              title="Record Payment on this Purchase"
+                            >
+                              <DollarSign className="h-3.5 w-3.5" />
+                              Pay
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setSelectedPurchase(po)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+                            title="View Purchase Details"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -215,6 +266,92 @@ export const PurchasesPage: React.FC<PurchasesPageProps> = ({ settings }) => {
               <span className="text-lg">{formatCurrency(selectedPurchase.total_amount, currency)}</span>
             </div>
           </div>
+        )}
+      </Modal>
+
+      {/* Record Purchase Payment Modal */}
+      <Modal
+        isOpen={Boolean(paymentPurchase)}
+        onClose={() => setPaymentPurchase(null)}
+        title={`Record Payment for ${paymentPurchase?.purchase_number}`}
+        subtitle={`Supplier: ${paymentPurchase?.supplier_name || 'Direct / No Supplier'}`}
+        maxWidth="sm"
+      >
+        {paymentPurchase && (
+          <form onSubmit={handleSavePurchasePayment} className="space-y-4">
+            {paymentError && (
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{paymentError}</span>
+              </div>
+            )}
+
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-2 text-xs">
+              <div className="flex justify-between items-center text-slate-500">
+                <span>Total Amount:</span>
+                <span className="font-bold text-slate-800">{formatCurrency(paymentPurchase.total_amount, currency)}</span>
+              </div>
+              <div className="flex justify-between items-center text-slate-500">
+                <span>Already Paid:</span>
+                <span className="font-semibold text-emerald-700">{formatCurrency(paymentPurchase.paid_amount, currency)}</span>
+              </div>
+              <div className="flex justify-between items-center pt-1.5 border-t border-slate-200">
+                <span className="font-bold text-slate-700">Remaining Due:</span>
+                <span className="font-extrabold text-rose-600 text-sm">{formatCurrency(paymentPurchase.due_amount, currency)}</span>
+              </div>
+            </div>
+
+            <div>
+              <Input
+                label="Payment Amount *"
+                type="number"
+                step="0.01"
+                min="0.01"
+                max={Number(paymentPurchase.due_amount || 0)}
+                value={paymentAmount}
+                onChange={(e) => setPaymentAmount(Number(e.target.value))}
+                required
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-600 mb-1">
+                Payment Method *
+              </label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="Cash">Cash</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+                <option value="Card">Card</option>
+                <option value="Cheque">Cheque</option>
+                <option value="Online">Online</option>
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="md"
+                onClick={() => setPaymentPurchase(null)}
+                disabled={submittingPayment}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="md"
+                disabled={submittingPayment || paymentAmount <= 0}
+              >
+                {submittingPayment ? 'Recording...' : `Record Payment (${formatCurrency(paymentAmount, currency)})`}
+              </Button>
+            </div>
+          </form>
         )}
       </Modal>
     </div>

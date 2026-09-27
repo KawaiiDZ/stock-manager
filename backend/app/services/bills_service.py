@@ -23,7 +23,7 @@ def list_bill_categories(db: Session, active_only: bool = True) -> List[BillCate
 def create_bill_category(db: Session, data: BillCategoryCreate) -> BillCategoryResponse:
     if not data.name or not data.name.strip():
         raise BusinessRuleException("Bill category name cannot be empty.")
-    existing = db.query(BillCategory).filter(BillCategory.name == data.name.strip()).first()
+    existing = db.query(BillCategory).filter(BillCategory.name.ilike(data.name.strip())).first()
     if existing:
         if not existing.is_active:
             existing.is_active = True

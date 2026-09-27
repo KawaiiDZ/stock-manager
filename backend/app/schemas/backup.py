@@ -12,8 +12,11 @@ class BackupCreateResponse(BaseModel):
     filename: str
     message: str
 
+from typing import Optional
+
 class BackupRestoreRequest(BaseModel):
     filename: str
+    confirm_pin: Optional[str] = None
 
 class BackupRestoreResponse(BaseModel):
     success: bool

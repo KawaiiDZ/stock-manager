@@ -1,7 +1,21 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../services/api';
 import { Product, Category, CustomField, CustomValueDto, BusinessSettings } from '../../types';
-import { Plus, Search, Edit2, ShoppingCart, AlertCircle, Trash2, Truck, RotateCcw } from 'lucide-react';
+import {
+  Plus,
+  Search,
+  Edit2,
+  ShoppingCart,
+  AlertCircle,
+  Trash2,
+  Truck,
+  RotateCcw,
+  Barcode,
+  AlertTriangle,
+  Sparkles,
+  Sliders,
+  Check,
+} from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Modal } from '../../components/common/Modal';
@@ -11,6 +25,9 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { BulkAddProductsModal } from './BulkAddProductsModal';
 import { StockAdjustmentModal } from './StockAdjustmentModal';
 import { NewPurchaseModal } from './NewPurchaseModal';
+import { BarcodePrintModal } from '../../components/barcode/BarcodePrintModal';
+import { UnregisteredBarcodeModal } from '../../components/barcode/UnregisteredBarcodeModal';
+import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { formatCurrency, formatMoney } from '../../utils/format';
 
 interface ProductsPageProps {
@@ -27,7 +44,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<number | undefined>();
-  const [activeTab, setActiveTab] = useState<'active' | 'deactivated'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'restock' | 'deactivated'>('active');
   const [loading, setLoading] = useState(false);
 
   // Modals
@@ -36,6 +53,17 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
   const [showStockUpdateModal, setShowStockUpdateModal] = useState(false);
   const [stockUpdateProduct, setStockUpdateProduct] = useState<Product | null>(null);
   const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(null);
+
+  // Barcode Label Print Modal
+  const [showBarcodeModal, setShowBarcodeModal] = useState(false);
+  const [barcodePrintProducts, setBarcodePrintProducts] = useState<Product[]>([]);
+  const [barcodePrintCopies, setBarcodePrintCopies] = useState<number>(1);
+
+  // Unregistered Barcode & Scanner Visual Feedback
+  const [unregisteredBarcode, setUnregisteredBarcode] = useState<string | null>(null);
+  const [highlightedProductId, setHighlightedProductId] = useState<number | null>(null);
+  const [scanToast, setScanToast] = useState<string | null>(null);
+  const [generatingBarcode, setGeneratingBarcode] = useState(false);
 
   // Edit / Add Product Form State
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -63,6 +91,8 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
   const currency = settings?.currency || 'Rs.';
   const showSku = settings?.show_sku !== false;
   const showBarcode = settings?.show_barcode !== false;
+  const enableBarcodePrinter = settings?.enable_barcode_printer !== false;
+  const enableBarcodeScanner = settings?.enable_barcode_scanner !== false;
 
   const loadData = async () => {
     setLoading(true);
@@ -71,7 +101,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
         api.getProducts({
           search: search.trim() || undefined,
           category_id: selectedCategory,
-          is_active: activeTab === 'active',
+          is_active: activeTab !== 'deactivated',
         }),
         api.getCategories(true),
         api.getCustomFields(true),
@@ -90,14 +120,96 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
     loadData();
   }, [search, selectedCategory, activeTab]);
 
+  // Hardware Barcode Scanner in Inventory - pulls product or prompts if unregistered
+  useBarcodeScanner({
+    enabled: enableBarcodeScanner && !showProductModal && !showBulkModal && !showBarcodeModal && !Boolean(unregisteredBarcode),
+    onScan: async (scannedCode) => {
+      const code = scannedCode.trim();
+      if (!code) return;
 
+      // 1. Check in memory
+      let match = products.find(
+        (p) =>
+          (p.barcode && p.barcode.toLowerCase() === code.toLowerCase()) ||
+          (p.sku && p.sku.toLowerCase() === code.toLowerCase()) ||
+          (p.product_id && p.product_id.toLowerCase() === code.toLowerCase())
+      );
 
-  const handleOpenAdd = () => {
+      // 2. Query remote database if not loaded in memory
+      if (!match) {
+        try {
+          const remote = await api.getProductByBarcode(code);
+          if (remote) {
+            match = remote;
+            setProducts((prev) => (prev.some((p) => p.id === remote.id) ? prev : [remote, ...prev]));
+          }
+        } catch {
+          match = undefined;
+        }
+      }
+
+      if (match) {
+        // Product successfully pulled! Focus tab and row
+        if (!match.is_active && activeTab !== 'deactivated') {
+          setActiveTab('deactivated');
+        } else if (match.is_active && activeTab === 'deactivated') {
+          setActiveTab('active');
+        }
+
+        // If in restock tab but product is in stock, switch to active
+        if (Number(match.current_stock || 0) > 0 && activeTab === 'restock') {
+          setActiveTab('active');
+        }
+
+        // Clear restrictive search and category filters so product is visible
+        setSearch('');
+        setSelectedCategory(undefined);
+
+        setHighlightedProductId(match.id);
+        setScanToast(`Found Product: ${match.name} (${match.product_id})`);
+
+        setTimeout(() => {
+          const el = document.getElementById(`product-row-${match!.id}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 150);
+
+        setTimeout(() => {
+          setHighlightedProductId((prev) => (prev === match!.id ? null : prev));
+        }, 3500);
+
+        setTimeout(() => {
+          setScanToast(null);
+        }, 4000);
+      } else {
+        // Unregistered barcode detected! Prompt user to enter product
+        setUnregisteredBarcode(code);
+      }
+    },
+    playBeep: true,
+  });
+
+  const handleGenerateBarcode = async () => {
+    setGeneratingBarcode(true);
+    try {
+      const res = await api.generateBarcode();
+      if (res && res.barcode) {
+        setFormData((prev) => ({ ...prev, barcode: res.barcode }));
+      }
+    } catch {
+      setFormData((prev) => ({ ...prev, barcode: `20${Math.floor(Date.now() / 1000)}` }));
+    } finally {
+      setGeneratingBarcode(false);
+    }
+  };
+
+  const handleOpenAdd = (prefillBarcode?: string) => {
     setEditingProduct(null);
     setFormData({
       name: '',
       sku: '',
-      barcode: '',
+      barcode: typeof prefillBarcode === 'string' ? prefillBarcode : '',
       category_id: selectedCategory || 0,
       purchase_price: 0,
       selling_price: 0,
@@ -137,8 +249,8 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
     setShowProductModal(true);
   };
 
-  const handleSaveProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveProduct = async (e?: React.FormEvent, printAfter: boolean = false) => {
+    if (e) e.preventDefault();
     if (!formData.name.trim()) return;
 
     setSaving(true);
@@ -152,8 +264,9 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
     );
 
     try {
+      let savedProduct: Product;
       if (editingProduct) {
-        await api.updateProduct(editingProduct.id, {
+        savedProduct = await api.updateProduct(editingProduct.id, {
           name: formData.name.trim(),
           sku: showSku ? (formData.sku.trim() || undefined) : editingProduct.sku,
           barcode: showBarcode ? (formData.barcode.trim() || undefined) : editingProduct.barcode,
@@ -163,7 +276,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
           custom_fields: customDto,
         });
       } else {
-        await api.createProduct({
+        savedProduct = await api.createProduct({
           name: formData.name.trim(),
           sku: showSku ? (formData.sku.trim() || undefined) : undefined,
           barcode: showBarcode ? (formData.barcode.trim() || undefined) : undefined,
@@ -176,6 +289,12 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
       }
       setShowProductModal(false);
       loadData();
+
+      if (printAfter) {
+        setBarcodePrintProducts([savedProduct]);
+        setBarcodePrintCopies(Math.max(1, savedProduct.current_stock || 1));
+        setShowBarcodeModal(true);
+      }
     } catch (err: any) {
       setModalError(err.detail || 'Failed to save product.');
     } finally {
@@ -215,6 +334,28 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
       alert(err.detail || 'Failed to add category');
     }
   };
+
+  // Out of stock calculations for Restock Queue
+  const totalOutOfStockCount = useMemo(() => {
+    return products.filter((p) => p.is_active && Number(p.current_stock || 0) <= 0).length;
+  }, [products]);
+
+  const restockFilteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      if (!p.is_active || Number(p.current_stock || 0) > 0) return false;
+      if (selectedCategory && p.category_id !== selectedCategory) return false;
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        return (
+          p.name.toLowerCase().includes(q) ||
+          p.product_id.toLowerCase().includes(q) ||
+          (p.sku && p.sku.toLowerCase().includes(q)) ||
+          (p.barcode && p.barcode.toLowerCase().includes(q))
+        );
+      }
+      return true;
+    });
+  }, [products, selectedCategory, search]);
 
   // Group products into dedicated category tables
   const categoryGroups = useMemo(() => {
@@ -271,7 +412,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* Active / Deactivated Tabs */}
+          {/* Active / Needs Restock / Deactivated Tabs */}
           <div className="flex items-center gap-1 bg-slate-200/70 p-1 rounded-2xl text-xs font-bold">
             <button
               type="button"
@@ -281,6 +422,26 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
               }`}
             >
               Active Catalog
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('restock')}
+              className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
+                activeTab === 'restock' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
+              }`}
+            >
+              <span>Needs Restock</span>
+              {totalOutOfStockCount > 0 && (
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                    activeTab === 'restock'
+                      ? 'bg-rose-100 text-rose-700'
+                      : 'bg-rose-500 text-white shadow-2xs'
+                  }`}
+                >
+                  {totalOutOfStockCount}
+                </span>
+              )}
             </button>
             <button
               type="button"
@@ -320,12 +481,39 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
             variant="primary"
             size="md"
             icon={<Plus className="h-4 w-4" />}
-            onClick={handleOpenAdd}
+            onClick={() => handleOpenAdd()}
           >
             + Add Product
           </Button>
         </div>
       </div>
+
+      {/* Out of Stock Notice Banner on Active Catalog */}
+      {activeTab === 'active' && totalOutOfStockCount > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-amber-50/80 border border-amber-200/90 text-amber-900 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-amber-100 border border-amber-200/60 flex items-center justify-center text-amber-700 shrink-0">
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-amber-900">
+                {totalOutOfStockCount} Product{totalOutOfStockCount > 1 ? 's' : ''} Out of Stock
+              </h4>
+              <p className="text-xs text-amber-700 font-medium">
+                These products have 0 inventory and cannot be sold at checkout until replenished.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveTab('restock')}
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition shadow-xs whitespace-nowrap self-start sm:self-auto cursor-pointer"
+          >
+            <Truck className="h-3.5 w-3.5" />
+            <span>Review & Restock ({totalOutOfStockCount})</span>
+          </button>
+        </div>
+      )}
 
       {/* Search & Category Filter Toolbar */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
@@ -354,11 +542,162 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
         </select>
       </div>
 
-      {/* Category Tables */}
+      {/* Category Tables or Restock Queue */}
       <div className="space-y-8">
         {loading ? (
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-16 text-center text-slate-400">
             Loading products...
+          </div>
+        ) : activeTab === 'restock' ? (
+          <div className="space-y-6">
+            {/* Restock Section Header Card */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="h-11 w-11 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shrink-0 shadow-2xs">
+                  <Truck className="h-6 w-6" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                    <span>Restock Queue</span>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-black bg-rose-100 text-rose-700 border border-rose-200">
+                      {totalOutOfStockCount} Out of Stock
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Products with 0 inventory. Replenish stock through incoming supplier purchase orders or physical count adjustments.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="primary"
+                  size="md"
+                  icon={<Truck className="h-4 w-4" />}
+                  onClick={() => {
+                    setStockUpdateProduct(null);
+                    setShowStockUpdateModal(true);
+                  }}
+                  className="font-bold bg-emerald-600 hover:bg-emerald-700 shadow-sm whitespace-nowrap"
+                >
+                  + New Stock Purchase
+                </Button>
+              </div>
+            </div>
+
+            {/* Restock Products Table or Empty State */}
+            {restockFilteredProducts.length === 0 ? (
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                <EmptyState
+                  title={search.trim() ? "No out-of-stock products matching search" : "All Products In Stock!"}
+                  description={
+                    search.trim()
+                      ? "No out of stock products matched your search or category filter."
+                      : "Great job! None of your active products are currently out of stock. Your catalog inventory is fully replenished."
+                  }
+                  actionText={search.trim() ? "Clear Filter" : undefined}
+                  onAction={search.trim() ? () => { setSearch(''); setSelectedCategory(undefined); } : undefined}
+                />
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-200/80 bg-slate-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Depleted Stock Items Requiring Restock ({restockFilteredProducts.length})
+                  </div>
+                  <span className="text-xs font-semibold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200/60 inline-flex items-center gap-1.5 self-start sm:self-auto">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    <span>Out of stock at checkout</span>
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                      <tr>
+                        <th className="py-3.5 px-6 whitespace-nowrap">Product ID</th>
+                        <th className="py-3.5 px-6 whitespace-nowrap">Product Name</th>
+                        <th className="py-3.5 px-6 whitespace-nowrap">Category</th>
+                        {(showSku || showBarcode) && (
+                          <th className="py-3.5 px-6 whitespace-nowrap">SKU / Barcode</th>
+                        )}
+                        <th className="py-3.5 px-6 text-right whitespace-nowrap">Cost Price</th>
+                        <th className="py-3.5 px-6 text-right whitespace-nowrap">Selling Price</th>
+                        <th className="py-3.5 px-6 text-center whitespace-nowrap">Current Stock</th>
+                        <th className="py-3.5 px-6 text-right whitespace-nowrap">Restock Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {restockFilteredProducts.map((p) => (
+                        <tr
+                          key={p.id}
+                          id={`product-row-${p.id}`}
+                          className={`transition-all duration-300 ${
+                            highlightedProductId === p.id
+                              ? 'bg-emerald-100/70 ring-2 ring-emerald-500 shadow-sm'
+                              : 'hover:bg-slate-50/60'
+                          }`}
+                        >
+                          <td className="py-4 px-6 font-bold text-slate-900 whitespace-nowrap">{p.product_id}</td>
+                          <td className="py-4 px-6 font-bold text-slate-800 whitespace-nowrap">
+                            <div>{p.name}</div>
+                          </td>
+                          <td className="py-4 px-6 text-xs font-semibold text-slate-600 whitespace-nowrap">
+                            <span className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200/60">
+                              {p.category_name || 'General'}
+                            </span>
+                          </td>
+                          {(showSku || showBarcode) && (
+                            <td className="py-4 px-6 text-slate-500 text-xs font-mono whitespace-nowrap">
+                              {showSku && p.sku && <div>SKU: {p.sku}</div>}
+                              {showBarcode && p.barcode && <div>BC: {p.barcode}</div>}
+                              {!p.sku && !p.barcode && '—'}
+                            </td>
+                          )}
+                          <td className="py-4 px-6 text-right text-slate-600 whitespace-nowrap">
+                            {formatCurrency(p.purchase_price, currency)}
+                          </td>
+                          <td className="py-4 px-6 text-right font-bold text-slate-900 whitespace-nowrap">
+                            {formatCurrency(p.selling_price, currency)}
+                          </td>
+                          <td className="py-4 px-6 text-center whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-rose-100 text-rose-700 border border-rose-200 shadow-2xs">
+                              0 units (Out of Stock)
+                            </span>
+                          </td>
+                          <td className="py-4 px-6 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                icon={<Sliders className="h-3.5 w-3.5 text-slate-600" />}
+                                onClick={() => setAdjustingProduct(p)}
+                                className="text-xs font-bold text-slate-700 hover:bg-slate-100"
+                                title="Quick physical stock count adjustment"
+                              >
+                                Quick Count
+                              </Button>
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                icon={<Truck className="h-3.5 w-3.5" />}
+                                onClick={() => {
+                                  setStockUpdateProduct(p);
+                                  setShowStockUpdateModal(true);
+                                }}
+                                className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 shadow-2xs"
+                              >
+                                Restock Now
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         ) : categoryGroups.length === 0 || products.length === 0 ? (
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
@@ -453,7 +792,15 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
                     <tbody className="divide-y divide-slate-100">
                       {group.products.map((p) => {
                         return (
-                          <tr key={p.id} className="hover:bg-slate-50/60 transition">
+                          <tr
+                            key={p.id}
+                            id={`product-row-${p.id}`}
+                            className={`transition-all duration-300 ${
+                              highlightedProductId === p.id
+                                ? 'bg-emerald-100/70 ring-2 ring-emerald-500 shadow-sm'
+                                : 'hover:bg-slate-50/60'
+                            }`}
+                          >
                             <td className="py-4 px-6 font-bold text-slate-900 whitespace-nowrap">{p.product_id}</td>
                             <td className="py-4 px-6 font-bold text-slate-800 whitespace-nowrap">
                               {p.name}
@@ -552,6 +899,20 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
                                   >
                                     <Edit2 className="h-4 w-4" />
                                   </button>
+                                  {enableBarcodePrinter && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setBarcodePrintProducts([p]);
+                                        setBarcodePrintCopies(Math.max(1, p.current_stock || 1));
+                                        setShowBarcodeModal(true);
+                                      }}
+                                      className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 transition"
+                                      title={`Print Barcode Label for ${p.name}`}
+                                    >
+                                      <Barcode className="h-4 w-4" />
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
                                     onClick={() => setDeletingProduct(p)}
@@ -663,12 +1024,27 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
           </div>
 
           {showBarcode && (
-            <Input
-              label="Barcode (Optional)"
-              placeholder="Scan or type barcode..."
-              value={formData.barcode}
-              onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
-            />
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
+                  Barcode (Optional)
+                </label>
+                <button
+                  type="button"
+                  onClick={handleGenerateBarcode}
+                  disabled={generatingBarcode}
+                  className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-lg transition"
+                >
+                  <Sparkles className="h-3 w-3" />
+                  <span>{generatingBarcode ? 'Generating...' : '⚡ Generate'}</span>
+                </button>
+              </div>
+              <Input
+                placeholder="Scan or type barcode..."
+                value={formData.barcode}
+                onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+              />
+            </div>
           )}
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -814,7 +1190,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
             );
           })()}
 
-          <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+          <div className="flex flex-wrap items-center justify-end gap-3 pt-3 border-t border-slate-100">
             <Button
               type="button"
               variant="secondary"
@@ -822,6 +1198,18 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
             >
               Cancel
             </Button>
+            {enableBarcodePrinter && (
+              <Button
+                type="button"
+                variant="secondary"
+                icon={<Barcode className="h-4 w-4 text-emerald-600" />}
+                onClick={() => handleSaveProduct(undefined, true)}
+                loading={saving}
+                className="font-bold border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+              >
+                Save & Print Barcode
+              </Button>
+            )}
             <Button type="submit" variant="primary" loading={saving}>
               {editingProduct ? 'Save Changes' : 'Create Product'}
             </Button>
@@ -944,6 +1332,37 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
         variant="danger"
         loading={deleting}
       />
+
+      {/* Barcode Print Modal */}
+      <BarcodePrintModal
+        isOpen={showBarcodeModal}
+        onClose={() => setShowBarcodeModal(false)}
+        settings={settings}
+        products={barcodePrintProducts}
+        initialCopies={barcodePrintCopies}
+      />
+
+      {/* Unregistered Barcode Prompt Modal */}
+      <UnregisteredBarcodeModal
+        isOpen={Boolean(unregisteredBarcode)}
+        onClose={() => setUnregisteredBarcode(null)}
+        barcode={unregisteredBarcode || ''}
+        contextText="Enter this product's name and price to add it to your active inventory catalog."
+        onRegister={(code) => {
+          setUnregisteredBarcode(null);
+          handleOpenAdd(code);
+        }}
+      />
+
+      {/* Floating Scanner Feedback Toast */}
+      {scanToast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-slate-900 text-white shadow-2xl text-xs font-bold border border-slate-700 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="h-6 w-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+            <Check className="h-3.5 w-3.5" />
+          </div>
+          <span>{scanToast}</span>
+        </div>
+      )}
     </div>
   );
 };

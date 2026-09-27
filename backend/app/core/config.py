@@ -77,6 +77,10 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "offline-desktop-secret-key-change-if-needed-123456789"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 30  # 30 days offline session
 
+    # Google OAuth 2.0 Credentials (can also be configured per-installation in Settings)
+    GOOGLE_CLIENT_ID: str = os.environ.get("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET: str = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+
     class Config:
         case_sensitive = True
 

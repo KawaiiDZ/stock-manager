@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../services/api';
-import { Product, Customer, BusinessSettings, Sale, Quotation, QuotationCreate } from '../../types';
+import { Product, Customer, BusinessSettings, Sale, Quotation, QuotationCreate, Category } from '../../types';
 import {
   Search,
   Plus,
@@ -21,6 +21,9 @@ import { Input } from '../../components/common/Input';
 import { Modal } from '../../components/common/Modal';
 import { ReceiptModal } from '../../components/receipts/ReceiptModal';
 import { QuotationModal } from '../../components/receipts/QuotationModal';
+import { UnregisteredBarcodeModal } from '../../components/barcode/UnregisteredBarcodeModal';
+import { QuickAddProductModal } from '../../components/products/QuickAddProductModal';
+import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { formatCurrency, formatMoney, formatQty } from '../../utils/format';
 
 interface CartItem {
@@ -69,23 +72,30 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   const [createdQuotation, setCreatedQuotation] = useState<Quotation | null>(null);
   const [showQuotationModal, setShowQuotationModal] = useState(false);
 
+  // Unregistered Barcode & Quick Add Product state
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [unregisteredBarcode, setUnregisteredBarcode] = useState<string | null>(null);
+  const [quickAddBarcode, setQuickAddBarcode] = useState<string | null>(null);
+
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const barcodeBufferRef = useRef<{ code: string; time: number }>({ code: '', time: 0 });
 
   const currency = settings?.currency || 'Rs.';
   const showSku = settings?.show_sku !== false;
   const showBarcode = settings?.show_barcode !== false;
+  const scannerEnabled = settings?.enable_barcode_scanner !== false;
 
   // Initial load
   useEffect(() => {
     const init = async () => {
       try {
-        const [prods, custs] = await Promise.all([
+        const [prods, custs, cats] = await Promise.all([
           api.getProducts({ is_active: true }),
           api.getCustomers({ is_active: true }),
+          api.getCategories(true),
         ]);
         setProducts(prods || []);
         setCustomers(custs || []);
+        setCategories(cats || []);
       } catch (err) {
         console.error('Failed to load initial sales data:', err);
       }
@@ -101,7 +111,46 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
     }
   }, [initialProduct]);
 
-  // Global USB Barcode Scanner & Keyboard Listener
+  // Robust Hardware Barcode Scanner Handler
+  const handleBarcodeScanned = async (scannedCode: string) => {
+    const code = scannedCode.trim();
+    if (!code) return;
+
+    // 1. Check local in-memory catalog
+    const localMatch = products.find(
+      (p) =>
+        (p.barcode && p.barcode.toLowerCase() === code.toLowerCase()) ||
+        (p.sku && p.sku.toLowerCase() === code.toLowerCase()) ||
+        (p.product_id && p.product_id.toLowerCase() === code.toLowerCase())
+    );
+
+    if (localMatch) {
+      addToCart(localMatch);
+      return;
+    }
+
+    // 2. Query remote database if not currently in memory
+    try {
+      const remoteProd = await api.getProductByBarcode(code);
+      if (remoteProd) {
+        setProducts((prev) => (prev.some((p) => p.id === remoteProd.id) ? prev : [...prev, remoteProd]));
+        addToCart(remoteProd);
+      } else {
+        // Prompt user to register product with this barcode
+        setUnregisteredBarcode(code);
+      }
+    } catch {
+      setUnregisteredBarcode(code);
+    }
+  };
+
+  useBarcodeScanner({
+    enabled: scannerEnabled,
+    onScan: handleBarcodeScanned,
+    playBeep: true,
+  });
+
+  // Global POS Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // F4 to focus search
@@ -115,31 +164,6 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         e.preventDefault();
         handleCompleteSale();
         return;
-      }
-
-      // Hardware Barcode Scanner Buffer
-      const currentTime = Date.now();
-      if (e.key === 'Enter') {
-        const scanned = barcodeBufferRef.current.code.trim();
-        if (scanned.length >= 3) {
-          const match = products.find(
-            (p) =>
-              (showBarcode && p.barcode?.toLowerCase() === scanned.toLowerCase()) ||
-              (showSku && p.sku?.toLowerCase() === scanned.toLowerCase())
-          );
-          if (match) {
-            addToCart(match);
-            barcodeBufferRef.current = { code: '', time: 0 };
-            return;
-          }
-        }
-        barcodeBufferRef.current = { code: '', time: 0 };
-      } else if (e.key.length === 1) {
-        if (currentTime - barcodeBufferRef.current.time > 150) {
-          barcodeBufferRef.current.code = '';
-        }
-        barcodeBufferRef.current.code += e.key;
-        barcodeBufferRef.current.time = currentTime;
       }
     };
 
@@ -279,9 +303,12 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
     const effectivePaid = Math.max(0, Number(paidAmount || 0));
     const effectiveDue = Math.max(0, grandTotal - effectivePaid);
 
-    if (effectiveDue > 0 && !selectedCustomerId && !inlineCustomerName.trim()) {
+    const selectedCust = customers.find((c) => c.id === selectedCustomerId);
+    const isWalkIn = (!selectedCust && !inlineCustomerName.trim()) || selectedCust?.customer_id === 'C-000001';
+
+    if (effectiveDue > 0 && isWalkIn) {
       setErrorMsg(
-        'Customer name is required when an amount is due (partial or unpaid sale).'
+        'Walk-in / Counter Customer cannot purchase on credit. Please enter or select a customer name for partial or unpaid sales.'
       );
       return;
     }
@@ -412,7 +439,15 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
             <Zap className="h-6 w-6 text-emerald-300 animate-pulse" />
           </div>
           <div>
-            <h1 className="text-2xl font-black tracking-tight">Point of Sale (POS)</h1>
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-2xl font-black tracking-tight">Point of Sale (POS)</h1>
+              {scannerEnabled && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-400/20 border border-emerald-300/40 text-emerald-200 text-[11px] font-bold tracking-wide">
+                  <Barcode className="h-3.5 w-3.5 text-emerald-300" />
+                  Scanner Active
+                </span>
+              )}
+            </div>
             <p className="text-emerald-200 text-xs mt-0.5 font-medium">
               {showBarcode ? 'Scan barcode or search product • ' : 'Search product • '}Press{' '}
               <kbd className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-mono">F4</kbd> to
@@ -916,6 +951,33 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         }}
         quotation={createdQuotation}
         settings={settings}
+      />
+
+      {/* Unregistered Barcode Prompt Modal */}
+      <UnregisteredBarcodeModal
+        isOpen={Boolean(unregisteredBarcode)}
+        onClose={() => setUnregisteredBarcode(null)}
+        barcode={unregisteredBarcode || ''}
+        contextText="Once saved, this product will be automatically added to your current sale."
+        onRegister={(code) => {
+          setUnregisteredBarcode(null);
+          setQuickAddBarcode(code);
+        }}
+      />
+
+      {/* Quick Add Product Modal from POS */}
+      <QuickAddProductModal
+        isOpen={Boolean(quickAddBarcode)}
+        onClose={() => setQuickAddBarcode(null)}
+        initialBarcode={quickAddBarcode || ''}
+        categories={categories}
+        settings={settings}
+        submitButtonText="Save & Add to Sale"
+        onProductCreated={(newProd) => {
+          setProducts((prev) => [newProd, ...prev]);
+          addToCart(newProd);
+          setQuickAddBarcode(null);
+        }}
       />
     </div>
   );

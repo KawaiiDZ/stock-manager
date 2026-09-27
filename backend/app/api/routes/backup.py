@@ -1,6 +1,8 @@
 from typing import List
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter, UploadFile, File, Depends
 from fastapi.responses import FileResponse
+from sqlalchemy.orm import Session
+from backend.app.core.database import get_db
 from backend.app.schemas.backup import (
     BackupFileResponse, BackupCreateResponse, BackupRestoreRequest, BackupRestoreResponse
 )
@@ -25,15 +27,15 @@ def trigger_backup():
     return create_backup()
 
 @router.post("/restore", response_model=BackupRestoreResponse)
-def trigger_restore(data: BackupRestoreRequest):
-    return restore_backup(data.filename)
+def trigger_restore(data: BackupRestoreRequest, db: Session = Depends(get_db)):
+    return restore_backup(data.filename, confirm_pin=data.confirm_pin, db=db)
 
 @router.get("/download/{filename}")
 def download_backup_file(filename: str):
     file_path = get_backup_path(filename)
     return FileResponse(
         path=str(file_path),
-        filename=filename,
+        filename=file_path.name,
         media_type="application/octet-stream"
     )
 

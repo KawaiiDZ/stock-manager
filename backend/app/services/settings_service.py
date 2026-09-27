@@ -4,7 +4,7 @@ from backend.app.schemas.business import BusinessSettingsUpdate
 from backend.app.core.errors import EntityNotFoundException, BusinessRuleException
 
 def get_settings(db: Session) -> BusinessSettings:
-    settings = db.query(BusinessSettings).filter(BusinessSettings.id == 1).first()
+    settings = db.query(BusinessSettings).filter(BusinessSettings.id == 1).first() or db.query(BusinessSettings).first()
     if not settings:
         raise EntityNotFoundException("Business Settings")
     return settings

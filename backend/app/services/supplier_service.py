@@ -124,6 +124,11 @@ def deactivate_supplier(db: Session, supplier_id: int) -> SupplierResponse:
     s = db.query(Supplier).filter(Supplier.id == supplier_id).first()
     if not s:
         raise EntityNotFoundException("Supplier", str(supplier_id))
+    
+    due = get_supplier_due(db, supplier_id)
+    if due > Decimal("0.00"):
+        raise BusinessRuleException(f"Cannot deactivate supplier '{s.name}' because there is an outstanding payable balance of Rs. {due}. Please settle or clear the balance before deactivation.")
+
     s.is_active = False
     db.commit()
     return get_supplier(db, s.id)
@@ -261,14 +266,16 @@ def get_supplier_ledger(db: Session, supplier_id: int) -> List[SupplierLedgerEnt
     ledger_entries = []
     for item in timeline:
         # For supplier, credit increases our payable obligation, debit decreases it
-        running_balance += item["credit"] - item["debit"]
+        d = item["debit"].quantize(Decimal("0.01"))
+        c = item["credit"].quantize(Decimal("0.01"))
+        running_balance = (running_balance + c - d).quantize(Decimal("0.01"))
         ledger_entries.append(SupplierLedgerEntry(
             date=item["date"],
             type=item["type"],
             reference=item["reference"],
             description=item["description"],
-            debit=item["debit"],
-            credit=item["credit"],
+            debit=d,
+            credit=c,
             balance=running_balance
         ))
 

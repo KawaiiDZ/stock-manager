@@ -122,7 +122,7 @@ def create_purchase(db: Session, data: PurchaseCreate) -> PurchaseResponse:
         if it.selling_price is not None and it.selling_price < Decimal("0.00"):
             raise BusinessRuleException(f"Selling price for {product.name} cannot be negative.")
 
-        line_total = it.quantity * it.unit_cost
+        line_total = (it.quantity * it.unit_cost).quantize(Decimal("0.01"))
         subtotal += line_total
 
         validated_items.append({
@@ -142,7 +142,7 @@ def create_purchase(db: Session, data: PurchaseCreate) -> PurchaseResponse:
 
     disc = data.discount_amount or Decimal("0.00")
     tax = data.tax_amount or Decimal("0.00")
-    total_amount = max(Decimal("0.00"), subtotal - disc + tax)
+    total_amount = max(Decimal("0.00"), (subtotal - disc + tax).quantize(Decimal("0.01")))
 
     # Validate supplier payment rules:
     # If no supplier is assigned, partial payments / credit are not permitted. Must be settled in full.
@@ -286,3 +286,56 @@ def list_purchases(
         )
     purchases = q.order_by(Purchase.created_at.desc(), Purchase.id.desc()).offset(skip).limit(limit).all()
     return [_format_purchase_response(p) for p in purchases]
+
+def record_additional_purchase_payment(db: Session, purchase_id: int, amount: Decimal, payment_method: str = "Cash") -> PurchaseResponse:
+    from backend.app.models.purchase import PurchaseReturn, PurchaseReturnItem
+    purchase = db.query(Purchase).options(
+        joinedload(Purchase.returns).joinedload(PurchaseReturn.items),
+        joinedload(Purchase.items)
+    ).filter(Purchase.id == purchase_id).first()
+    if not purchase:
+        raise EntityNotFoundException("Purchase", str(purchase_id))
+
+    if amount <= Decimal("0.00"):
+        raise BusinessRuleException("Payment amount must be greater than zero.")
+    amount = amount.quantize(Decimal("0.01"))
+
+    total_return_val = Decimal("0.00")
+    total_returned_qty = Decimal("0.00")
+    total_purchased_qty = sum(item.quantity for item in purchase.items)
+    if purchase.returns:
+        for ret in purchase.returns:
+            total_return_val += ret.total_return_amount
+            for ri in ret.items:
+                total_returned_qty += ri.quantity
+
+    current_due = max(Decimal("0.00"), purchase.total_amount - purchase.paid_amount - total_return_val)
+
+    if amount > current_due:
+        raise BusinessRuleException(f"Payment amount cannot exceed remaining due (Rs. {current_due}).")
+
+    payment = PurchasePayment(
+        purchase_id=purchase.id,
+        amount=amount,
+        payment_method=payment_method
+    )
+    db.add(payment)
+
+    purchase.paid_amount += amount
+    new_due = max(Decimal("0.00"), purchase.total_amount - purchase.paid_amount - total_return_val)
+    purchase.due_amount = new_due
+
+    if total_purchased_qty > Decimal("0.00") and total_returned_qty >= total_purchased_qty:
+        purchase.payment_status = "RETURNED"
+    elif total_returned_qty > Decimal("0.00"):
+        if new_due == Decimal("0.00"):
+            purchase.payment_status = "PARTIALLY_RETURNED"
+        else:
+            purchase.payment_status = "PARTIALLY_PAID"
+    elif new_due == Decimal("0.00") and purchase.paid_amount >= purchase.total_amount:
+        purchase.payment_status = "PAID"
+    else:
+        purchase.payment_status = "PARTIALLY_PAID"
+
+    db.commit()
+    return get_purchase(db, purchase.id)

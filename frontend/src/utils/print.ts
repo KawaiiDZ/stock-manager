@@ -15,6 +15,9 @@ export interface PrintOptions {
   title?: string;
   isThermal?: boolean;
   paperWidth?: '58mm' | '80mm';
+  isLabel?: boolean;
+  labelWidth?: string;
+  labelHeight?: string;
 }
 
 export const printElement = (
@@ -60,17 +63,75 @@ export const printElement = (
       return;
     }
 
+    const isLabel = Boolean(options.isLabel);
     const isThermal = Boolean(options.isThermal);
     const is58mm = options.paperWidth === '58mm';
     const rollWidth = is58mm ? '58mm' : '80mm';
+    const labelW = options.labelWidth || '50mm';
+    const labelH = options.labelHeight || '25mm';
     const docTitle = options.title || document.title;
+
+    // Dynamically calculate exact receipt height in mm from rendered DOM
+    let thermalHeightMm = 160;
+    if (isThermal && targetElement) {
+      const rect = targetElement.getBoundingClientRect();
+      const scrollH = targetElement.scrollHeight;
+      const offsetH = targetElement.offsetHeight;
+      const measuredPx = Math.max(rect.height, scrollH, offsetH);
+      if (measuredPx > 0) {
+        // 1px = 25.4 / 96 mm (~0.264583 mm). Add buffer for padding & cutter feed
+        thermalHeightMm = Math.ceil((measuredPx * 25.4) / 96) + 10;
+        thermalHeightMm = Math.max(60, thermalHeightMm);
+      }
+    }
+
+    const buildThermalCss = (heightMm: number) => `
+      @page {
+        size: ${rollWidth} ${heightMm}mm !important;
+        margin: 0 !important;
+      }
+      *, *::before, *::after {
+        box-sizing: border-box !important;
+      }
+      html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        color: #000000 !important;
+        width: ${rollWidth} !important;
+        max-width: ${rollWidth} !important;
+        height: ${heightMm}mm !important;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        overflow: hidden !important;
+      }
+      #print-root {
+        width: ${rollWidth} !important;
+        max-width: ${rollWidth} !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      #print-root > div {
+        width: 100% !important;
+        max-width: ${rollWidth} !important;
+        margin: 0 !important;
+        padding: 2mm ${is58mm ? '2mm' : '3mm'} 6mm ${is58mm ? '2mm' : '3mm'} !important;
+        box-shadow: none !important;
+        border: none !important;
+        border-radius: 0 !important;
+      }
+      .no-print, button, .btn-no-print {
+        display: none !important;
+      }
+    `;
 
     // 4. Construct print media stylesheet
     let printCss = '';
-    if (isThermal) {
+    if (isLabel) {
       printCss = `
         @page {
-          size: ${rollWidth} auto !important;
+          size: ${labelW} ${labelH} !important;
           margin: 0 !important;
         }
         *, *::before, *::after {
@@ -81,31 +142,50 @@ export const printElement = (
           padding: 0 !important;
           background: #ffffff !important;
           color: #000000 !important;
-          width: ${rollWidth} !important;
-          max-width: ${rollWidth} !important;
-          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+          width: ${labelW} !important;
+          height: ${labelH} !important;
+          font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
         }
         #print-root {
-          width: ${rollWidth} !important;
-          max-width: ${rollWidth} !important;
+          width: ${labelW} !important;
           margin: 0 !important;
           padding: 0 !important;
         }
-        #print-root > div {
-          width: 100% !important;
-          max-width: ${rollWidth} !important;
+        .barcode-label-sheet {
+          display: block !important;
           margin: 0 !important;
-          padding: 2mm 3mm 4mm 3mm !important;
-          box-shadow: none !important;
-          border: none !important;
-          border-radius: 0 !important;
+          padding: 0 !important;
+        }
+        .barcode-label-item {
+          width: ${labelW} !important;
+          height: ${labelH} !important;
+          max-width: ${labelW} !important;
+          max-height: ${labelH} !important;
+          page-break-after: always !important;
+          break-after: page !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+          overflow: hidden !important;
+          box-sizing: border-box !important;
+          padding: 1mm 1.5mm !important;
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          text-align: center !important;
+        }
+        .barcode-label-item:last-child {
+          page-break-after: avoid !important;
+          break-after: avoid !important;
         }
         .no-print, button, .btn-no-print {
           display: none !important;
         }
       `;
+    } else if (isThermal) {
+      printCss = buildThermalCss(thermalHeightMm);
     } else {
       printCss = `
         @page {
@@ -200,7 +280,14 @@ export const printElement = (
       // Ignored
     }
 
+    const stripHostPageRules = (cssText: string) => {
+      return cssText.replace(/@page\s*\{[^}]*\}/gi, '');
+    };
+
     if (inlinedCss) {
+      if (isThermal || isLabel) {
+        inlinedCss = stripHostPageRules(inlinedCss);
+      }
       const inlinedStyleEl = iframeDoc.createElement('style');
       inlinedStyleEl.textContent = inlinedCss;
       iframeDoc.head.appendChild(inlinedStyleEl);
@@ -210,6 +297,9 @@ export const printElement = (
     const linkPromises: Promise<void>[] = [];
     document.head.querySelectorAll('style, link[rel="stylesheet"]').forEach((node) => {
       const clone = node.cloneNode(true) as HTMLElement;
+      if (clone.tagName === 'STYLE' && (isThermal || isLabel)) {
+        clone.textContent = stripHostPageRules(clone.textContent || '');
+      }
       if (clone.tagName === 'LINK' && (clone as HTMLLinkElement).rel === 'stylesheet') {
         linkPromises.push(
           new Promise<void>((linkRes) => {
@@ -275,6 +365,21 @@ export const printElement = (
     const doPrint = () => {
       setTimeout(() => {
         try {
+          if (isThermal) {
+            try {
+              const rootDiv = iframeDoc.querySelector('#print-root > div') as HTMLElement;
+              if (rootDiv) {
+                const actualH = Math.max(rootDiv.scrollHeight, rootDiv.offsetHeight);
+                if (actualH > 0) {
+                  const actualMm = Math.ceil((actualH * 25.4) / 96) + 10;
+                  if (actualMm !== thermalHeightMm) {
+                    thermalHeightMm = actualMm;
+                    printStyleEl.textContent = buildThermalCss(actualMm);
+                  }
+                }
+              }
+            } catch {}
+          }
           iframeWin.focus();
           iframeWin.addEventListener('afterprint', cleanup);
           iframeWin.print();

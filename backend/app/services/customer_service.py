@@ -119,6 +119,8 @@ def update_customer(db: Session, customer_id: int, data: CustomerUpdate) -> Cust
     if data.name is not None:
         if not data.name.strip():
             raise BusinessRuleException("Customer name cannot be empty.")
+        if c.customer_id == "C-000001" and data.name.strip().lower() != "walk-in customer":
+            raise BusinessRuleException("The default Walk-in Customer account cannot be renamed.")
         c.name = data.name.strip()
     if data.phone is not None:
         c.phone = data.phone.strip() if data.phone else None
@@ -134,6 +136,11 @@ def deactivate_customer(db: Session, customer_id: int) -> CustomerResponse:
         raise EntityNotFoundException("Customer", str(customer_id))
     if c.customer_id == "C-000001":
         raise BusinessRuleException("Walk-in Customer cannot be deactivated.")
+    
+    due = get_customer_due(db, customer_id)
+    if due > Decimal("0.00"):
+        raise BusinessRuleException(f"Cannot deactivate customer '{c.name}' because they have an outstanding balance of Rs. {due}. Please settle or clear the balance before deactivation.")
+
     c.is_active = False
     db.commit()
     return get_customer(db, c.id)
@@ -272,14 +279,16 @@ def get_customer_ledger(db: Session, customer_id: int) -> List[CustomerLedgerEnt
     running_balance = Decimal("0.00")
     ledger_entries = []
     for item in timeline:
-        running_balance += item["debit"] - item["credit"]
+        d = item["debit"].quantize(Decimal("0.01"))
+        c = item["credit"].quantize(Decimal("0.01"))
+        running_balance = (running_balance + d - c).quantize(Decimal("0.01"))
         ledger_entries.append(CustomerLedgerEntry(
             date=item["date"],
             type=item["type"],
             reference=item["reference"],
             description=item["description"],
-            debit=item["debit"],
-            credit=item["credit"],
+            debit=d,
+            credit=c,
             balance=running_balance
         ))
 

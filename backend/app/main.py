@@ -17,8 +17,10 @@ from backend.app.services.auth_service import seed_initial_data
 from backend.app.api.routes import (
     auth, settings as settings_routes, products, inventory,
     customers, sales, returns, suppliers, purchases,
-    bills, expenses, dashboard, reports, backup, quotations
+    bills, expenses, dashboard, reports, backup, quotations,
+    google_backup
 )
+from backend.app.services.backup_scheduler import start_backup_scheduler, stop_backup_scheduler
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -31,7 +33,12 @@ async def lifespan(app: FastAPI):
         seed_initial_data(db)
     finally:
         db.close()
+    
+    # 3. Start background cloud backup scheduler
+    start_backup_scheduler()
     yield
+    stop_backup_scheduler()
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -109,6 +116,7 @@ app.include_router(expenses.router, prefix=api_prefix)
 app.include_router(dashboard.router, prefix=api_prefix)
 app.include_router(reports.router, prefix=api_prefix)
 app.include_router(backup.router, prefix=api_prefix)
+app.include_router(google_backup.router, prefix=api_prefix)
 app.include_router(quotations.router, prefix=api_prefix)
 
 @app.get("/api/health")

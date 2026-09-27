@@ -123,11 +123,6 @@
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
-
-  @page {
-    margin: 10mm 12mm 12mm 12mm;
-    size: A4 portrait;
-  }
 }
 
 /* Custom sleek scrollbar */

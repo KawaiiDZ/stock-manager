@@ -75,13 +75,18 @@ def create_product(data: ProductCreate, db: Session = Depends(get_db)):
 def create_products_bulk(products: List[ProductCreate], db: Session = Depends(get_db)):
     return product_service.create_products_bulk(db, products)
 
+@router.get("/products/generate-barcode")
+def generate_barcode(db: Session = Depends(get_db)):
+    code = product_service.generate_unique_barcode(db)
+    return {"barcode": code}
+
+@router.get("/products/barcode/{barcode:path}", response_model=Optional[ProductResponse])
+def get_product_by_barcode(barcode: str, db: Session = Depends(get_db)):
+    return product_service.get_product_by_barcode(db, barcode)
+
 @router.get("/products/{product_id}", response_model=ProductResponse)
 def get_product(product_id: int, db: Session = Depends(get_db)):
     return product_service.get_product(db, product_id)
-
-@router.get("/products/barcode/{barcode}", response_model=Optional[ProductResponse])
-def get_product_by_barcode(barcode: str, db: Session = Depends(get_db)):
-    return product_service.get_product_by_barcode(db, barcode)
 
 @router.put("/products/{product_id}", response_model=ProductResponse)
 def update_product(product_id: int, data: ProductUpdate, db: Session = Depends(get_db)):

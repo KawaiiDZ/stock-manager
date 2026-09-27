@@ -221,7 +221,7 @@ def _execute_create_sale(db: Session, data: SaleCreate) -> SaleResponse:
                 requested=float(item_data.quantity)
             )
 
-        item_total_price = (item_data.quantity * item_data.unit_price) - item_data.discount_amount
+        item_total_price = ((item_data.quantity * item_data.unit_price) - item_data.discount_amount).quantize(Decimal("0.01"))
         if item_total_price < Decimal("0.00"):
             item_total_price = Decimal("0.00")
 
@@ -482,6 +482,7 @@ def record_additional_sale_payment(db: Session, sale_id: int, amount: Decimal, p
 
     if amount <= Decimal("0.00"):
         raise BusinessRuleException("Payment amount must be greater than zero.")
+    amount = amount.quantize(Decimal("0.01"))
 
     total_balance_credit = Decimal("0.00")
     total_returned_qty = Decimal("0.00")

@@ -1,7 +1,7 @@
 from decimal import Decimal
 from typing import Optional, List
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 
 from backend.app.models.product import ProductCategory, Product, ProductCustomField, ProductCustomValue
 from backend.app.models.inventory import InventoryBatch, InventoryMovement
@@ -262,12 +262,42 @@ def get_product(db: Session, product_id: int) -> dict:
     if not product:
         raise EntityNotFoundException("Product", str(product_id))
     return _format_product_response(product)
+import random
+import time
+
+def generate_unique_barcode(db: Session) -> str:
+    """Generate a unique 12-digit in-store barcode (prefix '20' internal GS1 distribution range)."""
+    for _ in range(100):
+        base = "20" + "".join([str(random.randint(0, 9)) for _ in range(9)])
+        odds = sum(int(d) for d in base[::2])
+        evens = sum(int(d) for d in base[1::2])
+        checksum = (10 - ((odds + evens * 3) % 10)) % 10
+        candidate = f"{base}{checksum}"
+        existing = db.query(Product).filter(
+            or_(Product.barcode == candidate, Product.sku == candidate, Product.product_id == candidate)
+        ).first()
+        if not existing:
+            return candidate
+    return f"20{int(time.time())}"
 
 def get_product_by_barcode(db: Session, barcode: str) -> Optional[dict]:
+    clean_code = (barcode or "").strip()
+    if not clean_code:
+        return None
     product = db.query(Product).options(
         joinedload(Product.category),
         joinedload(Product.custom_values).joinedload(ProductCustomValue.custom_field)
-    ).filter(Product.barcode == barcode.strip(), Product.is_active == True).first()
+    ).filter(
+        or_(
+            Product.barcode == clean_code,
+            Product.sku == clean_code,
+            Product.product_id == clean_code,
+            func.lower(Product.barcode) == clean_code.lower(),
+            func.lower(Product.sku) == clean_code.lower(),
+            func.lower(Product.product_id) == clean_code.lower(),
+        ),
+        Product.is_active == True
+    ).first()
     if not product:
         return None
     return _format_product_response(product)

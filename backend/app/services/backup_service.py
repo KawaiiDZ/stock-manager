@@ -2,7 +2,7 @@ import os
 import shutil
 import sqlite3
 from datetime import datetime
-from typing import List
+from typing import List, Optional, Any
 from pathlib import Path
 
 from backend.app.core.config import settings
@@ -92,14 +92,27 @@ def list_backups() -> List[BackupFileResponse]:
     backups.sort(key=lambda x: x.created_at, reverse=True)
     return backups
 
-def restore_backup(backup_filename: str) -> BackupRestoreResponse:
+def restore_backup(backup_filename: str, confirm_pin: Optional[str] = None, db: Optional[Any] = None) -> BackupRestoreResponse:
     safe_filename = os.path.basename(backup_filename.strip())
     if not safe_filename.endswith(".db"):
-        raise BusinessRuleException("Invalid backup file extension. Only .db files can be restored.")
+        raise BusinessRuleException("Invalid backup file extension. Only .db files can be restored.", status_code=400)
+
 
     backup_path = (settings.BACKUP_DIR / safe_filename).resolve()
     if backup_path.parent != settings.BACKUP_DIR.resolve() or not backup_path.exists():
-        raise BusinessRuleException(f"Backup file '{safe_filename}' was not found in backups directory.")
+        raise BusinessRuleException(f"Backup file '{safe_filename}' was not found in backups directory.", status_code=400)
+
+    from backend.app.core.database import SessionLocal
+    from backend.app.services.auth_service import verify_settings_pin
+
+    check_db = db or SessionLocal()
+    try:
+        if not verify_settings_pin(check_db, str(confirm_pin or "").strip()):
+            raise BusinessRuleException("Incorrect or missing Configuration PIN. Database restore denied.", status_code=403)
+    finally:
+        if not db:
+            check_db.close()
+
 
     if not validate_sqlite_file(backup_path):
         raise BusinessRuleException(f"Backup file '{safe_filename}' is corrupted or not a valid database.")
@@ -107,7 +120,7 @@ def restore_backup(backup_filename: str) -> BackupRestoreResponse:
     db_path = settings.SQLITE_DB_PATH
 
     # Dispose active SQLAlchemy connection pool before replacing database file
-    engine.dispose()
+    engine.dispose(close=True)
 
     # 1. Create safety rollback backup of current state
     if db_path.exists():
@@ -117,6 +130,13 @@ def restore_backup(backup_filename: str) -> BackupRestoreResponse:
             shutil.copy2(db_path, pre_restore_backup)
         except Exception:
             pass
+        try:
+            curr_c = sqlite3.connect(str(db_path))
+            curr_c.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+            curr_c.execute("PRAGMA journal_mode=DELETE;")
+            curr_c.close()
+        except Exception:
+            pass
 
     # 2. Restore database from backup
     try:
@@ -124,42 +144,30 @@ def restore_backup(backup_filename: str) -> BackupRestoreResponse:
         dest_conn = sqlite3.connect(str(db_path))
         with dest_conn:
             source_conn.backup(dest_conn)
+        dest_conn.execute("PRAGMA journal_mode=WAL;")
+        dest_conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
         dest_conn.close()
         source_conn.close()
     except Exception as e:
         shutil.copy2(backup_path, db_path)
 
-    # 3. Clean up any stale WAL or SHM files
-    wal_file = Path(f"{db_path}-wal")
-    shm_file = Path(f"{db_path}-shm")
-    if wal_file.exists():
-        try:
-            wal_file.unlink()
-        except Exception:
-            pass
-    if shm_file.exists():
-        try:
-            shm_file.unlink()
-        except Exception:
-            pass
-
-    # 4. Dispose connections to flush file handles and run universal migrations
-    engine.dispose()
+    # 3. Dispose connections to flush file handles and run universal migrations
+    engine.dispose(close=True)
     try:
         auto_upgrade_schema()
     except Exception as e:
         print("Schema auto-upgrade error upon restore:", e)
 
-    # 5. Seed or heal baseline records (admin, default PIN, walk-in customer)
+    # 4. Seed or heal baseline records (admin, default PIN, walk-in customer)
     from backend.app.core.database import SessionLocal
     from backend.app.services.auth_service import seed_initial_data
-    db = SessionLocal()
+    heal_db = SessionLocal()
     try:
-        seed_initial_data(db)
+        seed_initial_data(heal_db)
     except Exception as e:
         print("Baseline data seeding error upon restore:", e)
     finally:
-        db.close()
+        heal_db.close()
 
     return BackupRestoreResponse(
         success=True,

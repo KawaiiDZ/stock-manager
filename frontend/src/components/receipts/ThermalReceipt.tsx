@@ -1,6 +1,7 @@
 import React from 'react';
 import { Sale, BusinessSettings } from '../../types';
-import { formatCurrency, formatMoney, formatDateTime } from '../../utils/format';
+import { formatCurrency, formatDateTime } from '../../utils/format';
+import { generateBarcodeSvg } from '../../utils/barcode';
 
 export interface ThermalReceiptProps {
   sale: Sale;
@@ -13,6 +14,7 @@ export interface ThermalReceiptProps {
   footerText?: string;
   printerType?: '58mm' | '80mm' | 'standard';
   paperWidth?: '58mm' | '80mm';
+  showBarcode?: boolean;
 }
 
 export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
@@ -26,6 +28,7 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
   footerText: propFooterText,
   printerType,
   paperWidth,
+  showBarcode = true,
 }) => {
   const currency = propCurrency || settings?.currency || 'Rs.';
   const shopName = businessName || settings?.business_name || 'My Local Business';
@@ -39,140 +42,175 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
   return (
     <div
       id="printable-thermal-receipt"
-      className={`bg-white text-black font-mono text-xs p-4 mx-auto print:m-0 print:p-1 ${
-        is58mm ? 'w-[58mm] max-w-[58mm] text-[10px]' : 'w-[80mm] max-w-[80mm]'
+      className={`bg-white text-black font-mono transition-all mx-auto print:m-0 print:p-0 print:w-full print:max-w-none ${
+        is58mm ? 'w-[58mm] max-w-[58mm] text-[10px] p-2.5 shadow-sm' : 'w-[80mm] max-w-[80mm] text-xs p-3.5 sm:p-4 shadow-sm'
       }`}
       style={{
         boxSizing: 'border-box',
-        lineHeight: '1.3',
+        lineHeight: '1.35',
       }}
     >
       {/* Header */}
-      <div className="text-center pb-2 border-b border-dashed border-black space-y-1">
+      <div className="text-center pb-2 border-b border-dashed border-black/70 space-y-1">
         <div className="flex justify-center pb-1">
           <img
             src={settings?.receipt_logo_path || settings?.logo_path || '/stokflow-receipt.png'}
             alt="Logo"
-            className="h-8 w-auto max-w-[140px] object-contain filter grayscale contrast-200"
+            className={`h-8 w-auto ${is58mm ? 'max-w-[110px]' : 'max-w-[150px]'} object-contain filter grayscale contrast-200`}
             onError={(e) => {
               (e.target as HTMLElement).style.display = 'none';
             }}
           />
         </div>
-        <h2 className="text-base font-black tracking-wider uppercase">{shopName}</h2>
-        {shopAddress && <p className="text-[11px] text-slate-700">{shopAddress}</p>}
-        {shopPhone && <p className="text-[11px] text-slate-700">Phone: {shopPhone}</p>}
-        {customHeader && <p className="text-[11px] text-slate-700 mt-1">{customHeader}</p>}
+        <h2 className={`${is58mm ? 'text-sm font-black' : 'text-base font-black'} tracking-wider uppercase leading-snug break-words`}>
+          {shopName}
+        </h2>
+        {shopAddress && <p className="leading-tight text-slate-700 break-words">{shopAddress}</p>}
+        {shopPhone && <p className="leading-tight text-slate-700">Phone: {shopPhone}</p>}
+        {customHeader && customHeader.trim().toLowerCase() !== shopName.trim().toLowerCase() && (
+          <p className="leading-tight text-slate-700 mt-1 italic break-words">{customHeader}</p>
+        )}
       </div>
 
       {/* Sale Info */}
-      <div className="py-2 border-b border-dashed border-black space-y-0.5 text-[11px]">
+      <div className="py-2 border-b border-dashed border-black/70 space-y-0.5 text-[10.5px]">
         <div className="flex justify-between">
-          <span>Receipt #:</span>
+          <span className="text-slate-600">Receipt #:</span>
           <span className="font-bold">{sale.receipt_number}</span>
         </div>
         <div className="flex justify-between">
-          <span>Date:</span>
+          <span className="text-slate-600">Date:</span>
           <span>{formatDateTime(sale.created_at)}</span>
         </div>
         <div className="flex justify-between">
-          <span>Customer:</span>
-          <span className="font-semibold">{sale.customer_name || 'Counter Walk-in'}</span>
+          <span className="text-slate-600">Customer:</span>
+          <span className="font-semibold text-right truncate max-w-[65%]">{sale.customer_name || 'Counter Walk-in'}</span>
         </div>
+        {(sale.payments?.[0]?.payment_method || (sale as any).payment_method) && (
+          <div className="flex justify-between">
+            <span className="text-slate-600">Payment:</span>
+            <span className="font-medium uppercase">
+              {sale.payments?.[0]?.payment_method || (sale as any).payment_method}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Items Table */}
-      <div className="py-2 border-b border-dashed border-black">
-        <div className="flex justify-between font-bold border-b border-black pb-1 mb-1">
-          <span>Item</span>
-          <span className="text-right">Qty × Price = Total</span>
+      <div className="py-2 border-b border-dashed border-black/70">
+        <div className="flex justify-between font-bold border-b border-black pb-1 mb-1.5 uppercase text-[10px] tracking-wide">
+          <span>Description</span>
+          <span className="text-right">Amount</span>
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           {sale.items?.map((item, idx) => {
             const origQty = Number(item.quantity || 0);
             const retQty = Number(item.returned_quantity || 0);
             const isFullyReturned = retQty >= origQty && origQty > 0;
             const isPartiallyReturned = retQty > 0 && retQty < origQty;
             const remainingQty = isFullyReturned ? 0 : Math.max(0, origQty - retQty);
+            const lineTotal = isFullyReturned
+              ? 0
+              : isPartiallyReturned
+              ? remainingQty * Number(item.unit_price || 0) - Number(item.discount_amount || 0)
+              : Number(item.total_price || 0);
 
             return (
-              <div key={idx} className={isFullyReturned ? 'text-slate-500 line-through' : ''}>
-                <div className="font-semibold leading-tight flex justify-between">
-                  <span>
-                    {item.product_name}
-                    {isFullyReturned && ' [RETURNED]'}
-                    {isPartiallyReturned && ` [${retQty} RET]`}
-                  </span>
+              <div key={idx} className={`leading-snug ${isFullyReturned ? 'opacity-60 line-through' : ''}`}>
+                {/* Line 1: Item Name */}
+                <div className="font-bold text-black break-words">
+                  {item.product_name}
+                  {isFullyReturned && ' (RETURNED)'}
+                  {isPartiallyReturned && ` (${retQty} RET)`}
                 </div>
-                <div className="flex justify-between text-[11px] text-slate-700">
-                  <span>
+
+                {/* Line 2: Qty × Unit Price left, Line Total right */}
+                <div className="flex justify-between items-baseline mt-0.5">
+                  <span className="text-slate-700">
                     {isFullyReturned
                       ? `0 (${origQty} ret) × ${formatCurrency(item.unit_price, currency)}`
                       : isPartiallyReturned
                       ? `${remainingQty} kept (${origQty} orig) × ${formatCurrency(item.unit_price, currency)}`
                       : `${origQty} × ${formatCurrency(item.unit_price, currency)}`}
-                    {Number(item.discount_amount || 0) > 0 && ` (-${formatCurrency(item.discount_amount, currency)})`}
                   </span>
-                  <span className="font-semibold">
-                    {isFullyReturned
-                      ? formatCurrency(0, currency)
-                      : isPartiallyReturned
-                      ? formatCurrency(remainingQty * Number(item.unit_price || 0), currency)
-                      : formatCurrency(item.total_price, currency)}
+                  <span className="font-bold font-mono text-black text-right ml-2 shrink-0">
+                    {formatCurrency(lineTotal, currency)}
                   </span>
                 </div>
+
+                {/* Indented item discount if any */}
+                {Number(item.discount_amount || 0) > 0 && !isFullyReturned && (
+                  <div className="text-[10px] text-slate-600 pl-2">
+                    ↳ Item Disc: -{formatCurrency(item.discount_amount, currency)}
+                  </div>
+                )}
+
+                {/* Indented returned units if partially returned */}
+                {isPartiallyReturned && (
+                  <div className="text-[10px] text-rose-700 font-semibold pl-2">
+                    ↳ Returned {retQty} × {formatCurrency(item.unit_price, currency)} (-{formatCurrency(retQty * Number(item.unit_price || 0), currency)})
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
+
+        {/* Total items & quantity summary */}
+        <div className="flex justify-between text-[10px] text-slate-600 pt-1.5 mt-2 border-t border-dotted border-black/40">
+          <span>Items / Units:</span>
+          <span>
+            {sale.items?.length || 0} lines / {(sale.items || []).reduce((acc, it) => acc + Number(it.quantity || 0), 0)} pcs
+          </span>
+        </div>
       </div>
 
       {/* Totals */}
-      <div className="py-2 border-b border-dashed border-black space-y-1">
+      <div className="py-2 border-b border-dashed border-black/70 space-y-1">
         <div className="flex justify-between">
           <span>Subtotal:</span>
-          <span>{formatCurrency(sale.subtotal, currency)}</span>
+          <span className="font-mono">{formatCurrency(sale.subtotal, currency)}</span>
         </div>
         {Number(sale.discount_amount || 0) > 0 && (
           <div className="flex justify-between">
-            <span>Discount:</span>
-            <span>-{formatCurrency(sale.discount_amount, currency)}</span>
+            <span>Order Discount:</span>
+            <span className="font-mono">-{formatCurrency(sale.discount_amount, currency)}</span>
           </div>
         )}
         {Number(sale.tax_amount || 0) > 0 && (
           <div className="flex justify-between">
             <span>Tax ({sale.tax_rate}%):</span>
-            <span>+{formatCurrency(sale.tax_amount, currency)}</span>
+            <span className="font-mono">+{formatCurrency(sale.tax_amount, currency)}</span>
           </div>
         )}
-        <div className="flex justify-between font-bold text-sm border-t border-black pt-1 mt-1">
-          <span>ORIGINAL TOTAL:</span>
-          <span>{formatCurrency(sale.total_amount, currency)}</span>
+        <div className="flex justify-between font-bold text-sm border-t-2 border-black pt-1.5 mt-1">
+          <span>TOTAL:</span>
+          <span className="font-mono">{formatCurrency(sale.total_amount, currency)}</span>
         </div>
         {Number(sale.total_returned_amount || 0) > 0 && (
           <>
-            <div className="flex justify-between text-[11px] text-rose-800 font-semibold">
+            <div className="flex justify-between text-rose-800 font-semibold">
               <span>Less Returned Items:</span>
-              <span>-{formatCurrency(sale.total_returned_amount, currency)}</span>
+              <span className="font-mono">-{formatCurrency(sale.total_returned_amount, currency)}</span>
             </div>
-            <div className="flex justify-between font-bold border-t border-dotted border-black pt-0.5">
-              <span>ADJUSTED TOTAL:</span>
-              <span>{formatCurrency(Math.max(0, Number(sale.total_amount || 0) - Number(sale.total_returned_amount || 0)), currency)}</span>
+            <div className="flex justify-between font-bold border-t border-dotted border-black pt-1">
+              <span>NET PAYABLE:</span>
+              <span className="font-mono">{formatCurrency(Math.max(0, Number(sale.total_amount || 0) - Number(sale.total_returned_amount || 0)), currency)}</span>
             </div>
           </>
         )}
       </div>
 
       {/* Payment details */}
-      <div className="py-2 border-b border-dashed border-black space-y-1 text-[11px]">
+      <div className="py-2 border-b border-dashed border-black/70 space-y-1">
         <div className="flex justify-between font-semibold">
           <span>Paid:</span>
-          <span>{formatCurrency(sale.paid_amount, currency)}</span>
+          <span className="font-mono">{formatCurrency(sale.paid_amount, currency)}</span>
         </div>
         {Number(sale.due_amount || 0) > 0 ? (
           <div className="flex justify-between font-bold text-rose-800">
             <span>Remaining Due:</span>
-            <span>{formatCurrency(sale.due_amount, currency)}</span>
+            <span className="font-mono">{formatCurrency(sale.due_amount, currency)}</span>
           </div>
         ) : (
           <div className="flex justify-between font-bold text-emerald-800">
@@ -182,17 +220,46 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
                 ? 'FULLY RETURNED'
                 : (sale.payment_status || '').toUpperCase() === 'PARTIALLY_RETURNED'
                 ? 'PARTIALLY RETURNED (SETTLED)'
-                : 'FULLY PAID'}
+                : 'PAID IN FULL'}
+            </span>
+          </div>
+        )}
+        {Number(sale.paid_amount || 0) > Number(sale.total_amount || 0) && (
+          <div className="flex justify-between text-slate-700">
+            <span>Change:</span>
+            <span className="font-mono">
+              {formatCurrency(Number(sale.paid_amount || 0) - Number(sale.total_amount || 0), currency)}
             </span>
           </div>
         )}
       </div>
 
+      {/* Code-128 Barcode for quick scanner lookup */}
+      {showBarcode !== false && sale.receipt_number && (
+        <div className="py-2.5 flex flex-col items-center justify-center">
+          <div
+            dangerouslySetInnerHTML={{
+              __html: generateBarcodeSvg(sale.receipt_number, {
+                height: is58mm ? 26 : 32,
+                barWidth: is58mm ? 1.3 : 1.6,
+                quietZone: 8,
+                includeText: true,
+                fontSize: is58mm ? 10 : 11,
+              }),
+            }}
+            className="flex justify-center w-full overflow-hidden"
+          />
+        </div>
+      )}
+
       {/* Footer message */}
-      <div className="text-center pt-3 text-[11px]">
-        <p className="font-medium">{footerText}</p>
-        <p className="text-[9px] text-slate-500 mt-1">Powered by Stock Manager</p>
+      <div className="text-center pt-2">
+        <p className="font-semibold leading-tight">{footerText}</p>
       </div>
+
+      {/* Paper Cutter Feed Spacing */}
+      <div className="h-4 print:h-6" />
     </div>
   );
 };
+

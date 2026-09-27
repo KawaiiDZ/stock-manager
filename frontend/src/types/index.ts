@@ -25,6 +25,14 @@ export interface BusinessSettings {
   enable_quotations?: boolean;
   invoice_terms?: string;
   quotation_terms?: string;
+  enable_barcode_scanner?: boolean;
+  enable_barcode_printer?: boolean;
+  barcode_label_size?: string;
+  barcode_label_show_business_name?: boolean;
+  barcode_label_show_product_name?: boolean;
+  barcode_label_show_price?: boolean;
+  barcode_label_show_sku?: boolean;
+  barcode_label_custom_text?: string;
 }
 
 export interface CustomField {
@@ -509,3 +517,46 @@ export interface QuotationConvertRequest {
   amount_paid?: number;
   notes?: string;
 }
+
+export interface GoogleDriveFileItem {
+  id: string;
+  name: string;
+  size_bytes: number;
+  size_formatted: string;
+  created_at: string;
+}
+
+export interface GoogleBackupStatusResponse {
+  is_connected: boolean;
+  is_enabled: boolean;
+  frequency: '6h' | 'daily' | 'weekly' | 'manual';
+  google_email?: string | null;
+  google_name?: string | null;
+  last_backup_at?: string | null;
+  last_backup_status: 'NEVER' | 'SUCCESS' | 'FAILED' | 'OFFLINE_SKIPPED' | 'IN_PROGRESS';
+  last_backup_size_bytes?: number | null;
+  last_backup_size_formatted?: string | null;
+  last_error_message?: string | null;
+  cloud_backups: GoogleDriveFileItem[];
+  has_custom_credentials: boolean;
+  client_id_configured: boolean;
+  quota_used_bytes?: number | null;
+  quota_limit_bytes?: number | null;
+  quota_used_formatted?: string | null;
+  quota_limit_formatted?: string | null;
+  is_quota_exceeded: boolean;
+}
+
+export interface GoogleBackupSettingsUpdate {
+  is_enabled?: boolean;
+  frequency?: string;
+  custom_client_id?: string;
+  custom_client_secret?: string;
+}
+
+export interface GoogleBackupActionResponse {
+  success: boolean;
+  message: string;
+  file?: GoogleDriveFileItem;
+}
+
