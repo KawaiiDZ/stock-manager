@@ -18,6 +18,10 @@ export interface BusinessSettings {
   date_format?: string;
   format_prices_with_commas?: boolean;
   receipt_type?: 'thermal' | 'pdf';
+  thermal_print_mode?: 'browser' | 'direct_escpos';
+  thermal_header_style?: 'logo_text' | 'text_only';
+  selected_thermal_printer?: string;
+  thermal_darkness?: 'maximum' | 'high' | 'normal';
   receipt_letterhead_path?: string | null;
   show_letterhead?: boolean;
   hide_header_text_with_letterhead?: boolean;
@@ -33,6 +37,14 @@ export interface BusinessSettings {
   barcode_label_show_price?: boolean;
   barcode_label_show_sku?: boolean;
   barcode_label_custom_text?: string;
+}
+
+export interface PrinterInfo {
+  name: string;
+  is_default: boolean;
+  is_thermal: boolean;
+  device_uri?: string;
+  status?: string;
 }
 
 export interface CustomField {

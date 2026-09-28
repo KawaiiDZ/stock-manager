@@ -87,11 +87,19 @@ export const printElement = (
 
     const buildThermalCss = (heightMm: number) => `
       @page {
-        size: ${rollWidth} ${heightMm}mm !important;
-        margin: 0 !important;
+        size: ${rollWidth} auto !important;
+        margin: 0mm !important;
       }
       *, *::before, *::after {
         box-sizing: border-box !important;
+        filter: none !important;
+        -webkit-filter: none !important;
+        backdrop-filter: none !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
+        -webkit-column-break-inside: avoid !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
       }
       html, body {
         margin: 0 !important;
@@ -100,17 +108,36 @@ export const printElement = (
         color: #000000 !important;
         width: ${rollWidth} !important;
         max-width: ${rollWidth} !important;
-        height: ${heightMm}mm !important;
+        height: auto !important;
+        min-height: 100% !important;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
-        overflow: hidden !important;
+        overflow: visible !important;
       }
       #print-root {
         width: ${rollWidth} !important;
         max-width: ${rollWidth} !important;
         margin: 0 !important;
         padding: 0 !important;
+        color: #000000 !important;
+        overflow: visible !important;
+      }
+      #print-root * {
+        color: #000000 !important;
+        border-color: #000000 !important;
+        font-weight: 700 !important;
+        -webkit-text-stroke: 0.35px #000000 !important;
+        text-rendering: geometricPrecision !important;
+      }
+      #print-root h1, #print-root h2, #print-root h3, #print-root strong, #print-root b, #print-root .font-bold, #print-root .font-black {
+        font-weight: 900 !important;
+        -webkit-text-stroke: 0.65px #000000 !important;
+      }
+      #print-root .border-dashed, #print-root .border-dotted {
+        border-style: solid !important;
+        border-bottom-width: 1.5px !important;
+        border-color: #000000 !important;
       }
       #print-root > div {
         width: 100% !important;
@@ -120,9 +147,15 @@ export const printElement = (
         box-shadow: none !important;
         border: none !important;
         border-radius: 0 !important;
+        overflow: visible !important;
       }
       .no-print, button, .btn-no-print {
         display: none !important;
+      }
+      /* Prevent mid-receipt page breaks and cuts in continuous rolls */
+      table, tr, td, th, .sale-item, .receipt-section, .receipt-row, .receipt-totals, .receipt-barcode, .receipt-header, .receipt-footer {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
       }
     `;
 

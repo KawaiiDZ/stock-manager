@@ -4,8 +4,8 @@ import { Button } from '../common/Button';
 import { ThermalReceipt } from './ThermalReceipt';
 import { PdfInvoiceReceipt } from './PdfInvoiceReceipt';
 import { Sale, BusinessSettings } from '../../types';
-import { Printer, Plus, Receipt, FileText } from 'lucide-react';
-
+import { Printer, Plus, Receipt, FileText, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { api } from '../../services/api';
 import { printElement } from '../../utils/print';
 
 interface ReceiptModalProps {
@@ -25,15 +25,20 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
 }) => {
   const [receiptType, setReceiptType] = useState<'thermal' | 'pdf'>('thermal');
   const [paperWidth, setPaperWidth] = useState<'80mm' | '58mm'>('80mm');
+  const [directPrinting, setDirectPrinting] = useState<boolean>(false);
+  const [printSuccessMsg, setPrintSuccessMsg] = useState<string | null>(null);
+  const [printErrorMsg, setPrintErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       setReceiptType(settings?.receipt_type === 'pdf' ? 'pdf' : 'thermal');
       setPaperWidth(settings?.receipt_printer_type === '58mm' ? '58mm' : '80mm');
+      setPrintSuccessMsg(null);
+      setPrintErrorMsg(null);
     }
   }, [isOpen, settings?.receipt_type, settings?.receipt_printer_type]);
 
-  const handlePrint = () => {
+  const handleBrowserPrint = () => {
     if (!sale) return;
     if (receiptType === 'thermal') {
       printElement('printable-thermal-receipt', {
@@ -47,6 +52,37 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         title: `${invoiceName}_${sale.receipt_number}`,
         isThermal: false,
       });
+    }
+  };
+
+  const handleDirectPrint = async () => {
+    if (!sale) return;
+    try {
+      setDirectPrinting(true);
+      setPrintErrorMsg(null);
+      setPrintSuccessMsg(null);
+      const res = await api.printThermalDirect({
+        sale_id: sale.id,
+        paper_width: paperWidth,
+        header_style: settings?.thermal_header_style || 'logo_text',
+        show_barcode: settings?.show_barcode ?? true,
+        darkness: settings?.thermal_darkness || 'maximum',
+      });
+      setPrintSuccessMsg(`Receipt sent directly to ${res.printer}`);
+      setTimeout(() => setPrintSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setPrintErrorMsg(err.detail || 'Direct ESC/POS print failed. Opening browser print dialog...');
+      handleBrowserPrint();
+    } finally {
+      setDirectPrinting(false);
+    }
+  };
+
+  const handlePrint = () => {
+    if (receiptType === 'thermal' && settings?.thermal_print_mode === 'direct_escpos') {
+      handleDirectPrint();
+    } else {
+      handleBrowserPrint();
     }
   };
 
@@ -149,6 +185,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                 footerText={settings?.receipt_footer}
                 paperWidth={paperWidth}
                 printerType={paperWidth}
+                headerStyle={settings?.thermal_header_style || 'logo_text'}
+                showBarcode={settings?.show_barcode ?? true}
               />
             </div>
           </div>
@@ -171,13 +209,28 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         )}
       </div>
 
+      {/* Status Notifications */}
+      {printSuccessMsg && (
+        <div className="px-6 py-2 bg-emerald-50 border-t border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span>{printSuccessMsg}</span>
+        </div>
+      )}
+      {printErrorMsg && (
+        <div className="px-6 py-2 bg-amber-50 border-t border-amber-200 text-amber-800 text-xs font-semibold flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+          <span>{printErrorMsg}</span>
+        </div>
+      )}
+
       {/* 3. Action Footer (Fixed Bottom) */}
       <div className="px-6 py-3 bg-white shrink-0 border-t border-slate-200 flex flex-col sm:flex-row gap-3">
         <Button
           variant="primary"
           size="lg"
-          className="flex-1 font-bold text-sm sm:text-base whitespace-nowrap bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20"
+          className="flex-1 font-bold text-sm sm:text-base whitespace-nowrap bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5"
           icon={<Printer className="h-5 w-5" />}
+          loading={directPrinting}
           onClick={handlePrint}
         >
           {receiptType === 'thermal' ? `Print Thermal Receipt (${paperWidth})` : 'Print / Save as PDF'}
@@ -187,7 +240,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
           <Button
             variant="outline"
             size="lg"
-            className="flex-1 font-semibold"
+            className="font-semibold"
             icon={<Plus className="h-5 w-5" />}
             onClick={() => {
               onClose();
@@ -197,7 +250,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             Next Sale
           </Button>
         ) : (
-          <Button variant="secondary" size="lg" className="flex-1 font-semibold" onClick={onClose}>
+          <Button variant="secondary" size="lg" className="font-semibold" onClick={onClose}>
             Close
           </Button>
         )}

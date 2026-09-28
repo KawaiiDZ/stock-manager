@@ -18,7 +18,7 @@ from backend.app.api.routes import (
     auth, settings as settings_routes, products, inventory,
     customers, sales, returns, suppliers, purchases,
     bills, expenses, dashboard, reports, backup, quotations,
-    google_backup
+    google_backup, printing
 )
 from backend.app.services.backup_scheduler import start_backup_scheduler, stop_backup_scheduler
 
@@ -118,6 +118,7 @@ app.include_router(reports.router, prefix=api_prefix)
 app.include_router(backup.router, prefix=api_prefix)
 app.include_router(google_backup.router, prefix=api_prefix)
 app.include_router(quotations.router, prefix=api_prefix)
+app.include_router(printing.router, prefix=api_prefix)
 
 @app.get("/api/health")
 def health_check():

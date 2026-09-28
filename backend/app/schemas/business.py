@@ -23,6 +23,10 @@ class BusinessSettingsResponse(BaseModel):
     date_format: str = "YYYY-MM-DD"
     format_prices_with_commas: bool = True
     receipt_type: str = "thermal"
+    thermal_print_mode: str = "browser"
+    thermal_header_style: str = "logo_text"
+    selected_thermal_printer: str = ""
+    thermal_darkness: str = "maximum"
     receipt_letterhead_path: Optional[str] = None
     show_letterhead: bool = False
     hide_header_text_with_letterhead: bool = False
@@ -61,6 +65,10 @@ class BusinessSettingsUpdate(BaseModel):
     date_format: Optional[str] = None
     format_prices_with_commas: Optional[bool] = None
     receipt_type: Optional[str] = None
+    thermal_print_mode: Optional[str] = None
+    thermal_header_style: Optional[str] = None
+    selected_thermal_printer: Optional[str] = None
+    thermal_darkness: Optional[str] = None
     receipt_letterhead_path: Optional[str] = None
     show_letterhead: Optional[bool] = None
     hide_header_text_with_letterhead: Optional[bool] = None

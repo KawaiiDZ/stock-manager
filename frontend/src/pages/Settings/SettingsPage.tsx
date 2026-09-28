@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../services/api';
-import { BusinessSettings, CustomField, BackupFile, Sale } from '../../types';
+import { BusinessSettings, CustomField, BackupFile, Sale, PrinterInfo } from '../../types';
 import {
   Settings as SettingsIcon,
   Lock,
@@ -25,6 +25,9 @@ import {
   Eye,
   Receipt,
   RotateCcw,
+  Zap,
+  Flame,
+  Info,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -34,6 +37,8 @@ import { SchemaBuilder } from './SchemaBuilder';
 import { SetupWizardModal } from '../../components/wizard/SetupWizardModal';
 import { BarcodePrintModal } from '../../components/barcode/BarcodePrintModal';
 import { ReceiptModal } from '../../components/receipts/ReceiptModal';
+import { ThermalReceipt } from '../../components/receipts/ThermalReceipt';
+import { printElement } from '../../utils/print';
 import { STANDARD_LABEL_SIZES, generateBarcodeSvg, parseLabelDimensions } from '../../utils/barcode';
 import { STANDARD_DATE_FORMATS, setGlobalFormattingPreferences, formatDate, formatCurrency } from '../../utils/format';
 import { GoogleBackupCard } from '../../components/settings/GoogleBackupCard';
@@ -88,6 +93,25 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [receiptHeader, setReceiptHeader] = useState(settings?.receipt_header || '');
   const [receiptFooter, setReceiptFooter] = useState(settings?.receipt_footer || '');
   const [printerType, setPrinterType] = useState(settings?.receipt_printer_type || '80mm');
+  const [thermalPrintMode, setThermalPrintMode] = useState<'browser' | 'direct_escpos'>(
+    settings?.thermal_print_mode || 'browser'
+  );
+  const [thermalHeaderStyle, setThermalHeaderStyle] = useState<'logo_text' | 'text_only'>(
+    settings?.thermal_header_style || 'logo_text'
+  );
+  const [thermalDarkness, setThermalDarkness] = useState<'maximum' | 'high' | 'normal'>(
+    settings?.thermal_darkness || 'maximum'
+  );
+  const [selectedThermalPrinter, setSelectedThermalPrinter] = useState<string>(
+    settings?.selected_thermal_printer || ''
+  );
+  const [systemPrinters, setSystemPrinters] = useState<PrinterInfo[]>([]);
+  const [loadingPrinters, setLoadingPrinters] = useState<boolean>(false);
+  const [directPrintingTest, setDirectPrintingTest] = useState<boolean>(false);
+  const [testPrintFeedback, setTestPrintFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   // Barcode & Scanner State
   const [enableBarcodeScanner, setEnableBarcodeScanner] = useState(settings?.enable_barcode_scanner ?? true);
@@ -218,6 +242,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setReceiptHeader(settings.receipt_header);
       setReceiptFooter(settings.receipt_footer);
       setPrinterType(settings.receipt_printer_type);
+      setThermalPrintMode(settings.thermal_print_mode || 'browser');
+      setThermalHeaderStyle(settings.thermal_header_style || 'logo_text');
+      setThermalDarkness(settings.thermal_darkness || 'maximum');
+      setSelectedThermalPrinter(settings.selected_thermal_printer || '');
       setShowSku(settings.show_sku ?? true);
       setShowBarcode(settings.show_barcode ?? true);
       setDateFormat(settings.date_format || 'YYYY-MM-DD');
@@ -244,6 +272,32 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setBarcodeLabelCustomText(settings.barcode_label_custom_text || '');
     }
   }, [settings]);
+
+  const loadPrinters = async () => {
+    setLoadingPrinters(true);
+    try {
+      const list = await api.getSystemPrinters();
+      setSystemPrinters(list);
+      if (list.length > 0) {
+        setSelectedThermalPrinter((prev) => {
+          if (prev && list.some((p) => p.name === prev)) return prev;
+          const thermal = list.find((p) => p.is_thermal);
+          const def = list.find((p) => p.is_default);
+          return thermal ? thermal.name : (def ? def.name : list[0].name);
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load system printers:', err);
+    } finally {
+      setLoadingPrinters(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isUnlocked && activeTab === 'printer') {
+      loadPrinters();
+    }
+  }, [isUnlocked, activeTab]);
 
   const loadCustomFields = async () => {
     try {
@@ -276,6 +330,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         setIsUnlocked(true);
         loadCustomFields();
         loadBackups();
+        loadPrinters();
       } else {
         setPinError('Incorrect PIN. Default PIN is 1234.');
       }
@@ -307,6 +362,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         date_format: dateFormat,
         format_prices_with_commas: formatPricesWithCommas,
         receipt_type: receiptType,
+        thermal_print_mode: thermalPrintMode,
+        thermal_header_style: thermalHeaderStyle,
+        thermal_darkness: thermalDarkness,
+        selected_thermal_printer: selectedThermalPrinter,
         show_letterhead: showLetterhead,
         hide_header_text_with_letterhead: hideHeaderTextWithLetterhead,
         receipt_letterhead_path: letterheadImage || null,
@@ -565,6 +624,40 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     } catch (err: any) {
       setErrorMsg(err.detail || 'Failed to change PIN');
     }
+  };
+
+  const handleTestDirectPrint = async () => {
+    setDirectPrintingTest(true);
+    setTestPrintFeedback(null);
+    try {
+      const res = await api.printThermalDirect({
+        is_sample: true,
+        printer_name: selectedThermalPrinter || undefined,
+        paper_width: printerType,
+        header_style: thermalHeaderStyle,
+        show_barcode: showBarcode,
+        darkness: thermalDarkness,
+      });
+      setTestPrintFeedback({
+        type: 'success',
+        message: `Direct ESC/POS test receipt sent to '${res.printer}' successfully! (${res.bytes_sent} bytes dispatched)`,
+      });
+    } catch (err: any) {
+      setTestPrintFeedback({
+        type: 'error',
+        message: err.detail || 'Direct ESC/POS test print failed. Check printer connection or power.',
+      });
+    } finally {
+      setDirectPrintingTest(false);
+    }
+  };
+
+  const handleTestBrowserPrint = () => {
+    printElement('printable-thermal-receipt', {
+      title: 'Sample_Test_Receipt',
+      isThermal: true,
+      paperWidth: (printerType === '58mm' ? '58mm' : '80mm'),
+    });
   };
 
   const handleOpenResetModal = (mode: 'sales_only' | 'inventory_only' | 'all_data') => {
@@ -1030,468 +1123,903 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
       {/* Tab: Receipt & Printer */}
       {activeTab === 'printer' && (
-        <div className="max-w-3xl space-y-6">
-          <form onSubmit={handleSaveSettings} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
-            <div>
-              <h3 className="font-bold text-slate-800 text-base">Receipt & Invoice Formatting</h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Choose between fast point-of-sale thermal receipts or full-page PDF/A4 corporate invoices with letterheads.
-              </p>
-            </div>
-
-            {/* Receipt Format Selector Cards */}
-            <div>
-              <label className="block text-xs font-bold uppercase text-slate-500 mb-2">
-                Default Receipt Format
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setReceiptType('thermal')}
-                  className={`p-4 rounded-2xl border-2 text-left transition-all flex items-start gap-3.5 ${
-                    receiptType === 'thermal'
-                      ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
-                      : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
-                  }`}
-                >
-                  <div className={`p-2.5 rounded-xl mt-0.5 ${receiptType === 'thermal' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                    <Printer className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-sm flex items-center gap-1.5">
-                      Thermal Receipt Roll
-                      {receiptType === 'thermal' && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-200 text-emerald-800 rounded-md">Default</span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                      Optimized for 80mm & 58mm thermal printers. Quick checkout, compact footprint, fast cuts.
-                    </p>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setReceiptType('pdf')}
-                  className={`p-4 rounded-2xl border-2 text-left transition-all flex items-start gap-3.5 ${
-                    receiptType === 'pdf'
-                      ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
-                      : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
-                  }`}
-                >
-                  <div className={`p-2.5 rounded-xl mt-0.5 ${receiptType === 'pdf' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                    <FileText className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-sm flex items-center gap-1.5">
-                      Standard PDF / A4 Invoice
-                      {receiptType === 'pdf' && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-200 text-emerald-800 rounded-md">Default</span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                      Full-page corporate layout. Supports custom letterhead graphics, detailed tables & signature blocks.
-                    </p>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            {/* Conditional Options for Thermal */}
-            {receiptType === 'thermal' && (
-              <div>
-                <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">
-                  Receipt Printer Paper Size
-                </label>
-                <select
-                  value={printerType}
-                  onChange={(e) => setPrinterType(e.target.value as any)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
-                >
-                  <option value="80mm">80mm Thermal Receipt (Standard Wide)</option>
-                  <option value="58mm">58mm Thermal Receipt (Narrow Compact)</option>
-                  <option value="standard">Standard A4 / Letter Page</option>
-                </select>
-              </div>
-            )}
-
-            {/* Conditional Options for PDF / A4 */}
-            {receiptType === 'pdf' && (
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-sm font-bold text-slate-800 block">Custom / Pre-printed Letterhead</span>
-                    <span className="text-xs text-slate-500">Enable custom full-width branding banner or pre-printed letterhead alignment</span>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={showLetterhead}
-                      onChange={(e) => setShowLetterhead(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-                  </label>
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+            {/* Left Column: Configuration Forms (7 cols on XL) */}
+            <div className="xl:col-span-7 space-y-6">
+              <form onSubmit={handleSaveSettings} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
+                <div>
+                  <h3 className="font-bold text-slate-800 text-base">Receipt & Invoice Formatting</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Configure thermal receipt printing, raw ESC/POS hardware spooling, and corporate PDF/A4 letterheads.
+                  </p>
                 </div>
 
-                {showLetterhead && (
-                  <div className="pt-3 border-t border-slate-200/80 space-y-3">
-                    <label className="flex items-start gap-2.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={hideHeaderTextWithLetterhead}
-                        onChange={(e) => setHideHeaderTextWithLetterhead(e.target.checked)}
-                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 mt-0.5"
-                      />
+                {/* Receipt Format Selector Cards */}
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-500 mb-2">
+                    Default Receipt Format
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setReceiptType('thermal')}
+                      className={`p-4 rounded-2xl border-2 text-left transition-all flex items-start gap-3.5 ${
+                        receiptType === 'thermal'
+                          ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
+                          : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                      }`}
+                    >
+                      <div className={`p-2.5 rounded-xl mt-0.5 ${receiptType === 'thermal' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                        <Printer className="h-5 w-5" />
+                      </div>
                       <div>
-                        <span className="text-xs font-semibold text-slate-800 block">
-                          Hide Computer-Generated Business Header Text
-                        </span>
+                        <div className="font-bold text-sm flex items-center gap-1.5">
+                          Thermal Receipt Roll
+                          {receiptType === 'thermal' && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-200 text-emerald-800 rounded-md">Active</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                          Optimized for 80mm & 58mm thermal printers. Fast checkout, compact footprint, fast cuts.
+                        </p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setReceiptType('pdf')}
+                      className={`p-4 rounded-2xl border-2 text-left transition-all flex items-start gap-3.5 ${
+                        receiptType === 'pdf'
+                          ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
+                          : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                      }`}
+                    >
+                      <div className={`p-2.5 rounded-xl mt-0.5 ${receiptType === 'pdf' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                        <FileText className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm flex items-center gap-1.5">
+                          Standard PDF / A4 Invoice
+                          {receiptType === 'pdf' && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-200 text-emerald-800 rounded-md">Active</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                          Full-page corporate layout. Supports custom letterhead graphics, detailed tables & signature blocks.
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Conditional Options for Thermal */}
+                {receiptType === 'thermal' && (
+                  <div className="space-y-5 pt-3 border-t border-slate-100">
+                    {/* Thermal Print Engine Mode Selection */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                          Thermal Printing Engine Mode
+                        </label>
                         <span className="text-[11px] text-slate-400">
-                          Check this if your physical stationary or uploaded letterhead graphic already contains your business name, address, and phone number.
+                          Dual Option: macOS & Windows
                         </span>
                       </div>
-                    </label>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Option 1: Direct ESC/POS */}
+                        <button
+                          type="button"
+                          onClick={() => setThermalPrintMode('direct_escpos')}
+                          className={`p-4 rounded-2xl border-2 text-left transition-all flex flex-col justify-between ${
+                            thermalPrintMode === 'direct_escpos'
+                              ? 'border-emerald-600 bg-emerald-50/40 shadow-sm ring-1 ring-emerald-500/20'
+                              : 'border-slate-200 hover:border-slate-300 bg-white'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between gap-1 mb-1.5">
+                              <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                                <Zap className="h-4 w-4 text-emerald-600" />
+                                Direct ESC/POS Engine
+                              </span>
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 shrink-0">
+                                Recommended
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 leading-relaxed">
+                              Dispatches raw binary commands straight to the thermal printer via system spooler. 1-click instant checkout, automatic paper cut, and completely immune to PostScript <code className="text-[10px] font-mono bg-slate-100 px-1 py-0.5 rounded">/imageType 3</code> errors.
+                            </p>
+                          </div>
+                          <div className="mt-3 text-[10px] font-semibold text-emerald-700 flex items-center gap-1">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> 1-Click fast raw printing without browser dialog
+                          </div>
+                        </button>
+
+                        {/* Option 2: Browser Print Dialog */}
+                        <button
+                          type="button"
+                          onClick={() => setThermalPrintMode('browser')}
+                          className={`p-4 rounded-2xl border-2 text-left transition-all flex flex-col justify-between ${
+                            thermalPrintMode === 'browser'
+                              ? 'border-emerald-600 bg-emerald-50/40 shadow-sm ring-1 ring-emerald-500/20'
+                              : 'border-slate-200 hover:border-slate-300 bg-white'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between gap-1 mb-1.5">
+                              <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                                <Printer className="h-4 w-4 text-blue-600" />
+                                Browser Print Dialog
+                              </span>
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">
+                                Standard OS
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 leading-relaxed">
+                              Opens your browser's native print preview dialog. Standard for Windows environments with official vendor printer drivers installed, or when selecting different destination printers on the fly.
+                            </p>
+                          </div>
+                          <div className="mt-3 text-[10px] font-semibold text-slate-600 flex items-center gap-1">
+                            <span>Allows selecting printer, copies & scale manually</span>
+                          </div>
+                        </button>
+                      </div>
+
+                      {/* Browser Print Preview Configuration Guide */}
+                      {thermalPrintMode === 'browser' && (
+                        <div className="mt-3 p-4 rounded-2xl bg-blue-50/70 border border-blue-200/80 space-y-2.5">
+                          <div className="flex items-center gap-2">
+                            <Info className="h-4 w-4 text-blue-600 shrink-0" />
+                            <span className="text-xs font-bold text-blue-950">
+                              Browser Print Preview Configuration Guide (Optimal Continuous Output)
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-blue-900 leading-relaxed">
+                            To prevent browser pagination breaks and accidental mid-receipt cuts on long receipts, ensure your browser print dialog has these settings configured:
+                          </p>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                            <div className="bg-white p-2.5 rounded-xl border border-blue-100">
+                              <span className="block text-[10px] font-bold uppercase text-slate-400">Margins</span>
+                              <span className="text-xs font-bold text-slate-800">None</span>
+                            </div>
+                            <div className="bg-white p-2.5 rounded-xl border border-blue-100">
+                              <span className="block text-[10px] font-bold uppercase text-slate-400">Scale</span>
+                              <span className="text-xs font-bold text-slate-800">100% / Default</span>
+                            </div>
+                            <div className="bg-white p-2.5 rounded-xl border border-blue-100">
+                              <span className="block text-[10px] font-bold uppercase text-slate-400">Headers & Footers</span>
+                              <span className="text-xs font-bold text-rose-700">Unchecked (Off)</span>
+                            </div>
+                            <div className="bg-white p-2.5 rounded-xl border border-blue-100">
+                              <span className="block text-[10px] font-bold uppercase text-slate-400">Paper Size</span>
+                              <span className="text-xs font-bold text-emerald-700">Roll / Continuous</span>
+                            </div>
+                          </div>
+                          <p className="text-[10px] text-blue-800/80">
+                            <strong>Tip:</strong> If your Mac/PC only lists standard &quot;Letter&quot; or &quot;A4&quot; for your thermal printer, click <em>Paper Size &gt; Manage Custom Sizes</em> and create <strong>&quot;Thermal 80mm Roll&quot;</strong> with Width: 80mm, Height: 2000mm, Margins: 0mm.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Detected Thermal Hardware / Printer Selector */}
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                            Target Thermal Printer (System Hardware)
+                          </label>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            Select the physical printer used for direct ESC/POS receipt generation
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={loadPrinters}
+                          disabled={loadingPrinters}
+                          className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-emerald-700 flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition"
+                          title="Rescan connected printers"
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${loadingPrinters ? 'animate-spin text-emerald-600' : ''}`} />
+                          <span>Rescan</span>
+                        </button>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <select
+                          value={selectedThermalPrinter}
+                          onChange={(e) => setSelectedThermalPrinter(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 shadow-sm"
+                        >
+                          <option value="">-- Auto-detect Default Thermal Printer --</option>
+                          {systemPrinters.map((p) => (
+                            <option key={p.name} value={p.name}>
+                              {p.name} {p.is_thermal ? '★ (Detected Thermal POS)' : ''} {p.is_default ? '(System Default)' : ''}
+                            </option>
+                          ))}
+                        </select>
+
+                        {selectedThermalPrinter && (
+                          <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+                            <span>Selected: <strong className="text-slate-800 font-mono">{selectedThermalPrinter}</strong></span>
+                            {systemPrinters.find((p) => p.name === selectedThermalPrinter)?.is_thermal && (
+                              <span className="text-emerald-700 font-bold flex items-center gap-1">
+                                <CheckCircle2 className="h-3 w-3" /> ESC/POS Thermal Ready
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Paper Size & Barcode Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Receipt Printer Paper Size */}
+                      <div>
+                        <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">
+                          Receipt Paper Width
+                        </label>
+                        <select
+                          value={printerType}
+                          onChange={(e) => setPrinterType(e.target.value as any)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
+                        >
+                          <option value="80mm">80mm Thermal Roll (Standard Wide - 48 cols)</option>
+                          <option value="58mm">58mm Thermal Roll (Narrow Compact - 32 cols)</option>
+                          <option value="standard">Standard A4 / Letter Page</option>
+                        </select>
+                      </div>
+
+                      {/* Barcode toggle on receipt */}
+                      <div>
+                        <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">
+                          Receipt Barcode (Code-128)
+                        </label>
+                        <label className="flex items-center gap-2.5 p-2.5 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100/60 transition">
+                          <input
+                            type="checkbox"
+                            checked={showBarcode}
+                            onChange={(e) => setShowBarcode(e.target.checked)}
+                            className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                          />
+                          <span className="text-xs font-bold text-slate-700">
+                            Print Barcode at Bottom
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Thermal Header Style Cards */}
+                    <div>
+                      <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">
+                        Thermal Receipt Header Style
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setThermalHeaderStyle('logo_text')}
+                          className={`p-3.5 rounded-2xl border-2 text-left transition flex items-start gap-3 ${
+                            thermalHeaderStyle === 'logo_text'
+                              ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
+                              : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                          }`}
+                        >
+                          <div className={`p-2 rounded-xl mt-0.5 ${thermalHeaderStyle === 'logo_text' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                            <Image className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <div className="font-bold text-xs">Logo + Text Header</div>
+                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                              Renders thermal store logo graphic followed by business details.
+                            </p>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setThermalHeaderStyle('text_only')}
+                          className={`p-3.5 rounded-2xl border-2 text-left transition flex items-start gap-3 ${
+                            thermalHeaderStyle === 'text_only'
+                              ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
+                              : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                          }`}
+                        >
+                          <div className={`p-2 rounded-xl mt-0.5 ${thermalHeaderStyle === 'text_only' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                            <FileText className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <div className="font-bold text-xs">Clean Text-Only Header</div>
+                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                              Ultra-fast pure text header. Zero image raster data, 100% universal compatibility.
+                            </p>
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Thermal Print Darkness & Density */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                          Thermal Print Darkness & Density
+                        </label>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-900 text-amber-300 flex items-center gap-1 shadow-sm">
+                          <Flame className="h-3 w-3 text-amber-400" /> Max Thermal Contrast
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* Maximum Dark */}
+                        <button
+                          type="button"
+                          onClick={() => setThermalDarkness('maximum')}
+                          className={`p-3.5 rounded-2xl border-2 text-left transition-all flex flex-col justify-between ${
+                            thermalDarkness === 'maximum'
+                              ? 'border-slate-900 bg-slate-900 text-white shadow-md'
+                              : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between gap-1 mb-1.5">
+                              <span className="font-bold text-xs flex items-center gap-1.5">
+                                <Flame className={`h-4 w-4 ${thermalDarkness === 'maximum' ? 'text-amber-400' : 'text-amber-600'}`} />
+                                Maximum Dark
+                              </span>
+                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${
+                                thermalDarkness === 'maximum' ? 'bg-amber-400 text-slate-950' : 'bg-amber-100 text-amber-900'
+                              }`}>
+                                100% Heat
+                              </span>
+                            </div>
+                            <p className={`text-[11px] leading-relaxed ${thermalDarkness === 'maximum' ? 'text-slate-300' : 'text-slate-500'}`}>
+                              Full 2.55ms burn time + Density 31 + Double-Strike mode. Deep pitch-black printout.
+                            </p>
+                          </div>
+                          <div className={`mt-3 text-[10px] font-bold flex items-center gap-1 ${thermalDarkness === 'maximum' ? 'text-amber-300' : 'text-emerald-700'}`}>
+                            <CheckCircle2 className="h-3 w-3" /> Recommended
+                          </div>
+                        </button>
+
+                        {/* High Density */}
+                        <button
+                          type="button"
+                          onClick={() => setThermalDarkness('high')}
+                          className={`p-3.5 rounded-2xl border-2 text-left transition-all flex flex-col justify-between ${
+                            thermalDarkness === 'high'
+                              ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
+                              : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between gap-1 mb-1.5">
+                              <span className="font-bold text-xs flex items-center gap-1.5">
+                                High Density
+                              </span>
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                                75% Heat
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 leading-relaxed">
+                              Balanced heating duration + density 24. Crisp dark printout for high-volume receipting.
+                            </p>
+                          </div>
+                          <div className="mt-3 text-[10px] font-medium text-slate-400">
+                            Fast & clear
+                          </div>
+                        </button>
+
+                        {/* Standard */}
+                        <button
+                          type="button"
+                          onClick={() => setThermalDarkness('normal')}
+                          className={`p-3.5 rounded-2xl border-2 text-left transition-all flex flex-col justify-between ${
+                            thermalDarkness === 'normal'
+                              ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
+                              : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between gap-1 mb-1.5">
+                              <span className="font-bold text-xs flex items-center gap-1.5">
+                                Standard
+                              </span>
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                                50% Heat
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 leading-relaxed">
+                              Factory default heating and dot density. Normal thermal print speed.
+                            </p>
+                          </div>
+                          <div className="mt-3 text-[10px] font-medium text-slate-400">
+                            Factory default
+                          </div>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
+
+                {/* Conditional Options for PDF / A4 */}
+                {receiptType === 'pdf' && (
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-sm font-bold text-slate-800 block">Custom / Pre-printed Letterhead</span>
+                        <span className="text-xs text-slate-500">Enable custom full-width branding banner or pre-printed letterhead alignment</span>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={showLetterhead}
+                          onChange={(e) => setShowLetterhead(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                      </label>
+                    </div>
+
+                    {showLetterhead && (
+                      <div className="pt-3 border-t border-slate-200/80 space-y-3">
+                        <label className="flex items-start gap-2.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={hideHeaderTextWithLetterhead}
+                            onChange={(e) => setHideHeaderTextWithLetterhead(e.target.checked)}
+                            className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 mt-0.5"
+                          />
+                          <div>
+                            <span className="text-xs font-semibold text-slate-800 block">
+                              Hide Computer-Generated Business Header Text
+                            </span>
+                            <span className="text-[11px] text-slate-400">
+                              Check this if your physical stationary or uploaded letterhead graphic already contains your business name, address, and phone number.
+                            </span>
+                          </div>
+                        </label>
+                      </div>
+                    )}
+
+                    <div className="pt-2">
+                      <Input
+                        label="A4 Invoice Document Heading Text"
+                        placeholder="e.g. TAX INVOICE, COMMERCIAL INVOICE, SALES INVOICE, BILL OF SALE, RECEIPT"
+                        value={invoiceTitle}
+                        onChange={(e) => setInvoiceTitle(e.target.value)}
+                        hint="Customize the main title text printed in bold capital letters at the top of A4/PDF invoices (Default: TAX INVOICE)."
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Quotations Feature Optional Toggle Card */}
+                <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-200 flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-indigo-600" />
+                      <span className="text-sm font-bold text-slate-800">
+                        Customer Quotations & Estimates
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${enableQuotations ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}`}>
+                        {enableQuotations ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed max-w-xl">
+                      Allow cashiers to prepare non-binding quotation estimates in POS without deducting stock or money, and manage active offers in the sidebar. Turn off if your business does not require quotations.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
+                    <input
+                      type="checkbox"
+                      checked={enableQuotations}
+                      onChange={(e) => setEnableQuotations(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                  </label>
+                </div>
+
+                {/* Customizable Terms & Conditions (T&Cs) */}
+                <div className="space-y-4 pt-2 border-t border-slate-100">
+                  <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-emerald-600" />
+                    Customizable Terms & Conditions (T&Cs)
+                  </h4>
+
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold uppercase text-slate-600 mb-1.5">
+                        A4 / PDF Invoice Terms & Conditions
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={invoiceTerms}
+                        onChange={(e) => setInvoiceTerms(e.target.value)}
+                        placeholder="Enter invoice terms and conditions to print at the bottom of standard A4 invoices..."
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800 focus:outline-none focus:border-emerald-500 leading-relaxed"
+                      />
+                      <span className="text-[11px] text-slate-400 block mt-1">
+                        Printed at the bottom of all corporate A4 invoices (warranty, return policies, customer notice).
+                      </span>
+                    </div>
+
+                    {enableQuotations && (
+                      <div>
+                        <label className="block text-xs font-bold uppercase text-slate-600 mb-1.5">
+                          Quotation Terms & Conditions
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={quotationTerms}
+                          onChange={(e) => setQuotationTerms(e.target.value)}
+                          placeholder="Enter quotation terms and conditions to print on customer quotation documents..."
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800 focus:outline-none focus:border-emerald-500 leading-relaxed"
+                        />
+                        <span className="text-[11px] text-slate-400 block mt-1">
+                          Printed on commercial quotation documents (validity period, stock availability clause, acceptance terms).
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    label="Receipt Header Subtitle"
+                    placeholder="e.g. Welcome to our store / Tax Invoice"
+                    value={receiptHeader}
+                    onChange={(e) => setReceiptHeader(e.target.value)}
+                  />
+
+                  <Input
+                    label="Receipt Footer Note"
+                    placeholder="e.g. Thank you for your business!"
+                    value={receiptFooter}
+                    onChange={(e) => setReceiptFooter(e.target.value)}
+                  />
+                </div>
 
                 <div className="pt-2">
-                  <Input
-                    label="A4 Invoice Document Heading Text"
-                    placeholder="e.g. TAX INVOICE, COMMERCIAL INVOICE, SALES INVOICE, BILL OF SALE, RECEIPT"
-                    value={invoiceTitle}
-                    onChange={(e) => setInvoiceTitle(e.target.value)}
-                    hint="Customize the main title text printed in bold capital letters at the top of A4/PDF invoices (Default: TAX INVOICE)."
-                  />
+                  <Button type="submit" variant="primary" loading={saving}>
+                    Save Receipt & Printer Settings
+                  </Button>
                 </div>
-              </div>
-            )}
+              </form>
 
-            {/* Quotations Feature Optional Toggle Card */}
-            <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-200 flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-indigo-600" />
-                  <span className="text-sm font-bold text-slate-800">
-                    Customer Quotations & Estimates
-                  </span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${enableQuotations ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}`}>
-                    {enableQuotations ? 'Enabled' : 'Disabled'}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 leading-relaxed max-w-xl">
-                  Allow cashiers to prepare non-binding quotation estimates in POS without deducting stock or money, and manage active offers in the sidebar. Turn off if your business does not require quotations.
-                </p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
-                <input
-                  type="checkbox"
-                  checked={enableQuotations}
-                  onChange={(e) => setEnableQuotations(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-              </label>
-            </div>
-
-            {/* Customizable Terms & Conditions (T&Cs) */}
-            <div className="space-y-4 pt-2 border-t border-slate-100">
-              <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                <FileText className="h-4 w-4 text-emerald-600" />
-                Customizable Terms & Conditions (T&Cs)
-              </h4>
-
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1.5">
-                    A4 / PDF Invoice Terms & Conditions
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={invoiceTerms}
-                    onChange={(e) => setInvoiceTerms(e.target.value)}
-                    placeholder="Enter invoice terms and conditions to print at the bottom of standard A4 invoices..."
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800 focus:outline-none focus:border-emerald-500 leading-relaxed"
-                  />
-                  <span className="text-[11px] text-slate-400 block mt-1">
-                    Printed at the bottom of all corporate A4 invoices (warranty, return policies, customer notice).
-                  </span>
-                </div>
-
-                {enableQuotations && (
+              {/* 1-Click Thermal Receipt Print Logo Uploader */}
+              <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <label className="block text-xs font-bold uppercase text-slate-600 mb-1.5">
-                      Quotation Terms & Conditions
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={quotationTerms}
-                      onChange={(e) => setQuotationTerms(e.target.value)}
-                      placeholder="Enter quotation terms and conditions to print on customer quotation documents..."
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800 focus:outline-none focus:border-emerald-500 leading-relaxed"
-                    />
-                    <span className="text-[11px] text-slate-400 block mt-1">
-                      Printed on commercial quotation documents (validity period, stock availability clause, acceptance terms).
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-slate-800 text-base">Thermal Receipt Print Logo</h3>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">Thermal Roll Format</span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      High-contrast black & white logo printed at the top of 80mm & 58mm customer receipts.
+                    </p>
                   </div>
-                )}
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input
-                label="Receipt Header Subtitle"
-                placeholder="e.g. Welcome to our store / Tax Invoice"
-                value={receiptHeader}
-                onChange={(e) => setReceiptHeader(e.target.value)}
-              />
-
-              <Input
-                label="Receipt Footer Note"
-                placeholder="e.g. Thank you for your business!"
-                value={receiptFooter}
-                onChange={(e) => setReceiptFooter(e.target.value)}
-              />
-            </div>
-
-            <div className="pt-2">
-              <Button type="submit" variant="primary" loading={saving}>
-                Save Receipt & Printer Settings
-              </Button>
-            </div>
-          </form>
-
-          {/* Custom PDF / A4 Letterhead Banner Uploader */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-slate-800 text-base">Corporate A4 Letterhead Banner</h3>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">PDF / A4 Format</span>
-                </div>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Upload an official high-resolution corporate header banner to print across the top of all PDF invoices.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <label className="cursor-pointer">
-                  <input
-                    type="file"
-                    accept="image/png, image/jpeg, image/webp"
-                    onChange={handleLetterheadFileUpload}
-                    className="hidden"
-                  />
-                  <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition">
-                    <Upload className="h-4 w-4" />
-                    Upload Letterhead
-                  </span>
-                </label>
-
-                {(letterheadImage || settings?.receipt_letterhead_path) && (
-                  <button
-                    type="button"
-                    onClick={handleResetLetterhead}
-                    className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 font-semibold text-xs transition"
-                    title="Remove custom letterhead"
-                  >
-                    Remove Letterhead
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Live Letterhead Preview */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
-              {(letterheadImage || settings?.receipt_letterhead_path) ? (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-emerald-700 flex items-center gap-1.5">
-                      <CheckCircle2 className="h-4 w-4" /> Custom Letterhead Active
-                    </span>
-                    <span className="text-[11px] text-slate-400">Preview scaled to fit container</span>
-                  </div>
-                  <div className="w-full bg-white border border-slate-200 rounded-xl p-2 overflow-hidden shadow-sm max-h-36 flex items-center justify-center">
-                    <img
-                      src={letterheadImage || settings?.receipt_letterhead_path}
-                      alt="Uploaded Letterhead Banner"
-                      className="w-full max-h-32 object-contain"
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="py-6 flex flex-col items-center justify-center text-center text-slate-400">
-                  <Image className="h-10 w-10 stroke-1 text-slate-300 mb-2" />
-                  <p className="text-xs font-semibold text-slate-600">No custom letterhead uploaded</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    Standard business name, phone, address, and logo will be automatically rendered as the header.
-                  </p>
-                </div>
-              )}
-
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-200/60 gap-1">
-                <span>Recommended Aspect Ratio: <strong>6:1 to 8:1</strong> (e.g. 1200×180px or 1600×220px)</span>
-                <span>Supported: PNG, JPEG, WebP (Max 2.5MB)</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 1-Click Thermal Receipt Print Logo Uploader */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-slate-800 text-base">Thermal Receipt Print Logo</h3>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">Thermal Roll Format</span>
-                </div>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  High-contrast black & white logo printed at the top of 80mm & 58mm customer receipts.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <label className="cursor-pointer">
-                  <input
-                    type="file"
-                    accept="image/png, image/jpeg, image/svg+xml, image/webp"
-                    onChange={handleReceiptLogoFileUpload}
-                    className="hidden"
-                  />
-                  <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition">
-                    <Upload className="h-4 w-4" />
-                    Upload Receipt Logo
-                  </span>
-                </label>
-
-                {settings?.receipt_logo_path && (
-                  <button
-                    type="button"
-                    onClick={handleResetReceiptLogo}
-                    className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 font-semibold text-xs transition"
-                    title="Revert back to StokFlow default thermal logo"
-                  >
-                    Reset to Default
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Clean Live Receipt Preview */}
-            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="h-16 w-48 flex items-center justify-center">
-                  <img
-                    src={settings?.receipt_logo_path || settings?.logo_path || '/stokflow-receipt.png'}
-                    alt="Active Receipt Logo"
-                    className="h-10 w-auto max-w-[170px] object-contain filter grayscale contrast-200"
-                  />
-                </div>
-                <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-slate-800">
-                      {settings?.receipt_logo_path ? 'Custom Receipt Logo' : 'Default StokFlow Thermal Logo'}
-                    </span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      settings?.receipt_logo_path ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700'
-                    }`}>
-                      {settings?.receipt_logo_path ? 'Custom Active' : 'Default Active'}
-                    </span>
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        accept="image/png, image/jpeg, image/svg+xml, image/webp"
+                        onChange={handleReceiptLogoFileUpload}
+                        className="hidden"
+                      />
+                      <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition">
+                        <Upload className="h-4 w-4" />
+                        Upload Receipt Logo
+                      </span>
+                    </label>
+
+                    {settings?.receipt_logo_path && (
+                      <button
+                        type="button"
+                        onClick={handleResetReceiptLogo}
+                        className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 font-semibold text-xs transition"
+                        title="Revert back to StokFlow default thermal logo"
+                      >
+                        Reset to Default
+                      </button>
+                    )}
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    Printed cleanly at the top of customer POS thermal receipts.
-                  </p>
+                </div>
+
+                {/* Clean Live Receipt Preview */}
+                <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="h-16 w-48 flex items-center justify-center bg-white rounded-xl border border-slate-200 p-1">
+                      <img
+                        src={settings?.receipt_logo_path || settings?.logo_path || '/stokflow-receipt.png'}
+                        alt="Active Receipt Logo"
+                        className="h-10 w-auto max-w-[170px] object-contain"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-800">
+                          {settings?.receipt_logo_path ? 'Custom Receipt Logo' : 'Default StokFlow Thermal Logo'}
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          settings?.receipt_logo_path ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700'
+                        }`}>
+                          {settings?.receipt_logo_path ? 'Custom Active' : 'Default Active'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Printed cleanly at the top of customer POS thermal receipts when Header Style is set to "Logo + Text".
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Recommended Dimensions Badges */}
+                  <div className="text-left sm:text-right space-y-1">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Recommended Dimensions
+                    </div>
+                    <div className="flex items-center gap-1.5 justify-start sm:justify-end">
+                      <span className="font-mono text-[11px] font-bold px-2 py-0.5 bg-white border border-slate-200 rounded-md text-slate-700">
+                        384 × 128 px
+                      </span>
+                      <span className="text-xs text-slate-400 font-bold">or</span>
+                      <span className="font-mono text-[11px] font-bold px-2 py-0.5 bg-white border border-slate-200 rounded-md text-slate-700">
+                        200 × 100 px
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      Pure Black (#000000) on White/Transparent
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Recommended Dimensions Badges */}
-              <div className="text-left sm:text-right space-y-1">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Recommended Dimensions
+              {/* Custom PDF / A4 Letterhead Banner Uploader */}
+              <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-slate-800 text-base">Corporate A4 Letterhead Banner</h3>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">PDF / A4 Format</span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Upload an official high-resolution corporate header banner to print across the top of all PDF invoices.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        accept="image/png, image/jpeg, image/webp"
+                        onChange={handleLetterheadFileUpload}
+                        className="hidden"
+                      />
+                      <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition">
+                        <Upload className="h-4 w-4" />
+                        Upload Letterhead
+                      </span>
+                    </label>
+
+                    {(letterheadImage || settings?.receipt_letterhead_path) && (
+                      <button
+                        type="button"
+                        onClick={handleResetLetterhead}
+                        className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 font-semibold text-xs transition"
+                        title="Remove custom letterhead"
+                      >
+                        Remove Letterhead
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5 justify-start sm:justify-end">
-                  <span className="font-mono text-[11px] font-bold px-2 py-0.5 bg-white border border-slate-200 rounded-md text-slate-700">
-                    384 × 128 px
-                  </span>
-                  <span className="text-xs text-slate-400 font-bold">or</span>
-                  <span className="font-mono text-[11px] font-bold px-2 py-0.5 bg-white border border-slate-200 rounded-md text-slate-700">
-                    200 × 100 px
-                  </span>
+
+                {/* Live Letterhead Preview */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+                  {(letterheadImage || settings?.receipt_letterhead_path) ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-emerald-700 flex items-center gap-1.5">
+                          <CheckCircle2 className="h-4 w-4" /> Custom Letterhead Active
+                        </span>
+                        <span className="text-[11px] text-slate-400">Preview scaled to fit container</span>
+                      </div>
+                      <div className="w-full bg-white border border-slate-200 rounded-xl p-2 overflow-hidden shadow-sm max-h-36 flex items-center justify-center">
+                        <img
+                          src={letterheadImage || settings?.receipt_letterhead_path}
+                          alt="Uploaded Letterhead Banner"
+                          className="w-full max-h-32 object-contain"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="py-6 flex flex-col items-center justify-center text-center text-slate-400">
+                      <Image className="h-10 w-10 stroke-1 text-slate-300 mb-2" />
+                      <p className="text-xs font-semibold text-slate-600">No custom letterhead uploaded</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Standard business name, phone, address, and logo will be automatically rendered as the header.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-200/60 gap-1">
+                    <span>Recommended Aspect Ratio: <strong>6:1 to 8:1</strong> (e.g. 1200×180px or 1600×220px)</span>
+                    <span>Supported: PNG, JPEG, WebP (Max 2.5MB)</span>
+                  </div>
                 </div>
-                <div className="text-[10px] text-slate-400">
-                  Pure Black (#000000) on White/Transparent
+              </div>
+            </div>
+
+            {/* Right Column: Live Interactive Thermal Receipt Preview (5 cols on XL) */}
+            <div className="xl:col-span-5 space-y-4">
+              <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-4 sticky top-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                      <Receipt className="h-4 w-4 text-emerald-600" />
+                      Live Receipt Preview
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Updates instantly as you modify settings on the left
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md">
+                      {printerType === '58mm' ? '58mm Roll' : '80mm Roll'}
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md">
+                      {thermalHeaderStyle === 'logo_text' ? 'Logo + Text' : 'Text Only'}
+                    </span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 ${
+                      thermalDarkness === 'maximum'
+                        ? 'bg-slate-900 text-amber-300'
+                        : thermalDarkness === 'high'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-slate-200 text-slate-700'
+                    }`}>
+                      <Flame className="h-3 w-3" />
+                      {thermalDarkness === 'maximum' ? 'Max Dark' : thermalDarkness === 'high' ? 'High Dark' : 'Standard'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Live Thermal Receipt Component Display */}
+                <div className="bg-slate-100/90 p-3 sm:p-4 rounded-2xl border border-slate-200 max-h-[520px] overflow-y-auto flex justify-center shadow-inner">
+                  <ThermalReceipt
+                    sale={sampleTestSale}
+                    businessName={bizName}
+                    phone={bizPhone}
+                    address={bizAddress}
+                    currency={currency}
+                    headerText={receiptHeader}
+                    footerText={receiptFooter}
+                    paperWidth={printerType === '58mm' ? '58mm' : '80mm'}
+                    headerStyle={thermalHeaderStyle}
+                    showBarcode={showBarcode}
+                    settings={{
+                      ...(settings || {}),
+                      business_name: bizName,
+                      phone: bizPhone,
+                      address: bizAddress,
+                      currency: currency,
+                      receipt_header: receiptHeader,
+                      receipt_footer: receiptFooter,
+                      receipt_printer_type: printerType as any,
+                      thermal_header_style: thermalHeaderStyle,
+                      thermal_darkness: thermalDarkness,
+                      show_barcode: showBarcode,
+                      receipt_logo_path: settings?.receipt_logo_path,
+                      logo_path: settings?.logo_path,
+                    } as any}
+                  />
+                </div>
+
+                {/* Feedback banner */}
+                {testPrintFeedback && (
+                  <div
+                    className={`p-3 rounded-xl text-xs font-semibold flex items-center justify-between gap-2 ${
+                      testPrintFeedback.type === 'success'
+                        ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                        : 'bg-rose-50 border border-rose-200 text-rose-700'
+                    }`}
+                  >
+                    <span className="leading-snug">{testPrintFeedback.message}</span>
+                    <button
+                      type="button"
+                      onClick={() => setTestPrintFeedback(null)}
+                      className="text-[10px] font-bold underline shrink-0"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+
+                {/* Live Test Actions */}
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    loading={directPrintingTest}
+                    onClick={handleTestDirectPrint}
+                    className="font-bold text-xs flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 shadow-sm"
+                    title="Send raw ESC/POS commands directly to the selected thermal printer"
+                  >
+                    <Zap className="h-3.5 w-3.5" />
+                    Test Direct Print
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleTestBrowserPrint}
+                    className="font-bold text-xs flex items-center justify-center gap-1.5"
+                    title="Open browser print dialog for the live receipt"
+                  >
+                    <Printer className="h-3.5 w-3.5" />
+                    Test Browser Print
+                  </Button>
+                </div>
+
+                <div className="text-center pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowTestReceiptModal(true)}
+                    className="text-[11px] font-semibold text-slate-500 hover:text-emerald-700 underline"
+                  >
+                    Open Fullscreen Interactive Test Dialog
+                  </button>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Print Test Receipt Diagnostic Tool */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
-                    <Printer className="h-5 w-5" />
-                  </div>
-                  <h3 className="font-bold text-slate-800 text-base">Print Test Receipt</h3>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                    Diagnostic Tool
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 mt-1 max-w-xl">
-                  Test your connected thermal receipt printer or standard A4 printer using realistic sample retail items, discounts, tax, and a scannable Code-128 barcode before going live.
-                </p>
+          {/* OS Driver Advisory: macOS CUPS vs Windows */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-2xl bg-amber-50 text-amber-600 mt-0.5 shrink-0">
+                <AlertTriangle className="h-5 w-5" />
               </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowTestReceiptModal(true)}
-                  className="font-bold flex items-center gap-1.5"
-                >
-                  <Eye className="h-4 w-4" />
-                  Preview Test Receipt
-                </Button>
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="sm"
-                  onClick={() => setShowTestReceiptModal(true)}
-                  className="font-bold flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20"
-                >
-                  <Printer className="h-4 w-4" />
-                  Print Test Receipt
-                </Button>
+              <div className="space-y-1">
+                <h4 className="font-bold text-slate-800 text-sm">
+                  Thermal Printer Troubleshooting & OS Driver Setup (macOS & Windows)
+                </h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Understanding why thermal printers can print endless PostScript code (such as <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-[10px]">/imageType 3 /InterleaveType 2 /DataDict currentdict</code>) and how StokFlow guarantees clean receipt printing.
+                </p>
               </div>
             </div>
 
-            {/* Test Receipt Feature Highlights & Roll Sizing */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                <Receipt className="h-3.5 w-3.5 text-emerald-600" />
-                Sample Test Sale Details
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-slate-600">
-                <div className="bg-white p-3 rounded-xl border border-slate-200">
-                  <div className="text-[10px] text-slate-400 font-bold uppercase">Sample Receipt #</div>
-                  <div className="font-mono font-bold text-slate-800 mt-0.5">RCP-TEST-9001</div>
-                  <div className="text-[10px] text-emerald-600 mt-1">Includes Code-128 Barcode</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
+                <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <span className="px-1.5 py-0.5 rounded bg-slate-200 text-slate-800 font-mono text-[10px]">macOS</span>
+                  <span>CUPS Driver PostScript Bypass</span>
                 </div>
-                <div className="bg-white p-3 rounded-xl border border-slate-200">
-                  <div className="text-[10px] text-slate-400 font-bold uppercase">Items & Discounts</div>
-                  <div className="font-bold text-slate-800 mt-0.5">3 Items (4 Units)</div>
-                  <div className="text-[10px] text-slate-500 mt-1">Tests item-level discount lines</div>
-                </div>
-                <div className="bg-white p-3 rounded-xl border border-slate-200">
-                  <div className="text-[10px] text-slate-400 font-bold uppercase">Supported Widths</div>
-                  <div className="font-bold text-slate-800 mt-0.5">80mm, 58mm & A4</div>
-                  <div className="text-[10px] text-slate-500 mt-1">Quick-switch inside preview</div>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  When USB thermal printers are plugged into a Mac without manufacturer drivers, macOS defaults them to <strong>"Generic PostScript Printer"</strong>. PostScript drivers attempt to render CSS graphics as PostScript code, causing thermal printers to print code endlessly.
+                </p>
+                <div className="text-[11px] text-emerald-800 font-semibold bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-200/60 leading-relaxed">
+                  ✓ <strong>Recommended Fix:</strong> Select <strong>"Direct ESC/POS Engine"</strong> above. StokFlow sends raw commands directly to <code className="font-mono text-[10px]">/usr/bin/lpr -l</code>, bypassing CUPS PostScript filters completely!
                 </div>
               </div>
-              <p className="text-[11px] text-slate-400">
-                Tip: Thermal receipts feature an automatic paper cutter feed margin at the bottom so your printer's blade doesn't clip your footer or barcode.
-              </p>
+
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
+                <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-mono text-[10px]">Windows</span>
+                  <span>Native Spooler & Dual Mode Support</span>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  On Windows 10/11, official POS receipt drivers (POS-80, POS-58, Xprinter, Epson) install raster spoolers that work out-of-the-box with both <strong>Browser Print Dialog</strong> and <strong>Direct ESC/POS Engine</strong>.
+                </p>
+                <div className="text-[11px] text-blue-800 font-semibold bg-blue-50/80 p-2.5 rounded-xl border border-blue-200/60 leading-relaxed">
+                  ✓ <strong>On Windows:</strong> Both modes function seamlessly. Direct ESC/POS offers the speed advantage of skipping the print dialog on every checkout.
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -2266,7 +2794,22 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           isOpen={showTestReceiptModal}
           onClose={() => setShowTestReceiptModal(false)}
           sale={sampleTestSale}
-          settings={settings}
+          settings={{
+            ...(settings || {}),
+            business_name: bizName,
+            phone: bizPhone,
+            address: bizAddress,
+            currency: currency,
+            receipt_header: receiptHeader,
+            receipt_footer: receiptFooter,
+            receipt_printer_type: printerType as any,
+            thermal_print_mode: thermalPrintMode,
+            thermal_header_style: thermalHeaderStyle,
+            thermal_darkness: thermalDarkness,
+            selected_thermal_printer: selectedThermalPrinter,
+            show_barcode: showBarcode,
+            show_sku: showSku,
+          } as any}
         />
       )}
     </div>

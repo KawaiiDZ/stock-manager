@@ -8,7 +8,8 @@ import {
   DashboardKPIs, MonthlySalesData, DaySalesDetail,
   BusinessSettings, BackupFile, LoginResponse, IndustryPreset,
   Quotation, QuotationCreate, QuotationConversionCheckResponse, QuotationConvertRequest,
-  GoogleDriveFileItem, GoogleBackupStatusResponse, GoogleBackupSettingsUpdate, GoogleBackupActionResponse
+  GoogleDriveFileItem, GoogleBackupStatusResponse, GoogleBackupSettingsUpdate, GoogleBackupActionResponse,
+  PrinterInfo
 } from '../types';
 
 
@@ -387,4 +388,21 @@ export const api = {
     request<Quotation>(`/quotations/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),
   deleteQuotation: (id: number) =>
     request<void>(`/quotations/${id}`, { method: 'DELETE' }),
+
+  // Thermal Hardware & Printing
+  getSystemPrinters: () => request<PrinterInfo[]>('/printing/printers'),
+  printThermalDirect: (data: {
+    sale_id?: number;
+    printer_name?: string;
+    paper_width?: string;
+    header_style?: string;
+    show_barcode?: boolean;
+    kick_drawer?: boolean;
+    is_sample?: boolean;
+    darkness?: string;
+  }) =>
+    request<{ success: boolean; printer: string; bytes_sent: number; message: string }>('/printing/receipt', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
