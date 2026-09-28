@@ -71,15 +71,15 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {errorMsg && (
-          <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-400 text-xs font-medium">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{errorMsg}</span>
           </div>
         )}
 
-        <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between text-xs">
-          <span className="text-slate-500">Current In-Stock Count:</span>
-          <span className="font-bold text-slate-800 text-sm">{product.current_stock} units</span>
+        <div className="p-3.5 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+          <span className="text-slate-500 dark:text-slate-400">Current In-Stock Count:</span>
+          <span className="font-bold text-slate-800 dark:text-white text-sm">{product.current_stock} units</span>
         </div>
 
         <Input
@@ -93,14 +93,14 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
         />
 
         <div className="text-xs flex items-center justify-between font-semibold px-1">
-          <span className="text-slate-500">Net Adjustment:</span>
+          <span className="text-slate-500 dark:text-slate-400">Net Adjustment:</span>
           <span
             className={
               diff > 0
-                ? 'text-emerald-700 font-bold'
+                ? 'text-brand-600 dark:text-brand-400 font-bold'
                 : diff < 0
-                ? 'text-rose-700 font-bold'
-                : 'text-slate-500'
+                ? 'text-rose-700 dark:text-rose-400 font-bold'
+                : 'text-slate-500 dark:text-slate-400'
             }
           >
             {diff > 0 ? `+${diff} (Add)` : diff < 0 ? `${diff} (Deduct)` : 'No change'}

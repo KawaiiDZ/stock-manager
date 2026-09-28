@@ -204,6 +204,9 @@ def _execute_create_sale(db: Session, data: SaleCreate) -> SaleResponse:
         if not product:
             raise EntityNotFoundException("Product", str(item_data.product_id))
 
+        if hasattr(product, "is_active") and not product.is_active:
+            raise BusinessRuleException(f"Product '{product.name}' is archived/inactive and cannot be sold.")
+
         if item_data.quantity <= Decimal("0.00"):
             raise BusinessRuleException(f"Quantity for {product.name} must be greater than zero.")
 

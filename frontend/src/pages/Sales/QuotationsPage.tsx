@@ -223,11 +223,11 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2.5">
-            <FileText className="h-7 w-7 text-indigo-600" />
+          <h1 className="text-2xl font-black text-slate-800 dark:text-slate-100 tracking-tight flex items-center gap-2.5">
+            <FileText className="h-7 w-7 text-brand-600 dark:text-brand-400" />
             Active Quotations & Estimates
           </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
             Track uncharged customer estimates, verify price changes, and convert approved offers directly into invoices
           </p>
         </div>
@@ -236,7 +236,7 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
           <Button
             variant="outline"
             size="md"
-            icon={<RefreshCw className="h-4 w-4 text-slate-600" />}
+            icon={<RefreshCw className="h-4 w-4 text-slate-600 dark:text-slate-300" />}
             onClick={loadQuotations}
             disabled={loading}
           >
@@ -249,7 +249,7 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
               size="md"
               icon={<Plus className="h-4 w-4" />}
               onClick={onNavigateToNewSale}
-              className="bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20"
+              className="shadow-md"
             >
               + Create Quotation (POS)
             </Button>
@@ -262,21 +262,21 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
         <div
           className={`p-4 rounded-2xl text-xs font-semibold flex items-center justify-between border transition ${
             notification.type === 'success'
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-              : 'bg-rose-50 border-rose-200 text-rose-800'
+              ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300'
+              : 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-300'
           }`}
         >
           <div className="flex items-center gap-2">
             {notification.type === 'success' ? (
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
             ) : (
-              <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+              <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
             )}
             <span>{notification.message}</span>
           </div>
           <button
             onClick={() => setNotification(null)}
-            className="text-slate-400 hover:text-slate-600 font-bold"
+            className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 font-bold"
           >
             Dismiss
           </button>
@@ -284,16 +284,16 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
       )}
 
       {/* Toolbar: Status Tabs & Search */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
         {/* Status Filter Tabs */}
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold">
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-bold">
           <button
             type="button"
             onClick={() => setStatusFilter('PENDING')}
             className={`px-3.5 py-1.5 rounded-lg transition ${
               statusFilter === 'PENDING'
                 ? 'bg-amber-500 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             Active Offers
@@ -304,7 +304,7 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
             className={`px-3.5 py-1.5 rounded-lg transition ${
               statusFilter === 'APPROVED'
                 ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             Approved (Invoices)
@@ -315,7 +315,7 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
             className={`px-3.5 py-1.5 rounded-lg transition ${
               statusFilter === 'REJECTED'
                 ? 'bg-rose-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             Disapproved
@@ -326,7 +326,7 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
             className={`px-3.5 py-1.5 rounded-lg transition ${
               statusFilter === 'SUPERSEDED'
                 ? 'bg-purple-700 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             Superseded
@@ -336,8 +336,8 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
             onClick={() => setStatusFilter('ALL')}
             className={`px-3.5 py-1.5 rounded-lg transition ${
               statusFilter === 'ALL'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-slate-900 dark:bg-slate-700 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             All History
@@ -356,16 +356,16 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
       </div>
 
       {/* Quotations List */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
         {loading ? (
-          <div className="p-16 text-center text-slate-400">Loading quotations...</div>
+          <div className="p-16 text-center text-slate-400 dark:text-slate-500">Loading quotations...</div>
         ) : quotations.length === 0 ? (
           <div className="p-16 text-center space-y-3">
-            <div className="inline-flex p-4 rounded-full bg-indigo-50 text-indigo-600 mb-1">
+            <div className="inline-flex p-4 rounded-full bg-brand-50 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400 mb-1">
               <FileText className="h-8 w-8" />
             </div>
-            <h3 className="text-base font-bold text-slate-800">No Quotations Found</h3>
-            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+            <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">No Quotations Found</h3>
+            <p className="text-xs text-slate-400 dark:text-slate-500 max-w-sm mx-auto">
               {statusFilter === 'PENDING'
                 ? 'There are no active quotation offers awaiting customer response right now.'
                 : 'No quotations match the selected filters.'}
@@ -384,7 +384,7 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm border-collapse">
-              <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 <tr>
                   <th className="py-3.5 px-6">Quote Number</th>
                   <th className="py-3.5 px-6">Date</th>
@@ -395,7 +395,7 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
                   <th className="py-3.5 px-6 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {quotations.map((q) => {
                   const isPending = q.status === 'PENDING';
                   const isApproved = q.status === 'APPROVED';
@@ -403,50 +403,50 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
                   const isSuperseded = q.status === 'SUPERSEDED';
 
                   return (
-                    <tr key={q.id} className="hover:bg-slate-50/70 transition">
+                    <tr key={q.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition">
                       {/* Quote Number */}
                       <td className="py-4 px-6 whitespace-nowrap">
-                        <span className="font-bold text-indigo-950 block">{q.quotation_number}</span>
+                        <span className="font-bold text-brand-700 dark:text-brand-300 block">{q.quotation_number}</span>
                         {isApproved && q.sale_id && (
-                          <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
                             Invoice Linked
                           </span>
                         )}
                         {isSuperseded && (
-                          <span className="text-[10px] text-purple-700 font-semibold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                          <span className="text-[10px] text-purple-700 dark:text-purple-400 font-semibold bg-purple-50 dark:bg-purple-950/40 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-800">
                             Superseded
                           </span>
                         )}
                       </td>
 
                       {/* Date */}
-                      <td className="py-4 px-6 whitespace-nowrap text-xs text-slate-600">
+                      <td className="py-4 px-6 whitespace-nowrap text-xs text-slate-600 dark:text-slate-400">
                         {formatDateTime(q.created_at)}
                       </td>
 
                       {/* Customer Details */}
                       <td className="py-4 px-6 whitespace-nowrap">
-                        <div className="font-bold text-slate-900">{q.customer_name}</div>
-                        <div className="text-xs text-slate-500">{q.customer_phone}</div>
+                        <div className="font-bold text-slate-900 dark:text-white">{q.customer_name}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">{q.customer_phone}</div>
                       </td>
 
                       {/* Items */}
-                      <td className="py-4 px-6 text-xs text-slate-600 max-w-xs">
-                        <div className="font-semibold text-slate-800">
+                      <td className="py-4 px-6 text-xs text-slate-600 dark:text-slate-400 max-w-xs">
+                        <div className="font-semibold text-slate-800 dark:text-slate-100">
                           {q.items.length} {q.items.length === 1 ? 'Product' : 'Products'}
                         </div>
-                        <div className="text-[11px] text-slate-400 truncate">
+                        <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
                           {q.items.map((it) => `${it.product_name} (${it.quantity})`).join(', ')}
                         </div>
                       </td>
 
                       {/* Total */}
                       <td className="py-4 px-6 text-right whitespace-nowrap">
-                        <div className="font-black text-slate-900">
+                        <div className="font-black text-slate-900 dark:text-white">
                           {formatCurrency(q.total_amount, currency)}
                         </div>
                         {Number(q.discount_amount || 0) > 0 && (
-                          <div className="text-[10px] text-emerald-600">
+                          <div className="text-[10px] text-emerald-600 dark:text-emerald-400">
                             Disc: -{formatCurrency(q.discount_amount, currency)}
                           </div>
                         )}
@@ -455,25 +455,25 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
                       {/* Status */}
                       <td className="py-4 px-6 text-center whitespace-nowrap">
                         {isPending && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
                             <Clock className="h-3 w-3" />
                             OFFER PENDING
                           </span>
                         )}
                         {isApproved && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
                             <CheckCircle2 className="h-3 w-3" />
                             CONVERTED
                           </span>
                         )}
                         {isRejected && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300" title={q.rejection_reason || ''}>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800" title={q.rejection_reason || ''}>
                             <XCircle className="h-3 w-3" />
                             DISAPPROVED
                           </span>
                         )}
                         {isSuperseded && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-300" title={q.rejection_reason || 'Superseded by revised agreement'}>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-800" title={q.rejection_reason || 'Superseded by revised agreement'}>
                             <RotateCcw className="h-3 w-3" />
                             SUPERSEDED
                           </span>
@@ -487,7 +487,7 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
                           <Button
                             variant="secondary"
                             size="sm"
-                            icon={<Printer className="h-3.5 w-3.5 text-slate-600" />}
+                            icon={<Printer className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />}
                             onClick={() => setPreviewQuotation(q)}
                             title="View / Print A4 Quotation"
                             className="font-semibold"
@@ -500,10 +500,10 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
                             <Button
                               variant="outline"
                               size="sm"
-                              icon={<Edit className="h-3.5 w-3.5 text-indigo-600" />}
+                              icon={<Edit className="h-3.5 w-3.5 text-brand-600 dark:text-brand-400" />}
                               onClick={() => setRevisingQuotation(q)}
                               title="Revise Quotation (Supersedes current agreement and creates revised quotation)"
-                              className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-bold text-xs"
+                              className="border-brand-200 dark:border-brand-800 text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-950/40 font-bold text-xs"
                             >
                               Edit
                             </Button>
@@ -517,7 +517,7 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
                                 size="sm"
                                 icon={<Check className="h-3.5 w-3.5" />}
                                 onClick={() => handleOpenApproveModal(q)}
-                                className="bg-emerald-600 hover:bg-emerald-700 shadow-sm font-bold text-xs"
+                                className="shadow-sm font-bold text-xs"
                                 title="Approve & Convert to Invoice"
                               >
                                 Approve

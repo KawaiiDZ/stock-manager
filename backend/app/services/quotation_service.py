@@ -279,6 +279,8 @@ def convert_quotation_to_sale(db: Session, quotation_id: int, request: Quotation
         p = products.get(it.product_id)
         if not p:
             raise EntityNotFoundException('Product', str(it.product_id))
+        if hasattr(p, 'is_active') and not p.is_active:
+            raise BusinessRuleException(f"Product '{p.name}' is archived/inactive and cannot be converted to sale.")
         if p.current_stock < it.quantity:
             raise InsufficientStockException(
                 product_name=p.name,

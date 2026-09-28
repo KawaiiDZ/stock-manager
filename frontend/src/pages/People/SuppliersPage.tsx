@@ -168,18 +168,18 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({ settings }) => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Suppliers & Payables</h1>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <h1 className="text-2xl font-black text-slate-800 dark:text-slate-100 tracking-tight">Suppliers & Payables</h1>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
             Manage wholesale distributors, payments, and credit obligations
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 bg-slate-200/70 p-1.5 rounded-2xl text-xs font-bold">
+          <div className="flex items-center gap-1 bg-slate-200/70 dark:bg-slate-800 p-1.5 rounded-2xl text-xs font-bold">
             <button
               onClick={() => setActiveTab('active')}
               className={`px-3.5 py-1.5 rounded-xl transition ${
-                activeTab === 'active' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
+                activeTab === 'active' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-400'
               }`}
             >
               Active Suppliers
@@ -187,7 +187,7 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({ settings }) => {
             <button
               onClick={() => setActiveTab('deactivated')}
               className={`px-3.5 py-1.5 rounded-xl transition ${
-                activeTab === 'deactivated' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
+                activeTab === 'deactivated' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-400'
               }`}
             >
               Deactivated
@@ -216,9 +216,9 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({ settings }) => {
       </div>
 
       {/* Suppliers Table */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
         {loading ? (
-          <div className="py-16 text-center text-slate-400">Loading suppliers...</div>
+          <div className="py-16 text-center text-slate-400 dark:text-slate-500">Loading suppliers...</div>
         ) : suppliers.length === 0 ? (
           <EmptyState
             title={activeTab === 'active' ? 'No suppliers yet' : 'No deactivated suppliers'}
@@ -229,7 +229,7 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({ settings }) => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                 <tr>
                   <th className="py-3.5 px-6">Supplier ID</th>
                   <th className="py-3.5 px-6">Supplier Name</th>
@@ -241,28 +241,28 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({ settings }) => {
                   <th className="py-3.5 px-6 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {suppliers.map((s) => {
                   const currentDueNum = Number(s.current_due || 0);
                   return (
-                    <tr key={s.id} className="hover:bg-slate-50/60 transition">
-                      <td className="py-4 px-6 font-bold text-slate-900">{s.supplier_id}</td>
-                      <td className="py-4 px-6 font-bold text-slate-800">{s.name}</td>
-                      <td className="py-4 px-6 text-slate-600">{s.phone || '—'}</td>
-                      <td className="py-4 px-6 text-slate-400 text-xs">{s.address || '—'}</td>
-                      <td className="py-4 px-6 text-right text-slate-700 font-medium">
+                    <tr key={s.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/50 transition">
+                      <td className="py-4 px-6 font-bold text-slate-900 dark:text-white">{s.supplier_id}</td>
+                      <td className="py-4 px-6 font-bold text-slate-800 dark:text-slate-100">{s.name}</td>
+                      <td className="py-4 px-6 text-slate-600 dark:text-slate-400">{s.phone || '—'}</td>
+                      <td className="py-4 px-6 text-slate-400 dark:text-slate-500 text-xs">{s.address || '—'}</td>
+                      <td className="py-4 px-6 text-right text-slate-700 dark:text-slate-300 font-medium">
                         {formatCurrency(s.total_purchases, currency)}
                       </td>
-                      <td className="py-4 px-6 text-right text-emerald-700 font-semibold">
+                      <td className="py-4 px-6 text-right text-emerald-600 dark:text-emerald-400 font-semibold">
                         {formatCurrency(s.total_paid, currency)}
                       </td>
                       <td className="py-4 px-6 text-right">
                         {currentDueNum > 0 ? (
-                          <span className="font-black text-rose-700">
+                          <span className="font-black text-rose-600 dark:text-rose-400">
                             {formatCurrency(currentDueNum, currency)}
                           </span>
                         ) : (
-                          <span className="text-slate-400 font-semibold">Rs. 0.00</span>
+                          <span className="text-slate-400 dark:text-slate-500 font-semibold">Rs. 0.00</span>
                         )}
                       </td>
                       <td className="py-4 px-6 text-right">
@@ -272,14 +272,14 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({ settings }) => {
                               variant="outline"
                               size="sm"
                               onClick={() => handleOpenPayment(s)}
-                              className="text-xs py-1 px-2.5 font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border-rose-200"
+                              className="text-xs py-1 px-2.5 font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 border-rose-200 dark:border-rose-800"
                             >
                               Pay Supplier
                             </Button>
                           )}
                           <button
                             onClick={() => handleOpenLedger(s)}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition"
+                            className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                             title="View Ledger Statement"
                           >
                             <BookOpen className="h-4 w-4" />
@@ -288,14 +288,14 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({ settings }) => {
                             <>
                               <button
                                 onClick={() => handleOpenEdit(s)}
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+                                className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                                 title="Edit Supplier"
                               >
                                 <Edit2 className="h-4 w-4" />
                               </button>
                               <button
                                 onClick={() => setDeactivatingSupp(s)}
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                                className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
                                 title="Deactivate Supplier"
                               >
                                 <Archive className="h-4 w-4" />
@@ -308,7 +308,7 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({ settings }) => {
                               size="sm"
                               icon={<RotateCcw className="h-3.5 w-3.5" />}
                               onClick={() => handleRestore(s.id)}
-                              className="text-xs py-1 px-2.5 font-semibold text-emerald-700"
+                              className="text-xs py-1 px-2.5 font-semibold text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-950/40"
                             >
                               Restore
                             </Button>
@@ -429,7 +429,7 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({ settings }) => {
         ) : (
           <div className="overflow-x-auto max-h-96">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 border-b border-slate-100 font-bold text-slate-500 uppercase tracking-wider">
+              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800 font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 <tr>
                   <th className="py-2.5 px-4">Date</th>
                   <th className="py-2.5 px-4">Type</th>
@@ -440,22 +440,22 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({ settings }) => {
                   <th className="py-2.5 px-4 text-right">Payable Balance</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {ledgerEntries.map((entry, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/60">
-                    <td className="py-3 px-4 text-slate-500">
+                  <tr key={idx} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/50">
+                    <td className="py-3 px-4 text-slate-500 dark:text-slate-400">
                       {new Date(entry.date).toLocaleDateString()}
                     </td>
-                    <td className="py-3 px-4 font-bold">{entry.type}</td>
-                    <td className="py-3 px-4 font-mono text-slate-600">{entry.reference}</td>
-                    <td className="py-3 px-4 text-slate-600">{entry.description}</td>
-                    <td className="py-3 px-4 text-right font-medium text-slate-800">
+                    <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-100">{entry.type}</td>
+                    <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-400">{entry.reference}</td>
+                    <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{entry.description}</td>
+                    <td className="py-3 px-4 text-right font-medium text-slate-800 dark:text-slate-100">
                       {Number(entry.credit) > 0 ? formatCurrency(entry.credit, currency) : '—'}
                     </td>
-                    <td className="py-3 px-4 text-right font-semibold text-emerald-700">
+                    <td className="py-3 px-4 text-right font-semibold text-emerald-600 dark:text-emerald-400">
                       {Number(entry.debit) > 0 ? formatCurrency(entry.debit, currency) : '—'}
                     </td>
-                    <td className="py-3 px-4 text-right font-bold text-slate-900">
+                    <td className="py-3 px-4 text-right font-bold text-slate-900 dark:text-white">
                       {formatCurrency(entry.balance, currency)}
                     </td>
                   </tr>

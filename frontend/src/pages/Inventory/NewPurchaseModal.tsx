@@ -336,20 +336,20 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
           )}
 
           {/* Supplier / Channel Info */}
-          <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
+          <div className="p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex items-center justify-between">
             <div>
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+              <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
                 Receiving Channel
               </span>
-              <span className="font-extrabold text-slate-900 text-sm flex items-center gap-2 mt-0.5">
+              <span className="font-extrabold text-slate-900 dark:text-white text-sm flex items-center gap-2 mt-0.5">
                 {isNoSupplier ? (
-                  <span className="inline-flex items-center gap-1.5 text-emerald-800 bg-emerald-100/80 px-2.5 py-1 rounded-lg text-xs font-bold border border-emerald-200">
-                    <Zap className="h-3.5 w-3.5 text-emerald-600" />
+                  <span className="inline-flex items-center gap-1.5 text-brand-800 dark:text-brand-300 bg-brand-100/80 dark:bg-brand-950/60 px-2.5 py-1 rounded-lg text-xs font-bold border border-brand-200 dark:border-brand-800/60">
+                    <Zap className="h-3.5 w-3.5 text-brand-600 dark:text-brand-400" />
                     No Supplier (Direct Cash Purchase)
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 text-slate-800">
-                    <Building2 className="h-4 w-4 text-slate-500" />
+                  <span className="inline-flex items-center gap-1.5 text-slate-800 dark:text-slate-200">
+                    <Building2 className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                     {supplierInput.trim()}
                   </span>
                 )}
@@ -357,18 +357,18 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
             </div>
 
             <div className="text-right text-xs">
-              <span className="text-slate-400 font-medium block">Total Items</span>
-              <span className="font-bold text-slate-800">{itemsDraft.length} {itemsDraft.length === 1 ? 'Product' : 'Products'}</span>
+              <span className="text-slate-400 dark:text-slate-500 font-medium block">Total Items</span>
+              <span className="font-bold text-slate-800 dark:text-slate-200">{itemsDraft.length} {itemsDraft.length === 1 ? 'Product' : 'Products'}</span>
             </div>
           </div>
 
           {/* Stock & Price Changes Breakdown */}
           <div className="space-y-2">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
               Stock & Master Price Updates
             </span>
 
-            <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs divide-y divide-slate-100 max-h-72 overflow-y-auto">
+            <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden bg-white dark:bg-slate-900 shadow-2xs divide-y divide-slate-100 dark:divide-slate-800 max-h-72 overflow-y-auto">
               {itemsDraft.map((item, idx) => {
                 const prod = products.find((p) => p.id === item.product_id) || lockedProduct;
                 const currentStock = prod ? Number(prod.current_stock) : 0;
@@ -389,60 +389,60 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                   <div key={idx} className="p-3.5 space-y-2 text-xs">
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="font-extrabold text-slate-900 text-sm">
+                        <span className="font-extrabold text-slate-900 dark:text-white text-sm">
                           {prod?.name || `Product #${item.product_id}`}
                         </span>
                         {prod?.category_name && (
-                          <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                          <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                             {prod.category_name}
                           </span>
                         )}
                       </div>
 
                       {/* Stock Progression Indicator */}
-                      <div className="flex items-center gap-2 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200 shrink-0">
+                      <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
                         <div className="text-center">
-                          <div className="text-[9px] text-slate-400 uppercase font-semibold">Stock</div>
-                          <div className="font-bold text-slate-700">{currentStock}</div>
+                          <div className="text-[9px] text-slate-400 dark:text-slate-500 uppercase font-semibold">Stock</div>
+                          <div className="font-bold text-slate-700 dark:text-slate-300">{currentStock}</div>
                         </div>
-                        <span className="text-emerald-600 font-extrabold text-xs">+{addedStock}</span>
+                        <span className="text-brand-600 dark:text-brand-400 font-extrabold text-xs">+{addedStock}</span>
                         <ArrowRight className="h-3 w-3 text-slate-400" />
                         <div className="text-center pl-0.5">
-                          <div className="text-[9px] text-emerald-700 uppercase font-bold">New</div>
-                          <div className="font-extrabold text-emerald-700">{projectedStock}</div>
+                          <div className="text-[9px] text-brand-700 dark:text-brand-400 uppercase font-bold">New</div>
+                          <div className="font-extrabold text-brand-700 dark:text-brand-400">{projectedStock}</div>
                         </div>
                       </div>
                     </div>
 
                     {/* Price Comparison Row */}
-                    <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-100 text-[11px]">
+                    <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-100 dark:border-slate-800 text-[11px]">
                       <div>
-                        <span className="text-slate-400 block font-medium">Cost per unit:</span>
-                        <span className="font-bold text-slate-800">
+                        <span className="text-slate-400 dark:text-slate-500 block font-medium">Cost per unit:</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200">
                           {formatCurrency(newCost, currency)}
                         </span>
                         {isCostChanged && (
-                          <span className="ml-1 text-[10px] text-amber-700 font-semibold">
+                          <span className="ml-1 text-[10px] text-amber-700 dark:text-amber-400 font-semibold">
                             (was {formatCurrency(oldCost, currency)})
                           </span>
                         )}
                       </div>
 
                       <div>
-                        <span className="text-slate-400 block font-medium">Selling price:</span>
-                        <span className="font-bold text-slate-800">
+                        <span className="text-slate-400 dark:text-slate-500 block font-medium">Selling price:</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200">
                           {formatCurrency(newSell, currency)}
                         </span>
                         {isSellChanged && (
-                          <span className="ml-1 text-[10px] text-emerald-700 font-semibold">
+                          <span className="ml-1 text-[10px] text-brand-700 dark:text-brand-400 font-semibold">
                             (was {formatCurrency(oldSell, currency)})
                           </span>
                         )}
                       </div>
 
                       <div className="text-right">
-                        <span className="text-slate-400 block font-medium">Line Total:</span>
-                        <span className="font-black text-slate-900">
+                        <span className="text-slate-400 dark:text-slate-500 block font-medium">Line Total:</span>
+                        <span className="font-black text-slate-900 dark:text-white">
                           {formatCurrency(lineCost, currency)}
                         </span>
                       </div>
@@ -454,28 +454,28 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
           </div>
 
           {/* Financials Breakdown */}
-          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
-            <div className="flex justify-between text-slate-600">
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2 text-xs">
+            <div className="flex justify-between text-slate-600 dark:text-slate-400">
               <span>Subtotal:</span>
-              <span className="font-bold text-slate-800">{formatCurrency(subtotal, currency)}</span>
+              <span className="font-bold text-slate-800 dark:text-slate-200">{formatCurrency(subtotal, currency)}</span>
             </div>
             {discount > 0 && (
-              <div className="flex justify-between text-amber-700">
+              <div className="flex justify-between text-amber-700 dark:text-amber-400">
                 <span>Discount:</span>
                 <span className="font-bold">-{formatCurrency(discount, currency)}</span>
               </div>
             )}
             {tax > 0 && (
-              <div className="flex justify-between text-slate-600">
+              <div className="flex justify-between text-slate-600 dark:text-slate-400">
                 <span>Tax:</span>
                 <span className="font-bold">+{formatCurrency(tax, currency)}</span>
               </div>
             )}
-            <div className="flex justify-between text-slate-900 font-black border-t border-slate-200 pt-2 text-sm">
+            <div className="flex justify-between text-slate-900 dark:text-white font-black border-t border-slate-200 dark:border-slate-800 pt-2 text-sm">
               <span>Total Payable:</span>
-              <span className="text-emerald-800">{formatCurrency(totalAmount, currency)}</span>
+              <span className="text-brand-700 dark:text-brand-400">{formatCurrency(totalAmount, currency)}</span>
             </div>
-            <div className="flex justify-between text-slate-700 font-semibold">
+            <div className="flex justify-between text-slate-700 dark:text-slate-300 font-semibold">
               <span>Amount Settled:</span>
               <span className="font-bold">{formatCurrency(paidAmount, currency)}</span>
             </div>
@@ -544,23 +544,23 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
         )}
 
         {/* 1. Supplier Mode Selector: With Supplier vs No Supplier */}
-        <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-3.5 space-y-3">
+        <div className="bg-slate-50/80 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 space-y-3">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
               Supplier / Source *
             </label>
 
-            <div className="inline-flex items-center p-0.5 bg-slate-200/70 rounded-xl">
+            <div className="inline-flex items-center p-0.5 bg-slate-200/70 dark:bg-slate-800 rounded-xl">
               <button
                 type="button"
                 onClick={() => setIsNoSupplier(false)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
                   !isNoSupplier
-                    ? 'bg-white text-slate-900 shadow-2xs font-extrabold'
-                    : 'text-slate-500 hover:text-slate-900'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs font-extrabold'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
                 }`}
               >
-                <Building2 className="h-3.5 w-3.5 text-slate-600" />
+                <Building2 className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
                 <span>With Supplier</span>
               </button>
               <button
@@ -571,8 +571,8 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                 }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
                   isNoSupplier
-                    ? 'bg-emerald-600 text-white shadow-2xs font-extrabold'
-                    : 'text-slate-500 hover:text-slate-900'
+                    ? 'bg-brand-600 text-white shadow-2xs font-extrabold'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
                 }`}
               >
                 <Zap className="h-3.5 w-3.5" />
@@ -596,13 +596,13 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                     setTimeout(() => setShowSupplierDropdown(false), 250);
                   }}
                   placeholder="Type any supplier name or select from list..."
-                  className="w-full bg-white border border-slate-200 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-800 focus:outline-none transition shadow-2xs pr-10"
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-none transition shadow-2xs pr-10"
                   required={!isNoSupplier}
                 />
                 <button
                   type="button"
                   onClick={() => setShowSupplierDropdown((prev) => !prev)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1 rounded-md transition"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1 rounded-md transition"
                   tabIndex={-1}
                 >
                   <ChevronDown
@@ -615,7 +615,7 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
 
               {/* Suggestions Dropdown */}
               {showSupplierDropdown && (
-                <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-56 overflow-y-auto z-50 py-1.5 divide-y divide-slate-100">
+                <div className="absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl max-h-56 overflow-y-auto z-50 py-1.5 divide-y divide-slate-100 dark:divide-slate-800">
                   {filteredSuppliers.length > 0 ? (
                     filteredSuppliers.map((s) => (
                       <button
@@ -625,16 +625,16 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                           setSupplierInput(s.name);
                           setShowSupplierDropdown(false);
                         }}
-                        className="w-full text-left px-4 py-2.5 hover:bg-emerald-50/70 flex items-center justify-between text-xs transition"
+                        className="w-full text-left px-4 py-2.5 hover:bg-brand-50/70 dark:hover:bg-slate-800 flex items-center justify-between text-xs transition"
                       >
-                        <span className="font-bold text-slate-800">{s.name}</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200">{s.name}</span>
                         {s.phone && (
-                          <span className="text-slate-400 font-mono text-[11px]">{s.phone}</span>
+                          <span className="text-slate-400 dark:text-slate-500 font-mono text-[11px]">{s.phone}</span>
                         )}
                       </button>
                     ))
                   ) : (
-                    <div className="px-4 py-2.5 text-xs text-slate-400 italic">
+                    <div className="px-4 py-2.5 text-xs text-slate-400 dark:text-slate-500 italic">
                       No matching existing suppliers
                     </div>
                   )}
@@ -646,9 +646,9 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                       <button
                         type="button"
                         onMouseDown={() => setShowSupplierDropdown(false)}
-                        className="w-full text-left px-4 py-2.5 bg-emerald-50/60 hover:bg-emerald-100/70 text-xs text-emerald-800 font-bold flex items-center gap-1.5 transition"
+                        className="w-full text-left px-4 py-2.5 bg-brand-50/60 dark:bg-brand-950/40 hover:bg-brand-100/70 dark:hover:bg-brand-900/50 text-xs text-brand-800 dark:text-brand-300 font-bold flex items-center gap-1.5 transition"
                       >
-                        <Plus className="h-3.5 w-3.5 text-emerald-600" />
+                        <Plus className="h-3.5 w-3.5 text-brand-600 dark:text-brand-400" />
                         <span>Use new supplier: "{supplierInput.trim()}"</span>
                       </button>
                     )}
@@ -656,12 +656,12 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
               )}
             </div>
           ) : (
-            <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2 text-emerald-900 font-bold">
-                <Zap className="h-4 w-4 text-emerald-600 shrink-0" />
+            <div className="p-3 bg-brand-50/70 dark:bg-brand-950/40 border border-brand-200 dark:border-brand-800/60 rounded-xl flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2 text-brand-900 dark:text-brand-300 font-bold">
+                <Zap className="h-4 w-4 text-brand-600 dark:text-brand-400 shrink-0" />
                 <span>Direct Stock Entry (No Supplier Account)</span>
               </div>
-              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded border border-emerald-200">
+              <span className="text-[11px] font-bold text-brand-700 dark:text-brand-300 bg-brand-100/80 dark:bg-brand-950/80 px-2 py-0.5 rounded border border-brand-200 dark:border-brand-800/60">
                 100% Full Payment Required
               </span>
             </div>
@@ -671,14 +671,14 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
         {/* 2. Products to Receive */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
               {lockedProduct ? 'Product to Receive' : 'Products to Receive'}
             </span>
             {!lockedProduct && (
               <button
                 type="button"
                 onClick={handleAddItem}
-                className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:underline"
+                className="inline-flex items-center gap-1 text-xs font-bold text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 hover:underline"
               >
                 <Plus className="h-3.5 w-3.5" />
                 <span>Add Another Product</span>
@@ -708,15 +708,15 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
               return (
                 <div
                   key={idx}
-                  className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-3 relative hover:border-slate-300 transition"
+                  className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-3 relative hover:border-slate-300 dark:hover:border-slate-700 transition"
                 >
                   {/* Top Row: Product Picker + Current Stock Badge + Delete Action */}
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex-1 relative">
                       {lockedProduct ? (
-                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200">
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                           <Lock className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                          <span className="font-extrabold text-xs text-slate-800 truncate">
+                          <span className="font-extrabold text-xs text-slate-800 dark:text-slate-200 truncate">
                             {lockedProduct.name}
                           </span>
                         </div>
@@ -730,35 +730,35 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                               value={rowSearchQuery}
                               onChange={(e) => setRowSearchQuery(e.target.value)}
                               placeholder={`Search 500+ products by name${showSku ? ', SKU' : ''}${showBarcode ? ', barcode' : ''}...`}
-                              className="w-full bg-slate-50 focus:bg-white border-2 border-emerald-500 rounded-xl pl-9 pr-8 py-1.5 text-xs font-bold text-slate-800 focus:outline-none shadow-sm"
+                              className="w-full bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border-2 border-brand-500 rounded-xl pl-9 pr-8 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none shadow-sm"
                               autoFocus
                             />
-                            <Search className="h-4 w-4 text-emerald-600 absolute left-3 top-1/2 -translate-y-1/2" />
+                            <Search className="h-4 w-4 text-brand-600 dark:text-brand-400 absolute left-3 top-1/2 -translate-y-1/2" />
                             <button
                               type="button"
                               onClick={() => {
                                 setActiveSearchIndex(null);
                                 setRowSearchQuery('');
                               }}
-                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5"
                             >
                               <X className="h-3.5 w-3.5" />
                             </button>
                           </div>
 
                           {/* Dropdown Results */}
-                          <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-52 overflow-y-auto z-50 divide-y divide-slate-100">
+                          <div className="absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl max-h-52 overflow-y-auto z-50 divide-y divide-slate-100 dark:divide-slate-800">
                             {filteredProducts.length > 0 ? (
                               filteredProducts.map((p) => (
                                 <button
                                   key={p.id}
                                   type="button"
                                   onClick={() => handleSelectProduct(idx, p)}
-                                  className="w-full text-left px-3.5 py-2 hover:bg-emerald-50/70 flex items-center justify-between text-xs transition gap-2"
+                                  className="w-full text-left px-3.5 py-2 hover:bg-brand-50/70 dark:hover:bg-slate-800/80 flex items-center justify-between text-xs transition gap-2"
                                 >
                                   <div className="truncate">
-                                    <div className="font-bold text-slate-900 truncate">{p.name}</div>
-                                    <div className="text-[10px] text-slate-400 flex items-center gap-2">
+                                    <div className="font-bold text-slate-900 dark:text-white truncate">{p.name}</div>
+                                    <div className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-2">
                                       {p.category_name && <span>{p.category_name}</span>}
                                       {showBarcode && p.barcode && <span>• Barcode: {p.barcode}</span>}
                                       {showSku && p.sku && <span>• SKU: {p.sku}</span>}
@@ -766,17 +766,17 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                                   </div>
 
                                   <div className="text-right shrink-0">
-                                    <div className="text-[11px] font-extrabold text-emerald-700">
+                                    <div className="text-[11px] font-extrabold text-brand-600 dark:text-brand-400">
                                       Stock: {p.current_stock}
                                     </div>
-                                    <div className="text-[10px] text-slate-500">
+                                    <div className="text-[10px] text-slate-500 dark:text-slate-400">
                                       Cost: {formatCurrency(p.purchase_price, currency)} | Sell: {formatCurrency(p.selling_price, currency)}
                                     </div>
                                   </div>
                                 </button>
                               ))
                             ) : (
-                              <div className="p-3 text-center text-xs text-slate-400">
+                              <div className="p-3 text-center text-xs text-slate-400 dark:text-slate-500">
                                 No products found matching "{rowSearchQuery}"
                               </div>
                             )}
@@ -790,21 +790,21 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                             setActiveSearchIndex(idx);
                             setRowSearchQuery('');
                           }}
-                          className="w-full text-left px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200/90 flex items-center justify-between gap-2 group transition"
+                          className="w-full text-left px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200/90 dark:border-slate-700 flex items-center justify-between gap-2 group transition"
                           title="Click to search and change product"
                         >
                           <div className="truncate">
-                            <span className="font-extrabold text-xs text-slate-900 truncate block">
+                            <span className="font-extrabold text-xs text-slate-900 dark:text-white truncate block">
                               {selectedProd?.name || `Select Product`}
                             </span>
                             {selectedProd?.category_name && (
-                              <span className="text-[10px] text-slate-500 font-medium">
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
                                 Category: {selectedProd.category_name}
                               </span>
                             )}
                           </div>
 
-                          <div className="flex items-center gap-1.5 text-xs text-slate-400 group-hover:text-emerald-700 font-bold shrink-0">
+                          <div className="flex items-center gap-1.5 text-xs text-slate-400 group-hover:text-brand-600 dark:group-hover:text-brand-400 font-bold shrink-0">
                             <Search className="h-3.5 w-3.5" />
                             <span className="text-[11px]">Change</span>
                           </div>
@@ -813,9 +813,9 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                     </div>
 
                     {/* Current Stock Tag */}
-                    <div className="shrink-0 bg-slate-100/90 border border-slate-200 px-2.5 py-1 rounded-xl text-center">
-                      <div className="text-[9px] text-slate-400 uppercase font-semibold">Current Stock</div>
-                      <div className="font-extrabold text-xs text-slate-800">{currentStock}</div>
+                    <div className="shrink-0 bg-slate-100/90 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-xl text-center">
+                      <div className="text-[9px] text-slate-400 dark:text-slate-500 uppercase font-semibold">Current Stock</div>
+                      <div className="font-extrabold text-xs text-slate-800 dark:text-slate-200">{currentStock}</div>
                     </div>
 
                     {/* Delete Item (when > 1 item and not locked) */}
@@ -824,7 +824,7 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                         type="button"
                         onClick={() => handleRemoveItem(idx)}
                         disabled={itemsDraft.length === 1}
-                        className="text-slate-400 hover:text-rose-600 disabled:opacity-20 p-1.5 rounded-lg hover:bg-rose-50 transition shrink-0"
+                        className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-20 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition shrink-0"
                         title="Remove product row"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -833,10 +833,10 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                   </div>
 
                   {/* Bottom Row: Qty, Cost, Selling Price, Line Total */}
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-100">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
                     {/* 1. Qty */}
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
                         Qty Incoming *
                       </label>
                       <input
@@ -844,7 +844,7 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                         min="1"
                         value={item.quantity}
                         onChange={(e) => updateItem(idx, 'quantity', Number(e.target.value))}
-                        className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900 focus:outline-none transition text-center"
+                        className="w-full bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900 dark:text-white focus:outline-none transition text-center"
                         required
                       />
                     </div>
@@ -852,11 +852,11 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                     {/* 2. Purchase Cost */}
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                           Cost ({currency}) *
                         </label>
                         {isCostDifferent && (
-                          <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1 rounded">
+                          <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-1 rounded">
                             Old: {originalCost}
                           </span>
                         )}
@@ -867,8 +867,8 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                         min="0"
                         value={item.unit_cost}
                         onChange={(e) => updateItem(idx, 'unit_cost', Number(e.target.value))}
-                        className={`w-full bg-slate-50 focus:bg-white border rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900 focus:outline-none transition text-right ${
-                          isCostDifferent ? 'border-amber-400 bg-amber-50/30' : 'border-slate-200 focus:border-emerald-500'
+                        className={`w-full bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900 dark:text-white focus:outline-none transition text-right ${
+                          isCostDifferent ? 'border-amber-400 dark:border-amber-500 bg-amber-50/30 dark:bg-amber-950/20' : 'border-slate-200 dark:border-slate-700 focus:border-brand-500'
                         }`}
                         required
                       />
@@ -877,11 +877,11 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                     {/* 3. Selling Price */}
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                           Selling ({currency}) *
                         </label>
                         {isSellDifferent && (
-                          <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 rounded">
+                          <span className="text-[9px] font-bold text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-950/50 px-1 rounded">
                             Old: {originalSell}
                           </span>
                         )}
@@ -892,20 +892,20 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                         min="0"
                         value={item.selling_price}
                         onChange={(e) => updateItem(idx, 'selling_price', Number(e.target.value))}
-                        className={`w-full bg-slate-50 focus:bg-white border rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900 focus:outline-none transition text-right ${
-                          isSellDifferent ? 'border-emerald-400 bg-emerald-50/30' : 'border-slate-200 focus:border-emerald-500'
+                        className={`w-full bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900 dark:text-white focus:outline-none transition text-right ${
+                          isSellDifferent ? 'border-brand-400 dark:border-brand-500 bg-brand-50/30 dark:bg-brand-950/20' : 'border-slate-200 dark:border-slate-700 focus:border-brand-500'
                         }`}
                         required
                       />
                     </div>
 
                     {/* 4. Line Total & Margin Preview */}
-                    <div className="flex flex-col justify-center text-right pl-2 bg-slate-50/60 rounded-xl px-3 py-1 border border-slate-100">
-                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Line Total</span>
-                      <span className="font-extrabold text-xs text-slate-900">
+                    <div className="flex flex-col justify-center text-right pl-2 bg-slate-50/60 dark:bg-slate-800/60 rounded-xl px-3 py-1 border border-slate-100 dark:border-slate-800">
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-semibold">Line Total</span>
+                      <span className="font-extrabold text-xs text-slate-900 dark:text-white">
                         {formatCurrency(lineTotal, currency)}
                       </span>
-                      <span className="text-[10px] text-emerald-700 font-bold">
+                      <span className="text-[10px] text-brand-700 dark:text-brand-400 font-bold">
                         Markup: +{formatCurrency(marginPerUnit, currency)} ({marginPct}%)
                       </span>
                     </div>
@@ -916,8 +916,8 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
           </div>
 
           {/* Catalog Price Synchronization Notice */}
-          <div className="p-2.5 bg-blue-50/70 border border-blue-200/80 rounded-xl text-[11px] text-blue-800 flex items-start gap-2">
-            <span className="shrink-0 font-bold text-blue-900">💡 Tip:</span>
+          <div className="p-2.5 bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/50 rounded-xl text-[11px] text-blue-800 dark:text-blue-300 flex items-start gap-2">
+            <span className="shrink-0 font-bold text-blue-900 dark:text-blue-200">💡 Tip:</span>
             <span>
               Cost and Selling price are prefilled with existing catalog rates. Updating them here changes this product's master catalog prices for both existing stock and incoming batches.
             </span>
@@ -925,7 +925,7 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
         </div>
 
         {/* 3. Subtotals & Payment Settlement */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-100 pt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-100 dark:border-slate-800 pt-4">
           <div className="space-y-3">
             <Input
               label="Discount"
@@ -937,11 +937,11 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
 
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
                   {isNoSupplier ? 'Payment Amount (Full Settlement)' : 'Amount Paid to Supplier'}
                 </label>
                 {isNoSupplier && (
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-1.5 py-0.5 rounded border border-emerald-200">
+                  <span className="text-[10px] font-bold text-brand-700 dark:text-brand-300 bg-brand-100/80 dark:bg-brand-950/80 px-1.5 py-0.5 rounded border border-brand-200 dark:border-brand-800/60">
                     Full Payment Required
                   </span>
                 )}
@@ -962,38 +962,38 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
           </div>
 
           <div className="space-y-3">
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-1.5 text-sm">
-              <div className="flex justify-between text-slate-600 text-xs">
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 space-y-1.5 text-sm">
+              <div className="flex justify-between text-slate-600 dark:text-slate-400 text-xs">
                 <span>Subtotal:</span>
-                <span className="font-bold text-slate-800">
+                <span className="font-bold text-slate-800 dark:text-slate-200">
                   {formatCurrency(subtotal, currency)}
                 </span>
               </div>
               {discount > 0 && (
-                <div className="flex justify-between text-amber-700 text-xs">
+                <div className="flex justify-between text-amber-700 dark:text-amber-400 text-xs">
                   <span>Discount:</span>
                   <span className="font-bold">-{formatCurrency(discount, currency)}</span>
                 </div>
               )}
               {tax > 0 && (
-                <div className="flex justify-between text-slate-600 text-xs">
+                <div className="flex justify-between text-slate-600 dark:text-slate-400 text-xs">
                   <span>Tax:</span>
                   <span className="font-bold">+{formatCurrency(tax, currency)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-slate-800 font-bold border-t border-slate-200 pt-2 text-sm">
+              <div className="flex justify-between text-slate-800 dark:text-slate-200 font-bold border-t border-slate-200 dark:border-slate-800 pt-2 text-sm">
                 <span>Total Payable:</span>
-                <span className="text-emerald-800 font-black">
+                <span className="text-brand-700 dark:text-brand-400 font-black">
                   {formatCurrency(totalAmount, currency)}
                 </span>
               </div>
               {!isNoSupplier ? (
-                <div className="flex justify-between text-xs text-rose-700 font-semibold pt-0.5">
+                <div className="flex justify-between text-xs text-rose-700 dark:text-rose-400 font-semibold pt-0.5">
                   <span>Supplier Due:</span>
                   <span>{formatCurrency(Math.max(0, totalAmount - paidAmount), currency)}</span>
                 </div>
               ) : (
-                <div className="flex justify-between text-xs text-emerald-700 font-bold pt-0.5">
+                <div className="flex justify-between text-xs text-brand-700 dark:text-brand-400 font-bold pt-0.5">
                   <span>Supplier Due:</span>
                   <span>Rs. 0.00 (Settled in Full)</span>
                 </div>

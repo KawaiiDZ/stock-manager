@@ -347,8 +347,8 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
       {/* Top Header Controls (Hidden on Print) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print">
         <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Business Reports</h1>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <h1 className="text-2xl font-black text-slate-800 dark:text-slate-100 tracking-tight">Business Reports</h1>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
             Corporate financial analytics, profit margins, inventory valuation, and ledgers in A4 print-ready layout
           </p>
         </div>
@@ -376,15 +376,15 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
       </div>
 
       {/* Tabs Navigation (Hidden on Print) */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-slate-200 no-print">
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-slate-200 dark:border-slate-800 no-print">
         {reportTabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition ${
               activeTab === tab.id
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                ? 'bg-slate-900 dark:bg-brand-600 text-white shadow-sm'
+                : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
             }`}
           >
             {tab.label}
@@ -401,7 +401,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ settings }) => {
               setEndDate(end);
             }}
           />
-          <div className="text-xs text-slate-500 font-semibold">
+          <div className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
             {reportData.length} records found
           </div>
         </div>

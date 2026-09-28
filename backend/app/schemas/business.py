@@ -32,6 +32,9 @@ class BusinessSettingsResponse(BaseModel):
     hide_header_text_with_letterhead: bool = False
     invoice_title: str = "TAX INVOICE"
     enable_quotations: bool = True
+    enable_navigation_hub: bool = True
+    theme_mode: str = "light"
+    color_theme: str = "emerald"
     invoice_terms: str = "1. Goods once sold will be accepted for return within 7 days in original condition.\n2. Warranty claims require presenting this invoice.\n3. Thank you for your business!"
     quotation_terms: str = "1. This quotation is an estimate and valid for 15 days from issue date.\n2. Stock is subject to physical availability upon confirmation.\n3. This document does not constitute a tax invoice until approved."
     enable_barcode_scanner: bool = True
@@ -74,6 +77,9 @@ class BusinessSettingsUpdate(BaseModel):
     hide_header_text_with_letterhead: Optional[bool] = None
     invoice_title: Optional[str] = None
     enable_quotations: Optional[bool] = None
+    enable_navigation_hub: Optional[bool] = None
+    theme_mode: Optional[str] = None
+    color_theme: Optional[str] = None
     invoice_terms: Optional[str] = None
     quotation_terms: Optional[str] = None
     enable_barcode_scanner: Optional[bool] = None

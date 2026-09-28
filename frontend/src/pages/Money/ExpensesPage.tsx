@@ -125,8 +125,8 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ settings }) => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">General Expenses</h1>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <h1 className="text-2xl font-black text-slate-800 dark:text-slate-100 tracking-tight">General Expenses</h1>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
             Record daily shop expenses, transport, delivery fuel, and maintenance
           </p>
         </div>
@@ -149,7 +149,7 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ settings }) => {
             onChange={(e) =>
               setSelectedCat(e.target.value ? Number(e.target.value) : undefined)
             }
-            className="w-full sm:w-56 bg-white border border-slate-200 text-sm font-semibold rounded-xl px-4 py-2.5 text-slate-700 focus:outline-none focus:border-emerald-500 shadow-sm cursor-pointer"
+            className="w-full sm:w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold rounded-xl px-4 py-2.5 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-brand-500 shadow-sm cursor-pointer"
           >
             <option value="">All Expense Categories</option>
             {categories.map((c) => (
@@ -167,20 +167,20 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ settings }) => {
           />
         </div>
 
-        <div className="bg-white px-5 py-2.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+        <div className="bg-white dark:bg-slate-900 px-5 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-3">
+          <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
             Total Filtered:
           </span>
-          <span className="text-lg font-black text-slate-900">
+          <span className="text-lg font-black text-slate-900 dark:text-white">
             {formatCurrency(totalExpenseAmount, currency)}
           </span>
         </div>
       </div>
 
       {/* Expenses Table */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
         {loading ? (
-          <div className="py-16 text-center text-slate-400">Loading expenses...</div>
+          <div className="py-16 text-center text-slate-400 dark:text-slate-500">Loading expenses...</div>
         ) : expenses.length === 0 ? (
           <EmptyState
             title="No expenses recorded"
@@ -191,7 +191,7 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ settings }) => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                 <tr>
                   <th className="py-3.5 px-6">Expense #</th>
                   <th className="py-3.5 px-6">Date</th>
@@ -203,33 +203,33 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ settings }) => {
                   <th className="py-3.5 px-6 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {expenses.map((e) => (
-                  <tr key={e.id} className="hover:bg-slate-50/60 transition">
-                    <td className="py-4 px-6 font-bold text-slate-900">{e.expense_number}</td>
-                    <td className="py-4 px-6 text-slate-500 text-xs">
+                  <tr key={e.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/50 transition">
+                    <td className="py-4 px-6 font-bold text-slate-900 dark:text-white">{e.expense_number}</td>
+                    <td className="py-4 px-6 text-slate-500 dark:text-slate-400 text-xs">
                       {new Date(e.expense_date).toLocaleDateString('en-GB', {
                         day: '2-digit',
                         month: 'short',
                         year: 'numeric',
                       })}
                     </td>
-                    <td className="py-4 px-6 text-slate-600 text-xs">
-                      <span className="inline-flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-md font-medium">
+                    <td className="py-4 px-6 text-slate-600 dark:text-slate-400 text-xs">
+                      <span className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md font-medium border border-slate-200/60 dark:border-slate-700">
                         <Tag className="h-3 w-3" />
                         {e.category_name}
                       </span>
                     </td>
-                    <td className="py-4 px-6 font-bold text-slate-800">{e.title}</td>
-                    <td className="py-4 px-6 text-right font-black text-slate-900">
+                    <td className="py-4 px-6 font-bold text-slate-800 dark:text-slate-100">{e.title}</td>
+                    <td className="py-4 px-6 text-right font-black text-slate-900 dark:text-white">
                       {formatCurrency(e.amount, currency)}
                     </td>
-                    <td className="py-4 px-6 text-slate-600 text-xs">{e.payment_method}</td>
-                    <td className="py-4 px-6 text-slate-400 text-xs">{e.notes || '—'}</td>
+                    <td className="py-4 px-6 text-slate-600 dark:text-slate-400 text-xs">{e.payment_method}</td>
+                    <td className="py-4 px-6 text-slate-400 dark:text-slate-500 text-xs">{e.notes || '—'}</td>
                     <td className="py-4 px-6 text-right">
                       <button
                         onClick={() => handleDeleteExpense(e.id)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                        className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
                         title="Delete Expense"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -262,13 +262,13 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ settings }) => {
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
                 Category
               </label>
               <button
                 type="button"
                 onClick={() => setShowAddCatModal(true)}
-                className="text-xs text-emerald-600 hover:underline font-semibold"
+                className="text-xs text-brand-600 dark:text-brand-400 hover:underline font-semibold"
               >
                 + Add Category
               </button>
@@ -276,7 +276,7 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ settings }) => {
             <select
               value={categoryId}
               onChange={(e) => setCategoryId(Number(e.target.value))}
-              className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-emerald-500 shadow-sm"
+              className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:border-brand-500 shadow-sm"
             >
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>

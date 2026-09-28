@@ -340,14 +340,14 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                 <Layers className="h-5 w-5" />
               </div>
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
                   Select Category *
                 </label>
                 <div className="flex items-center gap-2">
                   <select
                     value={selectedCategoryId}
                     onChange={(e) => setSelectedCategoryId(Number(e.target.value))}
-                    className="bg-white border border-slate-300 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-800 shadow-sm focus:outline-none min-w-[220px]"
+                    className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:border-brand-500 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-800 dark:text-slate-100 shadow-sm focus:outline-none min-w-[220px]"
                   >
                     <option value={0}>General / Uncategorized</option>
                     {categories.map((c) => (
@@ -358,7 +358,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                   </select>
 
                   {activeCategory && (
-                    <span className="text-xs font-extrabold px-2.5 py-1 rounded-lg bg-emerald-100/70 text-emerald-800 border border-emerald-200">
+                    <span className="text-xs font-extrabold px-2.5 py-1 rounded-lg bg-brand-100/70 dark:bg-brand-950/60 text-brand-800 dark:text-brand-300 border border-brand-200 dark:border-brand-800/60">
                       {activeCategory.name}
                     </span>
                   )}
@@ -367,23 +367,23 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
             </div>
 
             <div className="flex items-center gap-2 text-xs">
-              <div className="bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-sm flex items-center gap-2">
-                <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
-                <span className="font-bold text-slate-700">
+              <div className="bg-white dark:bg-slate-800 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-2">
+                <Sparkles className="h-3.5 w-3.5 text-brand-600 dark:text-brand-400" />
+                <span className="font-bold text-slate-700 dark:text-slate-200">
                   {relevantCustomFields.length} {relevantCustomFields.length === 1 ? 'attribute column' : 'attribute columns'}
                 </span>
-                <span className="text-slate-400">loaded for {activeCategory?.name || 'General'}</span>
+                <span className="text-slate-400 dark:text-slate-500">loaded for {activeCategory?.name || 'General'}</span>
               </div>
             </div>
           </div>
 
           {/* Spreadsheet Table with Horizontal & Vertical Scroll */}
-          <div className="border border-slate-200 rounded-2xl overflow-x-auto overflow-y-auto max-h-[56vh] shadow-sm bg-slate-50/30">
+          <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-x-auto overflow-y-auto max-h-[56vh] shadow-sm bg-slate-50/30 dark:bg-slate-900/40">
             <table
               className="text-left text-xs border-collapse table-fixed select-none"
               style={{ width: `${totalTableWidth}px`, minWidth: '100%' }}
             >
-              <thead className="bg-slate-100 sticky top-0 z-20 border-b border-slate-200 font-bold text-slate-700 uppercase tracking-wider text-[11px]">
+              <thead className="bg-slate-100 dark:bg-slate-800 sticky top-0 z-20 border-b border-slate-200 dark:border-slate-700 font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider text-[11px]">
                 <tr>
                   {/* Index */}
                   <th
@@ -513,13 +513,13 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                   ></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200/80 bg-white">
+              <tbody className="divide-y divide-slate-200/80 dark:divide-slate-800 bg-white dark:bg-slate-900">
                 {rows.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-emerald-50/30 transition">
+                  <tr key={idx} className="hover:bg-brand-50/30 dark:hover:bg-slate-800/40 transition">
                     {/* Index */}
                     <td
                       style={{ width: `${colWidths.index || 45}px` }}
-                      className="py-2 px-2 text-center font-bold text-slate-400 bg-white sticky left-0 z-10 shadow-[1px_0_0_0_#e2e8f0]"
+                      className="py-2 px-2 text-center font-bold text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-900 sticky left-0 z-10 shadow-[1px_0_0_0_#e2e8f0] dark:shadow-[1px_0_0_0_#334155]"
                     >
                       {idx + 1}
                     </td>
@@ -527,14 +527,14 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                     {/* Product Name */}
                     <td
                       style={{ width: `${colWidths.name || 220}px` }}
-                      className="py-1 px-1.5 bg-white sticky left-[45px] z-10 shadow-[1px_0_0_0_#e2e8f0]"
+                      className="py-1 px-1.5 bg-white dark:bg-slate-900 sticky left-[45px] z-10 shadow-[1px_0_0_0_#e2e8f0] dark:shadow-[1px_0_0_0_#334155]"
                     >
                       <input
                         type="text"
                         placeholder="e.g. Product Item Name"
                         value={row.name}
                         onChange={(e) => handleUpdateCell(idx, 'name', e.target.value)}
-                        className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2.5 py-1.5 font-bold text-slate-900 text-xs focus:outline-none shadow-sm"
+                        className="w-full bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-lg px-2.5 py-1.5 font-bold text-slate-900 dark:text-white text-xs focus:outline-none shadow-sm"
                       />
                     </td>
 
@@ -546,7 +546,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                           placeholder="SKU-001"
                           value={row.sku}
                           onChange={(e) => handleUpdateCell(idx, 'sku', e.target.value)}
-                          className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1.5 text-xs text-slate-700 focus:outline-none"
+                          className="w-full bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-lg px-2 py-1.5 text-xs text-slate-700 dark:text-slate-200 focus:outline-none"
                         />
                       </td>
                     )}
@@ -559,7 +559,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                           placeholder="Scan / Barcode"
                           value={row.barcode}
                           onChange={(e) => handleUpdateCell(idx, 'barcode', e.target.value)}
-                          className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1.5 font-mono text-slate-700 text-xs focus:outline-none"
+                          className="w-full bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-lg px-2 py-1.5 font-mono text-slate-700 dark:text-slate-200 text-xs focus:outline-none"
                         />
                       </td>
                     )}
@@ -578,7 +578,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                         onChange={(e) =>
                           handleUpdateCell(idx, 'purchase_price', Number(e.target.value))
                         }
-                        className="w-full text-right bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1.5 font-semibold text-slate-800 text-xs focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        className="w-full text-right bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-lg px-2 py-1.5 font-semibold text-slate-800 dark:text-slate-200 text-xs focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </td>
 
@@ -596,7 +596,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                         onChange={(e) =>
                           handleUpdateCell(idx, 'selling_price', Number(e.target.value))
                         }
-                        className="w-full text-right bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1.5 font-black text-slate-900 text-xs focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        className="w-full text-right bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-lg px-2 py-1.5 font-black text-slate-900 dark:text-white text-xs focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </td>
 
@@ -613,7 +613,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                         onChange={(e) =>
                           handleUpdateCell(idx, 'opening_stock', Number(e.target.value))
                         }
-                        className="w-full text-right bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1.5 font-bold text-emerald-700 text-xs focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        className="w-full text-right bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-lg px-2 py-1.5 font-bold text-brand-600 dark:text-brand-400 text-xs focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </td>
 
@@ -633,7 +633,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                               onChange={(e) =>
                                 handleUpdateCustomValue(idx, cf.id, e.target.value)
                               }
-                              className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1.5 text-xs text-slate-700 focus:outline-none"
+                              className="w-full bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-lg px-2 py-1.5 text-xs text-slate-700 dark:text-slate-200 focus:outline-none"
                             >
                               <option value="">— Select {cf.name} —</option>
                               {opts.map((opt, i) => (
@@ -664,7 +664,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                             onChange={(e) =>
                               handleUpdateCustomValue(idx, cf.id, e.target.value)
                             }
-                            className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1.5 text-xs text-slate-700 focus:outline-none font-medium"
+                            className="w-full bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-lg px-2 py-1.5 text-xs text-slate-700 dark:text-slate-200 focus:outline-none font-medium"
                           />
                         </td>
                       );
@@ -679,7 +679,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                         type="button"
                         onClick={() => handleRemoveRow(idx)}
                         disabled={rows.length <= 1}
-                        className="text-slate-300 hover:text-rose-500 disabled:opacity-20 p-1.5 transition rounded-lg hover:bg-rose-50"
+                        className="text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 disabled:opacity-20 p-1.5 transition rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40"
                         title="Remove Row"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -689,15 +689,15 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                 ))}
 
                 {/* Single small plus icon row directly below the product row */}
-                <tr className="border-t border-slate-200/70 bg-slate-50/50 hover:bg-slate-100/60 transition">
+                <tr className="border-t border-slate-200/70 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850 hover:bg-slate-100/60 dark:hover:bg-slate-800 transition">
                   <td
                     style={{ width: `${colWidths.index || 45}px` }}
-                    className="py-1.5 px-1 text-center sticky left-0 z-20 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]"
+                    className="py-1.5 px-1 text-center sticky left-0 z-20 bg-slate-50 dark:bg-slate-900 shadow-[1px_0_0_0_#e2e8f0] dark:shadow-[1px_0_0_0_#334155]"
                   >
                     <button
                       type="button"
                       onClick={() => handleAddRows(1)}
-                      className="inline-flex items-center justify-center h-6 w-6 rounded-md bg-white hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border border-slate-300 hover:border-emerald-400 shadow-2xs transition"
+                      className="inline-flex items-center justify-center h-6 w-6 rounded-md bg-white dark:bg-slate-800 hover:bg-brand-50 dark:hover:bg-brand-950/40 text-slate-600 dark:text-slate-300 hover:text-brand-600 dark:hover:text-brand-400 border border-slate-300 dark:border-slate-700 hover:border-brand-400 shadow-2xs transition"
                       title="Add a row"
                     >
                       <Plus className="h-3.5 w-3.5" />
@@ -710,7 +710,7 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                     <button
                       type="button"
                       onClick={() => handleAddRows(1)}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-800 transition"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 transition"
                     >
                       <Plus className="h-3 w-3" />
                       <span>Add another product row</span>
@@ -724,19 +724,19 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
           {/* Live Summary */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-1">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 font-semibold">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
                 {validRows.length} {validRows.length === 1 ? 'product' : 'products'} ready to save
               </span>
             </div>
 
-            <div className="flex items-center gap-4 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100 text-xs">
+            <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-800 px-4 py-2 rounded-xl border border-slate-100 dark:border-slate-700 text-xs">
               <div>
-                <span className="text-slate-400">Total Units: </span>
-                <span className="font-bold text-slate-800">{totalStockQty}</span>
+                <span className="text-slate-400 dark:text-slate-500">Total Units: </span>
+                <span className="font-bold text-slate-800 dark:text-white">{totalStockQty}</span>
               </div>
               <div>
-                <span className="text-slate-400">Stock Valuation: </span>
-                <span className="font-black text-emerald-700">
+                <span className="text-slate-400 dark:text-slate-500">Stock Valuation: </span>
+                <span className="font-black text-brand-600 dark:text-brand-400">
                   {formatCurrency(totalCostValue, currency)}
                 </span>
               </div>

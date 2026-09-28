@@ -145,8 +145,8 @@ export const BillsPage: React.FC<BillsPageProps> = ({ settings }) => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Recurring & Utility Bills</h1>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <h1 className="text-2xl font-black text-slate-800 dark:text-slate-100 tracking-tight">Recurring & Utility Bills</h1>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
             Track electricity, rent, internet, government, and other operational bills
           </p>
         </div>
@@ -166,7 +166,7 @@ export const BillsPage: React.FC<BillsPageProps> = ({ settings }) => {
         <select
           value={selectedCat || ''}
           onChange={(e) => setSelectedCat(e.target.value ? Number(e.target.value) : undefined)}
-          className="w-full sm:w-64 bg-white border border-slate-200 text-sm font-semibold rounded-xl px-4 py-2.5 text-slate-700 focus:outline-none focus:border-emerald-500 shadow-sm cursor-pointer"
+          className="w-full sm:w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold rounded-xl px-4 py-2.5 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-brand-500 shadow-sm cursor-pointer"
         >
           <option value="">All Bill Categories</option>
           {categories.map((c) => (
@@ -179,7 +179,7 @@ export const BillsPage: React.FC<BillsPageProps> = ({ settings }) => {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="w-full sm:w-56 bg-white border border-slate-200 text-sm font-semibold rounded-xl px-4 py-2.5 text-slate-700 focus:outline-none focus:border-emerald-500 shadow-sm cursor-pointer"
+          className="w-full sm:w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold rounded-xl px-4 py-2.5 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-brand-500 shadow-sm cursor-pointer"
         >
           <option value="all">All Statuses</option>
           <option value="TO_PAY">To Pay / Unpaid</option>
@@ -189,9 +189,9 @@ export const BillsPage: React.FC<BillsPageProps> = ({ settings }) => {
       </div>
 
       {/* Bills Table */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
         {loading ? (
-          <div className="py-16 text-center text-slate-400">Loading bills...</div>
+          <div className="py-16 text-center text-slate-400 dark:text-slate-500">Loading bills...</div>
         ) : bills.length === 0 ? (
           <EmptyState
             title="No bills recorded"
@@ -202,7 +202,7 @@ export const BillsPage: React.FC<BillsPageProps> = ({ settings }) => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                 <tr>
                   <th className="py-3.5 px-6">Bill #</th>
                   <th className="py-3.5 px-6">Bill Name</th>
@@ -215,19 +215,19 @@ export const BillsPage: React.FC<BillsPageProps> = ({ settings }) => {
                   <th className="py-3.5 px-6 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {bills.map((b) => {
                   const isOverdue = new Date(b.due_date) < new Date() && b.status !== 'PAID';
                   const dueNum = Number(b.due_amount || 0);
                   return (
-                    <tr key={b.id} className="hover:bg-slate-50/60 transition">
-                      <td className="py-4 px-6 font-bold text-slate-900">{b.bill_number}</td>
-                      <td className="py-4 px-6 font-bold text-slate-800">
+                    <tr key={b.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/50 transition">
+                      <td className="py-4 px-6 font-bold text-slate-900 dark:text-white">{b.bill_number}</td>
+                      <td className="py-4 px-6 font-bold text-slate-800 dark:text-slate-100">
                         {b.name}
-                        {b.notes && <p className="text-xs text-slate-400 font-normal">{b.notes}</p>}
+                        {b.notes && <p className="text-xs text-slate-400 dark:text-slate-500 font-normal">{b.notes}</p>}
                       </td>
-                      <td className="py-4 px-6 text-slate-600 text-xs">
-                        <span className="inline-flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-md font-medium">
+                      <td className="py-4 px-6 text-slate-600 dark:text-slate-400 text-xs">
+                        <span className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md font-medium border border-slate-200/60 dark:border-slate-700">
                           <Tag className="h-3 w-3" />
                           {b.category_name}
                         </span>
@@ -235,7 +235,7 @@ export const BillsPage: React.FC<BillsPageProps> = ({ settings }) => {
                       <td className="py-4 px-6 text-xs">
                         <span
                           className={`font-semibold ${
-                            isOverdue ? 'text-rose-600 font-bold' : 'text-slate-700'
+                            isOverdue ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-slate-700 dark:text-slate-300'
                           }`}
                         >
                           {new Date(b.due_date).toLocaleDateString('en-GB', {
@@ -245,13 +245,13 @@ export const BillsPage: React.FC<BillsPageProps> = ({ settings }) => {
                           })}
                         </span>
                       </td>
-                      <td className="py-4 px-6 text-right font-bold text-slate-900">
+                      <td className="py-4 px-6 text-right font-bold text-slate-900 dark:text-white">
                         {formatCurrency(b.amount, currency)}
                       </td>
-                      <td className="py-4 px-6 text-right text-emerald-700 font-semibold">
+                      <td className="py-4 px-6 text-right text-emerald-600 dark:text-emerald-400 font-semibold">
                         {formatCurrency(b.paid_amount, currency)}
                       </td>
-                      <td className="py-4 px-6 text-right font-semibold text-rose-700">
+                      <td className="py-4 px-6 text-right font-semibold text-rose-600 dark:text-rose-400">
                         {dueNum > 0 ? formatCurrency(dueNum, currency) : '—'}
                       </td>
                       <td className="py-4 px-6 text-center">
@@ -263,7 +263,7 @@ export const BillsPage: React.FC<BillsPageProps> = ({ settings }) => {
                             variant="outline"
                             size="sm"
                             onClick={() => handleOpenPay(b)}
-                            className="text-xs py-1 px-3 font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200"
+                            className="text-xs py-1 px-3 font-bold text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-950/40 hover:bg-brand-100 dark:hover:bg-brand-900/60 border-brand-200 dark:border-brand-800"
                           >
                             Pay Bill
                           </Button>
@@ -306,13 +306,13 @@ export const BillsPage: React.FC<BillsPageProps> = ({ settings }) => {
 
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
                   Category
                 </label>
                 <button
                   type="button"
                   onClick={() => setShowAddCatModal(true)}
-                  className="text-xs text-emerald-600 hover:underline font-semibold"
+                  className="text-xs text-brand-600 dark:text-brand-400 hover:underline font-semibold"
                 >
                   + Add Category
                 </button>
@@ -320,7 +320,7 @@ export const BillsPage: React.FC<BillsPageProps> = ({ settings }) => {
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(Number(e.target.value))}
-                className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-emerald-500 shadow-sm"
+                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:border-brand-500 shadow-sm"
               >
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>

@@ -44,13 +44,13 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
   return (
     <div className="w-full">
       {label && (
-        <label htmlFor={inputId} className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
+        <label htmlFor={inputId} className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
           {label}
         </label>
       )}
       <div className="relative rounded-xl shadow-sm">
         {prefix && (
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500 text-sm">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500 dark:text-slate-400 text-sm">
             {prefix}
           </div>
         )}
@@ -59,12 +59,12 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
           ref={ref}
           className={twMerge(
             clsx(
-              'block w-full rounded-xl border-slate-200 bg-white py-2.5 text-sm text-slate-800 transition duration-150',
-              'placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20',
+              'block w-full rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-2.5 text-sm text-slate-800 dark:text-slate-100 transition duration-150',
+              'placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20',
               'border',
               prefix ? 'pl-9' : 'pl-3.5',
               suffix ? 'pr-9' : 'pr-3.5',
-              error && 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/20 bg-rose-50/20',
+              error && 'border-rose-300 dark:border-rose-700 focus:border-rose-500 focus:ring-rose-500/20 bg-rose-50/20 dark:bg-rose-950/20',
               className
             )
           )}
@@ -73,13 +73,13 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
           onChange={handleChange}
         />
         {suffix && (
-          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-slate-500 text-sm">
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-slate-500 dark:text-slate-400 text-sm">
             {suffix}
           </div>
         )}
       </div>
-      {error && <p className="mt-1.5 text-xs text-rose-600 font-medium">{error}</p>}
-      {hint && !error && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
+      {error && <p className="mt-1.5 text-xs text-rose-600 dark:text-rose-400 font-medium">{error}</p>}
+      {hint && !error && <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{hint}</p>}
     </div>
   );
 });

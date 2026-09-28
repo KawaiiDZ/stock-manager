@@ -28,9 +28,16 @@ import {
   Zap,
   Flame,
   Info,
+  Compass,
+  Palette,
+  Sun,
+  Moon,
+  Monitor,
+  Check,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
+import { useTheme, COLOR_THEME_OPTIONS, ThemeMode, ColorTheme } from '../../context/ThemeContext';
 import { Modal } from '../../components/common/Modal';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { SchemaBuilder } from './SchemaBuilder';
@@ -60,9 +67,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [pinError, setPinError] = useState<string | null>(null);
   const [checkingPin, setCheckingPin] = useState(false);
 
+  const { themeMode, colorTheme, effectiveMode, setThemeMode, setColorTheme } = useTheme();
+
   // Settings tab
   const [activeTab, setActiveTab] = useState<
-    'business' | 'tax' | 'custom_fields' | 'printer' | 'barcode' | 'backup' | 'security' | 'danger_zone'
+    'business' | 'appearance' | 'tax' | 'custom_fields' | 'printer' | 'barcode' | 'backup' | 'security' | 'danger_zone'
   >('business');
 
   // Business Form State
@@ -86,6 +95,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [letterheadImage, setLetterheadImage] = useState(settings?.receipt_letterhead_path || '');
   const [invoiceTitle, setInvoiceTitle] = useState(settings?.invoice_title || 'TAX INVOICE');
   const [enableQuotations, setEnableQuotations] = useState(settings?.enable_quotations ?? true);
+  const [enableNavigationHub, setEnableNavigationHub] = useState(settings?.enable_navigation_hub ?? true);
   const [invoiceTerms, setInvoiceTerms] = useState(settings?.invoice_terms || '');
   const [quotationTerms, setQuotationTerms] = useState(settings?.quotation_terms || '');
 
@@ -256,6 +266,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setLetterheadImage(settings.receipt_letterhead_path || '');
       setInvoiceTitle(settings.invoice_title || 'TAX INVOICE');
       setEnableQuotations(settings.enable_quotations ?? true);
+      setEnableNavigationHub(settings.enable_navigation_hub ?? true);
       setInvoiceTerms(settings.invoice_terms || '1. Goods once sold will be accepted for return within 7 days in original condition.\n2. Warranty claims require presenting this invoice.\n3. Thank you for your business!');
       setQuotationTerms(settings.quotation_terms || '1. This quotation is an estimate and valid for 15 days from issue date.\n2. Stock is subject to physical availability upon confirmation.\n3. This document does not constitute a tax invoice until approved.');
       setEnableBarcodeScanner(settings.enable_barcode_scanner ?? true);
@@ -371,6 +382,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         receipt_letterhead_path: letterheadImage || null,
         invoice_title: invoiceTitle.trim() || 'TAX INVOICE',
         enable_quotations: enableQuotations,
+        enable_navigation_hub: enableNavigationHub,
+        theme_mode: themeMode,
+        color_theme: colorTheme,
         invoice_terms: invoiceTerms,
         quotation_terms: quotationTerms,
         enable_barcode_scanner: enableBarcodeScanner,
@@ -776,9 +790,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       )}
 
       {/* Navigation Tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-slate-200">
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-slate-200 dark:border-slate-800">
         {[
           { id: 'business', label: 'Business Profile', icon: <Store className="h-4 w-4" /> },
+          { id: 'appearance', label: 'Appearance & Themes', icon: <Palette className="h-4 w-4" /> },
           { id: 'tax', label: 'Tax Settings', icon: <Percent className="h-4 w-4" /> },
           { id: 'custom_fields', label: 'Custom Product Fields', icon: <Sliders className="h-4 w-4" /> },
           { id: 'printer', label: 'Receipt & Printer', icon: <Printer className="h-4 w-4" /> },
@@ -792,8 +807,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             onClick={() => setActiveTab(tab.id as any)}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${
               activeTab === tab.id
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                ? 'bg-slate-900 dark:bg-slate-800 text-white shadow-sm'
+                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/80'
             }`}
           >
             {tab.icon}
@@ -983,6 +998,34 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               </div>
             </div>
 
+            {/* Central Navigation Hub Toggle */}
+            <div className="pt-3 border-t border-slate-100 space-y-3">
+              <div>
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Compass className="h-4 w-4 text-emerald-600" />
+                  Navigation Hub
+                </h4>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Enable the central departmental visual dashboard with live statistics and keyboard quick-links. Keyboard shortcuts remain active across the entire app at all times.
+                </p>
+              </div>
+
+              <label className="flex items-start gap-3 p-3.5 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition">
+                <input
+                  type="checkbox"
+                  checked={enableNavigationHub}
+                  onChange={(e) => setEnableNavigationHub(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <div className="text-xs">
+                  <span className="font-bold text-slate-800 block">Enable Central Navigation Hub</span>
+                  <span className="text-slate-500 text-[11px] leading-relaxed">
+                    Display the Navigation Hub in the sidebar and top navigation for quick departmental overview and access.
+                  </span>
+                </div>
+              </label>
+            </div>
+
             <div className="pt-2">
               <Button type="submit" variant="primary" loading={saving}>
                 Save Profile
@@ -1073,6 +1116,168 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Appearance & Themes */}
+      {activeTab === 'appearance' && (
+        <div className="max-w-3xl space-y-6">
+          {/* Display Mode (Light / Dark / System) */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-5">
+            <div>
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base flex items-center gap-2">
+                <Palette className="h-5 w-5 text-brand-600" />
+                Display Theme & Mode
+              </h3>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                Customize your display mode to reduce eye strain or match your operating system theme.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                {
+                  id: 'light',
+                  title: 'Light Mode',
+                  desc: 'Crisp daylight interface',
+                  icon: <Sun className="h-5 w-5 text-amber-500" />,
+                },
+                {
+                  id: 'dark',
+                  title: 'Dark Mode',
+                  desc: 'Deep slate & charcoal palette',
+                  icon: <Moon className="h-5 w-5 text-indigo-400" />,
+                },
+                {
+                  id: 'system',
+                  title: 'System Auto',
+                  desc: 'Matches device OS setting',
+                  icon: <Monitor className="h-5 w-5 text-slate-400" />,
+                },
+              ].map((m) => {
+                const isSelected = themeMode === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setThemeMode(m.id as ThemeMode)}
+                    className={`flex flex-col text-left p-4 rounded-2xl border-2 transition-all relative ${
+                      isSelected
+                        ? 'border-brand-600 bg-brand-50/50 dark:bg-brand-950/30 ring-2 ring-brand-500/20 shadow-sm'
+                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/40 dark:bg-slate-800/40'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full mb-2">
+                      <div className="p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shadow-2xs">
+                        {m.icon}
+                      </div>
+                      {isSelected && (
+                        <div className="h-5 w-5 rounded-full bg-brand-600 text-white flex items-center justify-center">
+                          <Check className="h-3 w-3 stroke-[3]" />
+                        </div>
+                      )}
+                    </div>
+                    <span className="font-bold text-sm text-slate-800 dark:text-slate-100">{m.title}</span>
+                    <span className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 leading-snug">{m.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Color Themes */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-5">
+            <div>
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base">Brand Accent Color</h3>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                Choose the primary accent color applied across buttons, highlights, badges, and POS controls.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {COLOR_THEME_OPTIONS.map((c) => {
+                const isSelected = colorTheme === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setColorTheme(c.id)}
+                    className={`flex items-start gap-3.5 p-4 rounded-2xl border-2 transition-all text-left relative ${
+                      isSelected
+                        ? 'border-brand-600 bg-brand-50/40 dark:bg-brand-950/20 ring-2 ring-brand-500/20 shadow-sm'
+                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/30 dark:bg-slate-800/30'
+                    }`}
+                  >
+                    <div
+                      className={`h-9 w-9 rounded-xl ${c.previewClass} flex items-center justify-center text-white shadow-sm shrink-0`}
+                    >
+                      {isSelected ? <Check className="h-4 w-4 stroke-[3]" /> : null}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-sm text-slate-800 dark:text-slate-100">{c.name}</span>
+                        {isSelected && (
+                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-100 text-brand-800 dark:bg-brand-900/60 dark:text-brand-300">
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 leading-snug">{c.description}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Live Component Preview */}
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                Live Component Preview
+              </span>
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700 flex flex-wrap items-center gap-3">
+                <Button variant="primary" size="sm">
+                  Primary Action
+                </Button>
+                <button
+                  type="button"
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-brand-50 text-brand-700 dark:bg-brand-950/60 dark:text-brand-300 border border-brand-200 dark:border-brand-800"
+                >
+                  Active Tag
+                </button>
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-brand-600 dark:text-brand-400">
+                  <span className="h-2 w-2 rounded-full bg-brand-500 animate-pulse"></span>
+                  Live Indicator
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Receipt Print Protection Banner */}
+          <div className="p-4 rounded-2xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800 flex items-start gap-3">
+            <Info className="h-5 w-5 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
+            <div className="text-xs">
+              <span className="font-bold text-sky-900 dark:text-sky-200 block">Print & Thermal Immunity</span>
+              <span className="text-sky-700 dark:text-sky-300 leading-relaxed block mt-0.5">
+                Regardless of the selected theme or dark mode, thermal receipts and A4 invoices always print with crisp black text on pure white paper to conserve printer ink and ensure professional legal compliance.
+              </span>
+            </div>
+          </div>
+
+          {/* Save Button */}
+          <div className="pt-1 flex items-center gap-3">
+            <Button
+              type="button"
+              variant="primary"
+              loading={saving}
+              onClick={handleSaveSettings}
+            >
+              Save Appearance
+            </Button>
+            <span className="text-xs text-slate-400 dark:text-slate-500">
+              Settings persist across restarts and browser sessions.
+            </span>
           </div>
         </div>
       )}

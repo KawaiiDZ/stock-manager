@@ -33,6 +33,9 @@ class BusinessSettings(Base):
     hide_header_text_with_letterhead = Column(Boolean, nullable=False, default=False)
     invoice_title = Column(String(100), nullable=False, default="TAX INVOICE")
     enable_quotations = Column(Boolean, nullable=False, default=True)
+    enable_navigation_hub = Column(Boolean, nullable=False, default=True)
+    theme_mode = Column(String(20), nullable=False, default="light")  # light, dark, system
+    color_theme = Column(String(30), nullable=False, default="emerald")  # emerald, indigo, sky, rose, slate
     invoice_terms = Column(Text, nullable=False, default="1. Goods once sold will be accepted for return within 7 days in original condition.\n2. Warranty claims require presenting this invoice.\n3. Thank you for your business!")
     quotation_terms = Column(Text, nullable=False, default="1. This quotation is an estimate and valid for 15 days from issue date.\n2. Stock is subject to physical availability upon confirmation.\n3. This document does not constitute a tax invoice until approved.")
     # Barcode & Scanner Configuration

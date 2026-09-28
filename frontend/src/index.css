@@ -2,9 +2,90 @@
 @tailwind components;
 @tailwind utilities;
 
+:root,
+[data-theme="emerald"] {
+  --brand-50: #ecfdf5;
+  --brand-100: #d1fae5;
+  --brand-200: #a7f3d0;
+  --brand-300: #6ee7b7;
+  --brand-400: #34d399;
+  --brand-500: #10b981;
+  --brand-600: #059669;
+  --brand-700: #047857;
+  --brand-800: #065f46;
+  --brand-900: #064e3b;
+  --brand-ring: rgba(16, 185, 129, 0.25);
+  --brand-gradient-from: #059669;
+  --brand-gradient-to: #0f766e;
+}
+
+[data-theme="indigo"] {
+  --brand-50: #eef2ff;
+  --brand-100: #e0e7ff;
+  --brand-200: #c7d2fe;
+  --brand-300: #a5b4fc;
+  --brand-400: #818cf8;
+  --brand-500: #6366f1;
+  --brand-600: #4f46e5;
+  --brand-700: #4338ca;
+  --brand-800: #3730a3;
+  --brand-900: #312e81;
+  --brand-ring: rgba(99, 102, 241, 0.25);
+  --brand-gradient-from: #4f46e5;
+  --brand-gradient-to: #3730a3;
+}
+
+[data-theme="sky"] {
+  --brand-50: #f0f9ff;
+  --brand-100: #e0f2fe;
+  --brand-200: #bae6fd;
+  --brand-300: #7dd3fc;
+  --brand-400: #38bdf8;
+  --brand-500: #0ea5e9;
+  --brand-600: #0284c7;
+  --brand-700: #0369a1;
+  --brand-800: #075985;
+  --brand-900: #0c4a6e;
+  --brand-ring: rgba(14, 165, 233, 0.25);
+  --brand-gradient-from: #0284c7;
+  --brand-gradient-to: #0369a1;
+}
+
+[data-theme="rose"] {
+  --brand-50: #fff1f2;
+  --brand-100: #ffe4e6;
+  --brand-200: #fecdd3;
+  --brand-300: #fda4af;
+  --brand-400: #fb7185;
+  --brand-500: #f43f5e;
+  --brand-600: #e11d48;
+  --brand-700: #be123c;
+  --brand-800: #9f1239;
+  --brand-900: #881337;
+  --brand-ring: rgba(244, 63, 94, 0.25);
+  --brand-gradient-from: #e11d48;
+  --brand-gradient-to: #be123c;
+}
+
+[data-theme="slate"] {
+  --brand-50: #f8fafc;
+  --brand-100: #f1f5f9;
+  --brand-200: #e2e8f0;
+  --brand-300: #cbd5e1;
+  --brand-400: #94a3b8;
+  --brand-500: #64748b;
+  --brand-600: #475569;
+  --brand-700: #334155;
+  --brand-800: #1e293b;
+  --brand-900: #0f172a;
+  --brand-ring: rgba(100, 116, 139, 0.25);
+  --brand-gradient-from: #475569;
+  --brand-gradient-to: #1e293b;
+}
+
 @layer base {
   body {
-    @apply text-slate-800 bg-slate-50;
+    @apply text-slate-800 bg-slate-50 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-200;
   }
 }
 

@@ -23,6 +23,7 @@ import { ReceiptModal } from '../../components/receipts/ReceiptModal';
 import { QuotationModal } from '../../components/receipts/QuotationModal';
 import { UnregisteredBarcodeModal } from '../../components/barcode/UnregisteredBarcodeModal';
 import { QuickAddProductModal } from '../../components/products/QuickAddProductModal';
+import { CartQuantityInput } from '../../components/pos/CartQuantityInput';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { formatCurrency, formatMoney, formatQty } from '../../utils/format';
 
@@ -78,6 +79,42 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   const [quickAddBarcode, setQuickAddBarcode] = useState<string | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Keyboard navigation target: 'search', or cart item index (0, 1, ...), or null (no arrow active)
+  const [keyboardActiveTarget, setKeyboardActiveTarget] = useState<'search' | number | null>(null);
+
+  // Search dropdown active item index for keyboard arrow navigation (-1 = input, 0, 1, ... = dropdown items)
+  const [dropdownActiveIndex, setDropdownActiveIndex] = useState<number>(-1);
+
+  // Reset dropdown active index whenever search query changes
+  useEffect(() => {
+    setDropdownActiveIndex(-1);
+  }, [searchQuery]);
+
+  // Keep highlighted search dropdown item scrolled into view
+  useEffect(() => {
+    if (dropdownActiveIndex >= 0) {
+      const el = document.getElementById(`search-result-${dropdownActiveIndex}`);
+      el?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [dropdownActiveIndex]);
+
+  const handleCartNavigateUp = (fromIndex: number) => {
+    if (fromIndex > 0) {
+      setKeyboardActiveTarget(fromIndex - 1);
+    } else {
+      // Reached the top item in the cart: move focus back up to search input
+      setKeyboardActiveTarget('search');
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    }
+  };
+
+  const handleCartNavigateDown = (fromIndex: number) => {
+    if (fromIndex < cart.length - 1) {
+      setKeyboardActiveTarget(fromIndex + 1);
+    }
+  };
 
   const currency = settings?.currency || 'Rs.';
   const showSku = settings?.show_sku !== false;
@@ -150,12 +187,20 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
     playBeep: true,
   });
 
-  // Global POS Keyboard Shortcuts
+  // Global POS Keyboard Shortcuts & Arrow Navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // F4 to focus search
       if (e.key === 'F4') {
         e.preventDefault();
+        setKeyboardActiveTarget('search');
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+        return;
+      }
+      // Escape to reset keyboard navigation to search
+      if (e.key === 'Escape') {
+        setKeyboardActiveTarget(null);
         searchInputRef.current?.focus();
         return;
       }
@@ -165,11 +210,97 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         handleCompleteSale();
         return;
       }
+
+      // Check active element
+      const activeEl = document.activeElement;
+      const activeTag = activeEl?.tagName.toLowerCase();
+      const isSearchFocused = activeEl === searchInputRef.current;
+      const isQuantityInput = activeEl?.getAttribute('inputmode') === 'numeric';
+      const isDedicatedFormInput =
+        activeEl &&
+        (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select') &&
+        !isSearchFocused &&
+        !isQuantityInput;
+
+      // Do not intercept if user is inside search input (handled exclusively by handleSearchKeyDown),
+      // or inside customer/payment/notes inputs, or inside double-clicked quantity editor
+      if (isDedicatedFormInput || isQuantityInput || isSearchFocused) {
+        return;
+      }
+
+      // Arrow navigation
+      if (e.key === 'ArrowDown') {
+        if (cart.length > 0) {
+          if (keyboardActiveTarget === null) {
+            e.preventDefault();
+            setKeyboardActiveTarget(cart.length - 1);
+            searchInputRef.current?.blur();
+          } else if (keyboardActiveTarget === 'search') {
+            e.preventDefault();
+            setKeyboardActiveTarget(0);
+            searchInputRef.current?.blur();
+          } else if (typeof keyboardActiveTarget === 'number') {
+            e.preventDefault();
+            if (keyboardActiveTarget < cart.length - 1) {
+              setKeyboardActiveTarget(keyboardActiveTarget + 1);
+            }
+          }
+        }
+        return;
+      }
+
+      if (e.key === 'ArrowUp') {
+        if (typeof keyboardActiveTarget === 'number') {
+          e.preventDefault();
+          if (keyboardActiveTarget > 0) {
+            setKeyboardActiveTarget(keyboardActiveTarget - 1);
+          } else {
+            // Reached top cart item -> move active target up to search bar
+            setKeyboardActiveTarget('search');
+            searchInputRef.current?.focus();
+            searchInputRef.current?.select();
+          }
+        }
+        return;
+      }
+
+      if (e.key === 'ArrowLeft') {
+        if (typeof keyboardActiveTarget === 'number' && cart[keyboardActiveTarget]) {
+          e.preventDefault();
+          const targetItem = cart[keyboardActiveTarget];
+          updateQuantity(targetItem.product.id, targetItem.quantity - 1);
+        }
+        return;
+      }
+
+      if (e.key === 'ArrowRight') {
+        if (typeof keyboardActiveTarget === 'number' && cart[keyboardActiveTarget]) {
+          e.preventDefault();
+          const targetItem = cart[keyboardActiveTarget];
+          updateQuantity(targetItem.product.id, targetItem.quantity + 1);
+        }
+        return;
+      }
+
+      // "typing in the POS area should always go in the search bar"
+      if (
+        e.key.length === 1 &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey
+      ) {
+        if (!isSearchFocused) {
+          e.preventDefault();
+          setKeyboardActiveTarget(null);
+          searchInputRef.current?.focus();
+          setSearchQuery((prev) => prev + e.key);
+        }
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [products, cart, paidAmount, isPaidAmountCustomized, inlineCustomerName, selectedCustomerId]);
+  }, [cart, keyboardActiveTarget, paidAmount, isPaidAmountCustomized, inlineCustomerName, selectedCustomerId, searchQuery]);
 
   // Add product to cart
   const addToCart = (product: Product) => {
@@ -194,7 +325,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         setErrorMsg(`Item ${product.name} is currently out of stock.`);
         return;
       }
-      setCart([
+      const newCart = [
         ...cart,
         {
           product,
@@ -202,7 +333,8 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
           unit_price: Number(product.selling_price || 0),
           discount_amount: 0,
         },
-      ]);
+      ];
+      setCart(newCart);
     }
   };
 
@@ -211,19 +343,24 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
     const item = cart.find((i) => i.product.id === productId);
     if (!item) return;
 
-    const availableStock = Number(item.product.current_stock || 0);
+    const availableStock = Math.max(0, Number(item.product.current_stock || 0));
 
-    if (qty > availableStock) {
+    let finalQty = qty;
+    if (finalQty > availableStock) {
+      finalQty = availableStock;
       setErrorMsg(
-        `Not enough stock. Only ${availableStock} units of ${item.product.name} are available.`
+        `Quantity capped to maximum available stock (${availableStock} units of ${item.product.name}).`
       );
-      return;
     }
 
-    if (qty <= 0) {
-      setCart(cart.filter((i) => i.product.id !== productId));
+    if (finalQty <= 0) {
+      const newCart = cart.filter((i) => i.product.id !== productId);
+      setCart(newCart);
+      if (typeof keyboardActiveTarget === 'number' && keyboardActiveTarget >= newCart.length) {
+        setKeyboardActiveTarget(newCart.length > 0 ? newCart.length - 1 : null);
+      }
     } else {
-      setCart(cart.map((i) => (i.product.id === productId ? { ...i, quantity: qty } : i)));
+      setCart(cart.map((i) => (i.product.id === productId ? { ...i, quantity: finalQty } : i)));
     }
   };
 
@@ -236,7 +373,11 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   };
 
   const removeItem = (productId: number) => {
-    setCart(cart.filter((i) => i.product.id !== productId));
+    const newCart = cart.filter((i) => i.product.id !== productId);
+    setCart(newCart);
+    if (typeof keyboardActiveTarget === 'number' && keyboardActiveTarget >= newCart.length) {
+      setKeyboardActiveTarget(newCart.length > 0 ? newCart.length - 1 : null);
+    }
   };
 
   // Filter products for live search across name, barcode, sku, and all custom attributes
@@ -258,9 +399,61 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
     : [];
 
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && filteredProducts.length > 0) {
-      addToCart(filteredProducts[0]);
-      setSearchQuery('');
+    const hasDropdownResults = searchQuery.trim().length > 0 && filteredProducts.length > 0;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (hasDropdownResults) {
+        // Navigate down through search dropdown results
+        setDropdownActiveIndex((prev) =>
+          prev < filteredProducts.length - 1 ? prev + 1 : 0
+        );
+      } else if (cart.length > 0) {
+        // Dropdown closed -> jump down into cart items
+        if (keyboardActiveTarget === 'search') {
+          setKeyboardActiveTarget(0);
+        } else {
+          setKeyboardActiveTarget(cart.length - 1);
+        }
+        searchInputRef.current?.blur();
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (hasDropdownResults) {
+        // Navigate up through search dropdown results
+        setDropdownActiveIndex((prev) =>
+          prev > 0 ? prev - 1 : filteredProducts.length - 1
+        );
+      }
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (filteredProducts.length > 0) {
+        const targetProd =
+          dropdownActiveIndex >= 0 && dropdownActiveIndex < filteredProducts.length
+            ? filteredProducts[dropdownActiveIndex]
+            : filteredProducts[0];
+        addToCart(targetProd);
+        setSearchQuery('');
+        setDropdownActiveIndex(-1);
+      }
+      return;
+    }
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (searchQuery.trim().length > 0) {
+        setSearchQuery('');
+        setDropdownActiveIndex(-1);
+      } else {
+        setKeyboardActiveTarget(null);
+      }
+      return;
     }
   };
 
@@ -482,89 +675,122 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         {/* Left Column: Product Search & Cart */}
         <div className="lg:col-span-7 space-y-4">
           {/* Live Search & Barcode Input */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-4 shadow-sm relative">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm relative transition-all">
             <Input
               ref={searchInputRef}
               placeholder={`Search by Product name, ID${showSku ? ', SKU' : ''}${showBarcode ? ', or scan barcode' : ''}... (Press Enter to add)`}
-              prefix={<Search className="h-5 w-5 text-emerald-600" />}
+              prefix={
+                <Search
+                  className={`h-5 w-5 transition-colors ${
+                    keyboardActiveTarget === 'search'
+                      ? 'text-brand-600 stroke-[2.5]'
+                      : 'text-brand-500'
+                  }`}
+                />
+              }
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={handleSearchKeyDown}
-              className="text-base py-3 rounded-2xl font-medium"
+              onClick={() => {
+                if (keyboardActiveTarget === 'search') {
+                  setKeyboardActiveTarget(null);
+                }
+              }}
+              className={`text-base py-3 rounded-2xl font-medium transition-all ${
+                keyboardActiveTarget === 'search'
+                  ? '!border-2 !border-brand-500 !ring-4 !ring-brand-500/25 !bg-brand-50/25 dark:!bg-brand-950/30 shadow-md !text-slate-900 dark:!text-slate-100'
+                  : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+              }`}
               autoFocus
             />
 
             {/* Live Search Results Dropdown */}
             {searchQuery.trim().length > 0 && (
-              <div className="absolute left-4 right-4 top-18 z-30 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-slate-100">
+              <div className="absolute left-4 right-4 top-18 z-30 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
                 {filteredProducts.length === 0 ? (
-                  <div className="p-4 text-center text-sm text-slate-400">
+                  <div className="p-4 text-center text-sm text-slate-400 dark:text-slate-500">
                     No products match "{searchQuery}"
                   </div>
                 ) : (
-                  filteredProducts.map((prod) => (
-                    <button
-                      key={prod.id}
-                      type="button"
-                      onClick={() => {
-                        addToCart(prod);
-                        setSearchQuery('');
-                        searchInputRef.current?.focus();
-                      }}
-                      className="w-full text-left p-3.5 hover:bg-emerald-50/70 flex items-center justify-between transition group"
-                    >
-                      <div>
-                        <div className="font-bold text-slate-800 text-sm group-hover:text-emerald-900">
-                          {prod.name}
+                  filteredProducts.map((prod, idx) => {
+                    const isDropdownActive = dropdownActiveIndex === idx;
+                    return (
+                      <button
+                        key={prod.id}
+                        id={`search-result-${idx}`}
+                        type="button"
+                        onClick={() => {
+                          addToCart(prod);
+                          setSearchQuery('');
+                          setDropdownActiveIndex(-1);
+                          searchInputRef.current?.focus();
+                        }}
+                        onMouseEnter={() => setDropdownActiveIndex(idx)}
+                        className={`w-full text-left p-3.5 flex items-center justify-between transition-colors group ${
+                          isDropdownActive
+                            ? 'bg-brand-50/95 dark:bg-brand-950/60 ring-2 ring-inset ring-brand-500/40 border-l-4 border-brand-600'
+                            : 'hover:bg-brand-50/70 dark:hover:bg-brand-950/30 border-l-4 border-transparent'
+                        }`}
+                      >
+                        <div>
+                          <div
+                            className={`font-bold text-sm ${
+                              isDropdownActive
+                                ? 'text-brand-950 dark:text-brand-200 font-extrabold'
+                                : 'text-slate-800 dark:text-slate-100 group-hover:text-brand-900 dark:group-hover:text-brand-300'
+                            }`}
+                          >
+                            {prod.name}
+                          </div>
+                          <div className="text-xs text-slate-400 dark:text-slate-500 flex flex-wrap items-center gap-1.5 mt-0.5">
+                            <span>ID: {prod.product_id}</span>
+                            {showBarcode && prod.barcode && <span>• BC: {prod.barcode}</span>}
+                            {showSku && prod.sku && <span>• SKU: {prod.sku}</span>}
+                            {prod.custom_fields &&
+                              prod.custom_fields.map((cf) => (
+                                <span
+                                  key={cf.field_id}
+                                  className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 py-0.2 rounded text-[10px] font-semibold"
+                                >
+                                  {cf.value}
+                                </span>
+                              ))}
+                          </div>
                         </div>
-                        <div className="text-xs text-slate-400 flex flex-wrap items-center gap-1.5 mt-0.5">
-                          <span>ID: {prod.product_id}</span>
-                          {showBarcode && prod.barcode && <span>• BC: {prod.barcode}</span>}
-                          {showSku && prod.sku && <span>• SKU: {prod.sku}</span>}
-                          {prod.custom_fields &&
-                            prod.custom_fields.map((cf) => (
-                              <span
-                                key={cf.field_id}
-                                className="bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded text-[10px] font-semibold"
-                              >
-                                {cf.value}
-                              </span>
-                            ))}
+                        <div className="text-right">
+                          <div className="font-black text-slate-900 dark:text-slate-100 text-sm">
+                            {formatCurrency(prod.selling_price, currency)}
+                          </div>
+                          <div
+                            className={`text-xs font-semibold ${
+                              Number(prod.current_stock) > 5
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : Number(prod.current_stock) > 0
+                                ? 'text-amber-600 dark:text-amber-400'
+                                : 'text-rose-600 dark:text-rose-400'
+                            }`}
+                          >
+                            Stock: {prod.current_stock}
+                          </div>
                         </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-black text-slate-900 text-sm">
-                          {formatCurrency(prod.selling_price, currency)}
-                        </div>
-                        <div
-                          className={`text-xs font-semibold ${
-                            Number(prod.current_stock) > 5
-                              ? 'text-emerald-600'
-                              : Number(prod.current_stock) > 0
-                              ? 'text-amber-600'
-                              : 'text-rose-600'
-                          }`}
-                        >
-                          Stock: {prod.current_stock}
-                        </div>
-                      </div>
-                    </button>
-                  ))
+                      </button>
+                    );
+                  })
                 )}
               </div>
             )}
           </div>
 
           {/* Cart Table */}
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden min-h-[380px] flex flex-col">
-            <div className="p-4 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden min-h-[380px] flex flex-col">
+            <div className="p-4 bg-slate-50/80 dark:bg-slate-800/80 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 Cart Items ({cart.reduce((sum, i) => sum + i.quantity, 0)} units)
               </span>
               {cart.length > 0 && (
                 <button
                   onClick={() => setCart([])}
-                  className="text-xs text-rose-600 font-bold hover:underline"
+                  className="text-xs text-rose-600 dark:text-rose-400 font-bold hover:underline"
                 >
                   Clear All
                 </button>
@@ -573,50 +799,74 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
 
             <div className="flex-1 overflow-y-auto max-h-[480px]">
               {cart.length === 0 ? (
-                <div className="py-24 text-center text-slate-400 flex flex-col items-center">
-                  <div className="h-12 w-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
+                <div className="py-24 text-center text-slate-400 dark:text-slate-500 flex flex-col items-center">
+                  <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 mb-3">
                     <Barcode className="h-6 w-6" />
                   </div>
-                  <p className="font-semibold text-slate-600 text-sm">Cart is empty</p>
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="font-semibold text-slate-600 dark:text-slate-300 text-sm">Cart is empty</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
                     {showBarcode
                       ? 'Scan a product barcode or use search above'
                       : 'Search products above to add to cart'}
                   </p>
                 </div>
               ) : (
-                <div className="divide-y divide-slate-100">
-                  {cart.map((item) => (
+                <div className="divide-y divide-slate-100 dark:divide-slate-800 p-2 space-y-1">
+                  {cart.map((item, idx) => (
                     <div
                       key={item.product.id}
-                      className="p-4 hover:bg-slate-50/60 transition flex items-center justify-between gap-3"
+                      onClick={() => setKeyboardActiveTarget(idx)}
+                      className={`p-3.5 transition-all flex items-center justify-between gap-3 rounded-2xl cursor-pointer ${
+                        keyboardActiveTarget === idx
+                          ? 'bg-brand-50/80 dark:bg-brand-950/50 border-2 border-brand-500 shadow-xs ring-2 ring-brand-500/20'
+                          : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/60 border-2 border-transparent'
+                      }`}
                     >
                       <div className="flex-1 min-w-0">
-                        <div className="font-bold text-slate-800 text-sm truncate">
+                        <div className="font-bold text-slate-800 dark:text-slate-100 text-sm truncate">
                           {item.product.name}
                         </div>
-                        <div className="text-xs text-slate-400 mt-0.5">
+                        <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                           Unit Price: {formatCurrency(item.unit_price, currency)} • Stock:{' '}
                           {item.product.current_stock}
                         </div>
                       </div>
 
                       {/* Quantity Controls */}
-                      <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+                      <div
+                        className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <button
                           type="button"
                           onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                          className="h-7 w-7 rounded-lg bg-white flex items-center justify-center text-slate-700 hover:bg-slate-200 shadow-sm font-bold"
+                          className="h-7 w-7 rounded-lg bg-white dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 shadow-sm font-bold transition disabled:opacity-40"
+                          title="Decrease quantity"
                         >
                           <Minus className="h-3.5 w-3.5" />
                         </button>
-                        <span className="w-8 text-center font-black text-sm text-slate-900">
-                          {item.quantity}
-                        </span>
+                        <CartQuantityInput
+                          productId={item.product.id}
+                          productName={item.product.name}
+                          quantity={item.quantity}
+                          availableStock={Number(item.product.current_stock || 0)}
+                          isActive={keyboardActiveTarget === idx}
+                          onUpdateQuantity={updateQuantity}
+                          onNotifyCapped={(maxStock, prodName) => {
+                            setErrorMsg(
+                              `Quantity capped to maximum available stock (${maxStock} units of ${prodName}).`
+                            );
+                          }}
+                          onNavigateUp={() => handleCartNavigateUp(idx)}
+                          onNavigateDown={() => handleCartNavigateDown(idx)}
+                          onFocusItem={() => setKeyboardActiveTarget(idx)}
+                        />
                         <button
                           type="button"
                           onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                          className="h-7 w-7 rounded-lg bg-white flex items-center justify-center text-slate-700 hover:bg-slate-200 shadow-sm font-bold"
+                          className="h-7 w-7 rounded-lg bg-white dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 shadow-sm font-bold transition disabled:opacity-40"
+                          title="Increase quantity"
+                          disabled={item.quantity >= Number(item.product.current_stock || 0)}
                         >
                           <Plus className="h-3.5 w-3.5" />
                         </button>
@@ -624,7 +874,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
 
                       {/* Item Total */}
                       <div className="w-24 text-right">
-                        <span className="font-black text-slate-900 text-sm">
+                        <span className="font-black text-slate-900 dark:text-slate-100 text-sm">
                           {formatCurrency(item.quantity * Number(item.unit_price), currency)}
                         </span>
                       </div>
@@ -632,8 +882,11 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                       {/* Remove Button */}
                       <button
                         type="button"
-                        onClick={() => removeItem(item.product.id)}
-                        className="text-slate-300 hover:text-rose-500 p-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeItem(item.product.id);
+                        }}
+                        className="text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 p-1 transition"
                         title="Remove"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -649,15 +902,15 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         {/* Right Column: Checkout & Payment Options */}
         <div className="lg:col-span-5 space-y-4">
           {/* Box 1: Customer & Payment Details */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 Customer & Payment
               </span>
               <button
                 type="button"
                 onClick={() => setShowAddCustomerModal(true)}
-                className="text-xs font-bold text-emerald-700 hover:text-emerald-900 underline"
+                className="text-xs font-bold text-brand-600 dark:text-brand-400 hover:underline"
               >
                 {selectedCustomerId ? 'Change Customer' : 'Select Existing'}
               </button>
@@ -684,13 +937,13 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
               />
 
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
                   Payment Method
                 </label>
                 <select
                   value={paymentMethod}
                   onChange={(e: any) => setPaymentMethod(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100"
                 >
                   <option value="Cash">Cash</option>
                   <option value="Card">Card</option>
@@ -706,17 +959,20 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                 prefix={currency}
                 placeholder="0.00"
                 value={saleDiscount || ''}
-                onChange={(e) => setSaleDiscount(Number(e.target.value))}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  setSaleDiscount(isNaN(v) || v < 0 ? 0 : v);
+                }}
                 className="text-xs py-2"
               />
             </div>
 
             {selectedCustomerObj && (
-              <div className="flex items-center justify-between text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-                <span className="text-slate-600 truncate">
-                  Selected: <strong className="text-slate-900">{selectedCustomerObj.name}</strong>
+              <div className="flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2">
+                <span className="text-slate-600 dark:text-slate-300 truncate">
+                  Selected: <strong className="text-slate-900 dark:text-slate-100">{selectedCustomerObj.name}</strong>
                   {Number(selectedCustomerObj.current_due || 0) > 0 && (
-                    <span className="text-rose-600 ml-1.5 font-semibold">
+                    <span className="text-rose-600 dark:text-rose-400 ml-1.5 font-semibold">
                       (Previous Due: {formatCurrency(selectedCustomerObj.current_due, currency)})
                     </span>
                   )}
@@ -728,7 +984,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                     setInlineCustomerName('');
                     setInlineCustomerPhone('');
                   }}
-                  className="text-xs text-rose-600 font-bold hover:underline ml-2"
+                  className="text-xs text-rose-600 dark:text-rose-400 font-bold hover:underline ml-2"
                 >
                   Clear
                 </button>
@@ -737,42 +993,42 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
           </div>
 
           {/* Box 2: Totals & Settlement */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
             {/* Financial Summary */}
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between text-slate-600 text-xs">
+              <div className="flex justify-between text-slate-600 dark:text-slate-400 text-xs">
                 <span>Subtotal:</span>
-                <span className="font-semibold text-slate-800">
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
                   {formatCurrency(subtotal, currency)}
                 </span>
               </div>
               {saleDiscount > 0 && (
-                <div className="flex justify-between text-emerald-700 text-xs font-semibold">
+                <div className="flex justify-between text-brand-600 dark:text-brand-400 text-xs font-semibold">
                   <span>Discount:</span>
                   <span>- {formatCurrency(saleDiscount, currency)}</span>
                 </div>
               )}
               {taxAmount > 0 && (
-                <div className="flex justify-between text-slate-600 text-xs">
+                <div className="flex justify-between text-slate-600 dark:text-slate-400 text-xs">
                   <span>Tax ({taxRate}%):</span>
-                  <span className="font-semibold text-slate-800">
+                  <span className="font-semibold text-slate-800 dark:text-slate-200">
                     +{formatCurrency(taxAmount, currency)}
                   </span>
                 </div>
               )}
-              <div className="flex justify-between text-slate-900 font-black text-lg border-t border-slate-200 pt-2">
+              <div className="flex justify-between text-slate-900 dark:text-slate-100 font-black text-lg border-t border-slate-200 dark:border-slate-800 pt-2">
                 <span>Net Total:</span>
-                <span className="text-emerald-800 font-black">
+                <span className="text-brand-600 dark:text-brand-400 font-black">
                   {formatCurrency(grandTotal, currency)}
                 </span>
               </div>
             </div>
 
             {/* Amount Paid Input & Live Settlement */}
-            <div className="pt-3 border-t border-slate-200 space-y-2.5">
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
               <div>
                 <div className="flex justify-between items-center mb-1">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
                     Amount Paid
                   </label>
                   {grandTotal > 0 && (
@@ -800,7 +1056,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                   placeholder={grandTotal > 0 ? formatMoney(grandTotal) : '0.00'}
                   value={paidAmount === 0 && isPaidAmountCustomized ? '' : paidAmount || ''}
                   onChange={(e) => {
-                    const val = e.target.value === '' ? 0 : Number(e.target.value);
+                    const val = e.target.value === '' ? 0 : Math.max(0, parseFloat(e.target.value) || 0);
                     setPaidAmount(val);
                     setIsPaidAmountCustomized(true);
                   }}
@@ -853,13 +1109,13 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                   </div>
                 ) : changeAmount > 0 ? (
                   <div className="text-right">
-                    <span className="text-slate-500 mr-1">Change:</span>
-                    <span className="font-bold text-emerald-700 text-sm">
+                    <span className="text-slate-500 dark:text-slate-400 mr-1">Change:</span>
+                    <span className="font-bold text-brand-600 dark:text-brand-400 text-sm">
                       {formatCurrency(changeAmount, currency)}
                     </span>
                   </div>
                 ) : (
-                  <span className="text-slate-400 font-medium">Settled</span>
+                  <span className="text-slate-400 dark:text-slate-500 font-medium">Settled</span>
                 )}
               </div>
             </div>
@@ -871,11 +1127,11 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                   type="button"
                   variant="outline"
                   size="lg"
-                  icon={<FileText className="h-5 w-5 text-indigo-600" />}
+                  icon={<FileText className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
                   onClick={handleSaveQuotation}
                   disabled={cart.length === 0 || savingQuotation || completing}
                   loading={savingQuotation}
-                  className="py-3.5 text-sm font-bold border-indigo-200 text-indigo-900 bg-indigo-50/50 hover:bg-indigo-100/60 rounded-2xl whitespace-nowrap"
+                  className="py-3.5 text-sm font-bold border-indigo-200 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200 bg-indigo-50/50 dark:bg-indigo-950/40 hover:bg-indigo-100/60 dark:hover:bg-indigo-900/60 rounded-2xl whitespace-nowrap"
                   title="Create uncharged quotation (does not deduct stock or money)"
                 >
                   Save as Quotation
@@ -889,7 +1145,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                 onClick={handleCompleteSale}
                 disabled={cart.length === 0 || completing || savingQuotation}
                 loading={completing}
-                className="flex-1 py-3.5 text-base font-bold tracking-wide rounded-2xl shadow-lg shadow-emerald-600/20"
+                className="flex-1 py-3.5 text-base font-bold tracking-wide rounded-2xl shadow-lg shadow-brand-600/20"
               >
                 Complete Sale ({formatCurrency(grandTotal, currency)})
               </Button>

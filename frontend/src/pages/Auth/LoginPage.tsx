@@ -44,8 +44,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 flex flex-col justify-center items-center p-4">
-      <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl border border-slate-100/10">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col justify-center items-center p-4">
+      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-8 shadow-2xl border border-slate-100/10 dark:border-slate-800">
         {/* Brand Header */}
         <div className="text-center mb-8 flex flex-col items-center">
           <img
@@ -53,17 +53,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             alt={settings?.business_name || 'StokFlow'}
             className="h-14 w-auto max-w-[240px] object-contain mb-3"
           />
-          <h1 className="text-xl font-black text-slate-800 tracking-tight">
+          <h1 className="text-xl font-black text-slate-800 dark:text-white tracking-tight">
             {settings?.business_name || 'Business Portal Login'}
           </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
             Offline Inventory, POS & Financial Ledgers
           </p>
         </div>
 
         {/* Error Notification */}
         {errorMsg && (
-          <div className="flex items-center gap-2 p-3 mb-5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+          <div className="flex items-center gap-2 p-3 mb-5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-400 text-xs font-medium">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{errorMsg}</span>
           </div>
@@ -95,7 +95,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               type="submit"
               variant="primary"
               size="lg"
-              className="w-full font-bold shadow-lg shadow-emerald-600/20"
+              className="w-full font-bold shadow-lg shadow-brand-600/20"
               loading={loading}
             >
               Login to Business
@@ -103,9 +103,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           </div>
         </form>
 
-        <div className="text-center mt-6 pt-6 border-t border-slate-100 text-xs text-slate-400">
-          Default login: <span className="font-mono font-bold text-slate-600">admin</span> /{' '}
-          <span className="font-mono font-bold text-slate-600">admin123</span>
+        <div className="text-center mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400 dark:text-slate-500">
+          Default login: <span className="font-mono font-bold text-slate-600 dark:text-slate-300">admin</span> /{' '}
+          <span className="font-mono font-bold text-slate-600 dark:text-slate-300">admin123</span>
         </div>
       </div>
     </div>

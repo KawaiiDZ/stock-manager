@@ -413,13 +413,13 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
 
       {/* 1-Click Industry Presets Bar */}
       {presets.length > 0 && (
-        <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-3">
+        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-emerald-600" />
+            <h3 className="font-bold text-slate-800 dark:text-white text-sm flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-brand-600 dark:text-brand-400" />
               Quick Switch Industry Presets
             </h3>
-            <span className="text-xs text-slate-400">Click any template to apply its columns</span>
+            <span className="text-xs text-slate-400 dark:text-slate-500">Click any template to apply its columns</span>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
@@ -428,12 +428,12 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                 key={p.key}
                 type="button"
                 onClick={() => handleApplyPreset(p.key)}
-                className="p-3 rounded-2xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/40 text-left transition group"
+                className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-brand-500 hover:bg-brand-50/40 dark:hover:bg-slate-800 text-left transition group"
               >
-                <div className="font-bold text-slate-800 text-xs group-hover:text-emerald-900 truncate">
+                <div className="font-bold text-slate-800 dark:text-slate-200 text-xs group-hover:text-brand-600 dark:group-hover:text-brand-400 truncate">
                   {p.title}
                 </div>
-                <div className="text-[10px] text-slate-400 mt-0.5">{p.fields.length} columns</div>
+                <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{p.fields.length} columns</div>
               </button>
             ))}
           </div>
@@ -443,15 +443,15 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
       {/* Main Grid: Active Attributes Table + Add Form */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Active Attributes Table */}
-        <div className="lg:col-span-8 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-          <div className="p-4 bg-slate-50 border-b border-slate-100 space-y-3">
+        <div className="lg:col-span-8 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-4 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-800 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
-                <Sliders className="h-4 w-4 text-emerald-600" />
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                <Sliders className="h-4 w-4 text-brand-600 dark:text-brand-400" />
                 Configured Attributes ({customFields.length})
               </span>
-              <span className="text-[11px] text-slate-400 flex items-center gap-1.5">
-                {reordering && <span className="text-emerald-600 font-semibold animate-pulse">Saving order...</span>}
+              <span className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                {reordering && <span className="text-brand-600 dark:text-brand-400 font-semibold animate-pulse">Saving order...</span>}
                 <span>Drag handle or use arrows to rearrange</span>
               </span>
             </div>
@@ -463,8 +463,8 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                 onClick={() => handleSelectTab('all')}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
                   activeCategoryTab === 'all'
-                    ? 'bg-slate-900 text-white shadow-sm'
-                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                    ? 'bg-slate-900 dark:bg-white dark:text-slate-900 text-white shadow-sm'
+                    : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
                 }`}
               >
                 All ({customFields.length})
@@ -475,7 +475,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
                   activeCategoryTab === 'global'
                     ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                    : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
                 }`}
               >
                 Global ({customFields.filter((f) => !f.category_id).length})
@@ -488,8 +488,8 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                     key={cat.id}
                     className={`inline-flex items-center rounded-xl overflow-hidden border transition text-xs font-bold whitespace-nowrap shadow-sm ${
                       isActive
-                        ? 'bg-emerald-600 border-emerald-600 text-white'
-                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                        ? 'bg-brand-600 border-brand-600 text-white'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
                     }`}
                   >
                     <button
@@ -497,7 +497,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                       onClick={() => handleSelectTab(cat.id)}
                       className="px-3.5 py-1.5 focus:outline-none"
                     >
-                      {cat.name} <span className={isActive ? 'text-emerald-100 text-[11px]' : 'text-slate-400 text-[11px]'}>({count})</span>
+                      {cat.name} <span className={isActive ? 'text-brand-100 text-[11px]' : 'text-slate-400 text-[11px]'}>({count})</span>
                     </button>
                     <button
                       type="button"
@@ -508,8 +508,8 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                       }}
                       className={`px-2 py-1.5 border-l transition ${
                         isActive
-                          ? 'border-emerald-500/60 hover:bg-rose-600 text-white'
-                          : 'border-slate-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                          ? 'border-brand-500/60 hover:bg-rose-600 text-white'
+                          : 'border-slate-200 dark:border-slate-700 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40'
                       }`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -521,20 +521,20 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
               {/* Quick On-the-Fly Category Add Form */}
               <form
                 onSubmit={handleInlineCreateCategory}
-                className="inline-flex items-center gap-1.5 bg-white border border-emerald-300 rounded-xl px-2.5 py-1 shadow-sm focus-within:ring-2 focus-within:ring-emerald-500/30"
+                className="inline-flex items-center gap-1.5 bg-white dark:bg-slate-800 border border-brand-300 dark:border-brand-700 rounded-xl px-2.5 py-1 shadow-sm focus-within:ring-2 focus-within:ring-brand-500/30"
               >
-                <Plus className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                <Plus className="h-3.5 w-3.5 text-brand-600 dark:text-brand-400 shrink-0" />
                 <input
                   type="text"
                   placeholder="New category..."
                   value={inlineCatName}
                   onChange={(e) => setInlineCatName(e.target.value)}
-                  className="text-xs bg-transparent border-none focus:outline-none w-28 text-slate-800 placeholder:text-slate-400 font-medium"
+                  className="text-xs bg-transparent border-none focus:outline-none w-28 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 font-medium"
                 />
                 <button
                   type="submit"
                   disabled={!inlineCatName.trim() || inlineCatSaving}
-                  className="px-2 py-0.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-700 disabled:opacity-40 transition"
+                  className="px-2 py-0.5 rounded-lg bg-brand-600 text-white text-[11px] font-bold hover:bg-brand-700 disabled:opacity-40 transition"
                 >
                   {inlineCatSaving ? '...' : '+ Add'}
                 </button>
@@ -543,7 +543,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
               <button
                 type="button"
                 onClick={() => setShowAddCatModal(true)}
-                className="px-2.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200 flex items-center gap-1"
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 flex items-center gap-1"
                 title="Open Add Category Dialog"
               >
                 <Plus className="h-3.5 w-3.5" /> More
@@ -557,13 +557,13 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
             if (!currentCat) return null;
             const count = customFields.filter((f) => f.category_id === currentCat.id).length;
             return (
-              <div className="px-4 py-2.5 bg-emerald-50/70 border-b border-emerald-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+              <div className="px-4 py-2.5 bg-brand-50/70 dark:bg-brand-950/40 border-b border-brand-100 dark:border-brand-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
                 <div className="flex items-center gap-2">
-                  <Tag className="h-4 w-4 text-emerald-700 shrink-0" />
-                  <span className="font-bold text-slate-800">
-                    Category: <span className="text-emerald-900 font-extrabold">{currentCat.name}</span>
+                  <Tag className="h-4 w-4 text-brand-700 dark:text-brand-400 shrink-0" />
+                  <span className="font-bold text-slate-800 dark:text-white">
+                    Category: <span className="text-brand-900 dark:text-brand-300 font-extrabold">{currentCat.name}</span>
                   </span>
-                  <span className="text-emerald-600 text-[11px] bg-emerald-100/80 px-2 py-0.5 rounded-full font-semibold">
+                  <span className="text-brand-600 dark:text-brand-400 text-[11px] bg-brand-100/80 dark:bg-brand-950/60 px-2 py-0.5 rounded-full font-semibold">
                     {count} {count === 1 ? 'custom attribute' : 'custom attributes'}
                   </span>
                 </div>
@@ -575,14 +575,14 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                       setEditingCategory(currentCat);
                       setEditCatName(currentCat.name);
                     }}
-                    className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold flex items-center gap-1 transition text-[11px] shadow-sm"
+                    className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 font-bold flex items-center gap-1 transition text-[11px] shadow-sm"
                   >
                     <Edit2 className="h-3 w-3 text-slate-500" /> Rename Category
                   </button>
                   <button
                     type="button"
                     onClick={() => handleDeleteCategory(currentCat)}
-                    className="px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-600 hover:text-white font-bold flex items-center gap-1 transition text-[11px] shadow-sm"
+                    className="px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-400 hover:bg-rose-600 hover:text-white font-bold flex items-center gap-1 transition text-[11px] shadow-sm"
                   >
                     <Trash2 className="h-3 w-3" /> Delete Category & All Products
                   </button>
@@ -591,7 +591,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
             );
           })()}
 
-          <div className="divide-y divide-slate-100 overflow-y-auto flex-1">
+          <div className="divide-y divide-slate-100 dark:divide-slate-800 overflow-y-auto flex-1">
             {(() => {
               const filteredFields = customFields.filter((cf) => {
                 if (activeCategoryTab === 'all') return true;
@@ -601,7 +601,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
 
               if (filteredFields.length === 0) {
                 return (
-                  <div className="p-12 text-center text-slate-400 text-xs">
+                  <div className="p-12 text-center text-slate-400 dark:text-slate-500 text-xs">
                     No custom attributes configured for this category yet. Add one using the form on the right.
                   </div>
                 );
@@ -623,15 +623,15 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                       setDragOverFieldId(null);
                     }}
                     onDrop={(e) => handleDrop(e, cf.id, filteredFields)}
-                    className={`p-3.5 sm:p-4 hover:bg-slate-50/80 transition flex items-center justify-between gap-3 text-xs border-b border-slate-100 last:border-b-0 select-none ${
-                      isDragging ? 'opacity-40 bg-slate-100 scale-[0.99] border-dashed border-2 border-emerald-400' : ''
-                    } ${isOver && !isDragging ? 'border-t-2 border-emerald-500 bg-emerald-50/60' : ''}`}
+                    className={`p-3.5 sm:p-4 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition flex items-center justify-between gap-3 text-xs border-b border-slate-100 dark:border-slate-800 last:border-b-0 select-none ${
+                      isDragging ? 'opacity-40 bg-slate-100 dark:bg-slate-800 scale-[0.99] border-dashed border-2 border-brand-400' : ''
+                    } ${isOver && !isDragging ? 'border-t-2 border-brand-500 bg-brand-50/60 dark:bg-brand-950/40' : ''}`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       {/* Drag handle & arrow controls */}
                       <div className="flex items-center gap-1 shrink-0">
                         <div
-                          className="p-1 rounded-md text-slate-300 hover:text-slate-600 hover:bg-slate-100 cursor-grab active:cursor-grabbing transition"
+                          className="p-1 rounded-md text-slate-300 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-grab active:cursor-grabbing transition"
                           title="Drag up or down to reorder attribute"
                         >
                           <GripVertical className="h-4 w-4" />
@@ -641,7 +641,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                             type="button"
                             onClick={() => handleMove(cf.id, 'up', filteredFields)}
                             disabled={idx === 0 || reordering}
-                            className="p-0.5 rounded text-slate-300 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-20 disabled:hover:bg-transparent transition"
+                            className="p-0.5 rounded text-slate-300 dark:text-slate-600 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-20 disabled:hover:bg-transparent transition"
                             title="Move up"
                           >
                             <ChevronUp className="h-3 w-3" />
@@ -650,7 +650,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                             type="button"
                             onClick={() => handleMove(cf.id, 'down', filteredFields)}
                             disabled={idx === filteredFields.length - 1 || reordering}
-                            className="p-0.5 rounded text-slate-300 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-20 disabled:hover:bg-transparent transition"
+                            className="p-0.5 rounded text-slate-300 dark:text-slate-600 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-20 disabled:hover:bg-transparent transition"
                             title="Move down"
                           >
                             <ChevronDown className="h-3 w-3" />
@@ -660,27 +660,27 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
 
                       <div className="space-y-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-bold text-slate-900 text-sm truncate">{cf.name}</span>
+                          <span className="font-bold text-slate-900 dark:text-white text-sm truncate">{cf.name}</span>
                           <span
                             className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
                               isGlobal
-                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900/50'
+                                : 'bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-800/50'
                             }`}
                           >
                             {isGlobal ? 'Global' : (cf.category_name || 'Category')}
                           </span>
-                          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-mono uppercase font-semibold">
+                          <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-mono uppercase font-semibold">
                             {cf.field_type}
                           </span>
                           {cf.is_required && (
-                            <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[10px] font-bold">
+                            <span className="px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 text-[10px] font-bold">
                               Required
                             </span>
                           )}
                         </div>
                         {cf.options && (
-                          <div className="text-[11px] text-slate-500 font-mono truncate max-w-md">
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono truncate max-w-md">
                             Options: {cf.options}
                           </div>
                         )}
@@ -693,8 +693,8 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                         <span
                           className={`p-1 px-2 rounded-lg text-[10px] font-bold flex items-center gap-1 ${
                             cf.show_in_table
-                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                              : 'bg-slate-50 text-slate-300'
+                              ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900/50'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-300 dark:text-slate-600'
                           }`}
                           title="Main Table Column"
                         >
@@ -703,8 +703,8 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                         <span
                           className={`p-1 px-2 rounded-lg text-[10px] font-bold flex items-center gap-1 ${
                             cf.show_in_pos
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : 'bg-slate-50 text-slate-300'
+                              ? 'bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-800/50'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-300 dark:text-slate-600'
                           }`}
                           title="POS Searchable"
                         >
@@ -713,8 +713,8 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                         <span
                           className={`p-1 px-2 rounded-lg text-[10px] font-bold flex items-center gap-1 ${
                             cf.show_in_receipt
-                              ? 'bg-purple-50 text-purple-700 border border-purple-200'
-                              : 'bg-slate-50 text-slate-300'
+                              ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/50'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-300 dark:text-slate-600'
                           }`}
                           title="Thermal Receipt Item"
                         >
@@ -726,7 +726,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                       <button
                         type="button"
                         onClick={() => setEditingField(cf)}
-                        className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
+                        className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
                         title="Edit Attribute"
                       >
                         <Edit2 className="h-4 w-4" />
@@ -734,7 +734,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                       <button
                         type="button"
                         onClick={() => handleDeleteField(cf.id, cf.name)}
-                        className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                        className="p-1.5 text-slate-300 dark:text-slate-600 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition"
                         title="Delete Attribute"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -748,21 +748,21 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
         </div>
 
         {/* Add New Attribute Form */}
-        <div className="lg:col-span-4 bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-4">
-          <h3 className="font-bold text-slate-900 text-sm border-b border-slate-100 pb-3 flex items-center gap-2">
-            <Plus className="h-4 w-4 text-emerald-600" />
+        <div className="lg:col-span-4 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+          <h3 className="font-bold text-slate-900 dark:text-white text-sm border-b border-slate-100 dark:border-slate-800 pb-3 flex items-center gap-2">
+            <Plus className="h-4 w-4 text-brand-600 dark:text-brand-400" />
             Add New Attribute Column
           </h3>
 
           <form onSubmit={handleCreateField} className="space-y-3.5">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
                 Target Category Schema *
               </label>
               <select
                 value={targetCategoryId}
                 onChange={(e) => setTargetCategoryId(e.target.value ? Number(e.target.value) : '')}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-brand-500"
               >
                 <option value="">All Categories (Global Attribute)</option>
                 {categories.map((c) => (
@@ -771,7 +771,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                   </option>
                 ))}
               </select>
-              <p className="text-[10px] text-slate-400 mt-1">
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
                 Assign to a category (e.g. specific department) or make it global across all items.
               </p>
             </div>
@@ -785,13 +785,13 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
             />
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
                 Field Type
               </label>
               <select
                 value={fieldType}
                 onChange={(e) => setFieldType(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-200"
               >
                 <option value="text">Text (Free typing)</option>
                 <option value="select">Dropdown (Select list)</option>
@@ -810,43 +810,43 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
               />
             )}
 
-            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-2 text-xs">
-              <span className="font-bold text-slate-700 block uppercase text-[10px] tracking-wider">
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-2 text-xs">
+              <span className="font-bold text-slate-700 dark:text-slate-300 block uppercase text-[10px] tracking-wider">
                 Display & Behavior Rules
               </span>
-              <label className="flex items-center gap-2 cursor-pointer text-slate-600">
+              <label className="flex items-center gap-2 cursor-pointer text-slate-600 dark:text-slate-400">
                 <input
                   type="checkbox"
                   checked={showInTable}
                   onChange={(e) => setShowInTable(e.target.checked)}
-                  className="rounded text-emerald-600"
+                  className="rounded text-brand-600"
                 />
                 <span>Show as Main Table Column</span>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer text-slate-600">
+              <label className="flex items-center gap-2 cursor-pointer text-slate-600 dark:text-slate-400">
                 <input
                   type="checkbox"
                   checked={showInPos}
                   onChange={(e) => setShowInPos(e.target.checked)}
-                  className="rounded text-emerald-600"
+                  className="rounded text-brand-600"
                 />
                 <span>Include in POS Live Search</span>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer text-slate-600">
+              <label className="flex items-center gap-2 cursor-pointer text-slate-600 dark:text-slate-400">
                 <input
                   type="checkbox"
                   checked={showInReceipt}
                   onChange={(e) => setShowInReceipt(e.target.checked)}
-                  className="rounded text-emerald-600"
+                  className="rounded text-brand-600"
                 />
                 <span>Print on Thermal Receipt</span>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer text-slate-600">
+              <label className="flex items-center gap-2 cursor-pointer text-slate-600 dark:text-slate-400">
                 <input
                   type="checkbox"
                   checked={isRequired}
                   onChange={(e) => setIsRequired(e.target.checked)}
-                  className="rounded text-emerald-600"
+                  className="rounded text-brand-600"
                 />
                 <span>Mandatory (Required Field)</span>
               </label>
@@ -856,7 +856,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
               type="submit"
               variant="primary"
               size="md"
-              className="w-full font-bold shadow-md shadow-emerald-600/20"
+              className="w-full font-bold shadow-md shadow-brand-600/20"
               disabled={!name.trim()}
             >
               + Create Attribute
@@ -875,7 +875,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
         >
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
                 Target Category Schema
               </label>
               <select
@@ -886,7 +886,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
                     category_id: e.target.value ? Number(e.target.value) : null,
                   })
                 }
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-brand-500"
               >
                 <option value="">All Categories (Global Attribute)</option>
                 {categories.map((c) => (
@@ -905,13 +905,13 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
             />
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
                 Field Type
               </label>
               <select
                 value={editingField.field_type}
                 onChange={(e) => setEditingField({ ...editingField, field_type: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-200"
               >
                 <option value="text">Text (Free typing)</option>
                 <option value="select">Dropdown (Select list)</option>
@@ -928,54 +928,54 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
               />
             )}
 
-            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-2 text-xs">
-              <label className="flex items-center gap-2 cursor-pointer text-slate-600">
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-2 text-xs">
+              <label className="flex items-center gap-2 cursor-pointer text-slate-600 dark:text-slate-400">
                 <input
                   type="checkbox"
                   checked={editingField.show_in_table ?? true}
                   onChange={(e) =>
                     setEditingField({ ...editingField, show_in_table: e.target.checked })
                   }
-                  className="rounded text-emerald-600"
+                  className="rounded text-brand-600"
                 />
                 <span>Show as Main Table Column</span>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer text-slate-600">
+              <label className="flex items-center gap-2 cursor-pointer text-slate-600 dark:text-slate-400">
                 <input
                   type="checkbox"
                   checked={editingField.show_in_pos ?? true}
                   onChange={(e) =>
                     setEditingField({ ...editingField, show_in_pos: e.target.checked })
                   }
-                  className="rounded text-emerald-600"
+                  className="rounded text-brand-600"
                 />
                 <span>Include in POS Live Search</span>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer text-slate-600">
+              <label className="flex items-center gap-2 cursor-pointer text-slate-600 dark:text-slate-400">
                 <input
                   type="checkbox"
                   checked={editingField.show_in_receipt ?? false}
                   onChange={(e) =>
                     setEditingField({ ...editingField, show_in_receipt: e.target.checked })
                   }
-                  className="rounded text-emerald-600"
+                  className="rounded text-brand-600"
                 />
                 <span>Print on Thermal Receipt</span>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer text-slate-600">
+              <label className="flex items-center gap-2 cursor-pointer text-slate-600 dark:text-slate-400">
                 <input
                   type="checkbox"
                   checked={editingField.is_required ?? false}
                   onChange={(e) =>
                     setEditingField({ ...editingField, is_required: e.target.checked })
                   }
-                  className="rounded text-emerald-600"
+                  className="rounded text-brand-600"
                 />
                 <span>Mandatory (Required)</span>
               </label>
             </div>
 
-            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
               <Button type="button" variant="secondary" onClick={() => setEditingField(null)}>
                 Cancel
               </Button>

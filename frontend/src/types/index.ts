@@ -27,6 +27,9 @@ export interface BusinessSettings {
   hide_header_text_with_letterhead?: boolean;
   invoice_title?: string;
   enable_quotations?: boolean;
+  enable_navigation_hub?: boolean;
+  theme_mode?: 'light' | 'dark' | 'system';
+  color_theme?: 'emerald' | 'indigo' | 'sky' | 'rose' | 'slate';
   invoice_terms?: string;
   quotation_terms?: string;
   enable_barcode_scanner?: boolean;

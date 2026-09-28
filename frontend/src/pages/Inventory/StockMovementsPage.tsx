@@ -72,8 +72,8 @@ export const StockMovementsPage: React.FC<StockMovementsPageProps> = ({ settings
   return (
     <div className="space-y-6 pb-12">
       <div>
-        <h1 className="text-2xl font-black text-slate-800 tracking-tight">Stock Movements</h1>
-        <p className="text-xs text-slate-400 mt-0.5">
+        <h1 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Stock Movements</h1>
+        <p className="text-xs text-slate-400 dark:text-slate-400 mt-0.5">
           Complete audit trail of all inventory additions, sales, and returns
         </p>
       </div>
@@ -85,7 +85,7 @@ export const StockMovementsPage: React.FC<StockMovementsPageProps> = ({ settings
           onChange={(e) =>
             setSelectedProductId(e.target.value ? Number(e.target.value) : undefined)
           }
-          className="w-full sm:w-64 bg-white border border-slate-200 text-sm font-semibold rounded-xl px-4 py-2.5 text-slate-700 focus:outline-none focus:border-emerald-500 shadow-sm cursor-pointer"
+          className="w-full sm:w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold rounded-xl px-4 py-2.5 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-brand-500 shadow-sm cursor-pointer"
         >
           <option value="">All Products</option>
           {products.map((p) => (
@@ -98,7 +98,7 @@ export const StockMovementsPage: React.FC<StockMovementsPageProps> = ({ settings
         <select
           value={selectedType}
           onChange={(e) => setSelectedType(e.target.value)}
-          className="w-full sm:w-56 bg-white border border-slate-200 text-sm font-semibold rounded-xl px-4 py-2.5 text-slate-700 focus:outline-none focus:border-emerald-500 shadow-sm cursor-pointer"
+          className="w-full sm:w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold rounded-xl px-4 py-2.5 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-brand-500 shadow-sm cursor-pointer"
         >
           <option value="all">All Movement Types</option>
           <option value="SALE">Sales (Out)</option>
@@ -111,9 +111,9 @@ export const StockMovementsPage: React.FC<StockMovementsPageProps> = ({ settings
       </div>
 
       {/* Movements Table */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
         {loading ? (
-          <div className="py-16 text-center text-slate-400">Loading stock movements...</div>
+          <div className="py-16 text-center text-slate-400 dark:text-slate-500">Loading stock movements...</div>
         ) : movements.length === 0 ? (
           <EmptyState
             title="No movements found"
@@ -122,7 +122,7 @@ export const StockMovementsPage: React.FC<StockMovementsPageProps> = ({ settings
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-800 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                 <tr>
                   <th className="py-3.5 px-6">Date & Time</th>
                   <th className="py-3.5 px-6">Product</th>
@@ -133,10 +133,10 @@ export const StockMovementsPage: React.FC<StockMovementsPageProps> = ({ settings
                   <th className="py-3.5 px-6">Notes</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {movements.map((m) => (
-                  <tr key={m.id} className="hover:bg-slate-50/60 transition">
-                    <td className="py-4 px-6 text-slate-500 text-xs">
+                  <tr key={m.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
+                    <td className="py-4 px-6 text-slate-500 dark:text-slate-400 text-xs">
                       {new Date(m.created_at).toLocaleDateString('en-GB', {
                         day: '2-digit',
                         month: 'short',
@@ -147,22 +147,22 @@ export const StockMovementsPage: React.FC<StockMovementsPageProps> = ({ settings
                         minute: '2-digit',
                       })}
                     </td>
-                    <td className="py-4 px-6 font-bold text-slate-900">{m.product_name}</td>
+                    <td className="py-4 px-6 font-bold text-slate-900 dark:text-white">{m.product_name}</td>
                     <td className="py-4 px-6">
-                      <span className="text-xs font-semibold text-slate-700">
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                         {m.movement_type ? m.movement_type.replace(/_/g, ' ') : '—'}
                       </span>
                     </td>
-                    <td className="py-4 px-6 text-slate-700 font-mono text-xs">
+                    <td className="py-4 px-6 text-slate-700 dark:text-slate-300 font-mono text-xs">
                       {m.reference_id}
                     </td>
                     <td className="py-4 px-6 text-center">
                       {getMovementBadge(m.movement_type, m.quantity)}
                     </td>
-                    <td className="py-4 px-6 text-right text-slate-600 text-xs">
+                    <td className="py-4 px-6 text-right text-slate-600 dark:text-slate-300 text-xs">
                       {formatCurrency(m.unit_cost, currency)}
                     </td>
-                    <td className="py-4 px-6 text-slate-400 text-xs">{m.notes || '—'}</td>
+                    <td className="py-4 px-6 text-slate-400 dark:text-slate-500 text-xs">{m.notes || '—'}</td>
                   </tr>
                 ))}
               </tbody>

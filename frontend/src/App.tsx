@@ -20,12 +20,16 @@ import { ExpensesPage } from './pages/Money/ExpensesPage';
 import { ReportsPage } from './pages/Reports/ReportsPage';
 import { SettingsPage } from './pages/Settings/SettingsPage';
 import { QuotationsPage } from './pages/Sales/QuotationsPage';
+import { NavigationHubPage } from './pages/Hub/NavigationHubPage';
 import { SetupWizardModal } from './components/wizard/SetupWizardModal';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 import { setGlobalFormattingPreferences } from './utils/format';
+import { dispatchGlobalShortcut } from './utils/shortcuts';
+import { useTheme } from './context/ThemeContext';
 
 export const App: React.FC = () => {
+  const { syncFromSettings } = useTheme();
   const [currentUser, setCurrentUser] = useState<{ username: string; full_name: string } | null>(
     () => {
       const saved = localStorage.getItem('sm_user');
@@ -55,6 +59,7 @@ export const App: React.FC = () => {
           formatPricesWithCommas: bizSettings.format_prices_with_commas,
           currency: bizSettings.currency,
         });
+        syncFromSettings(bizSettings.theme_mode, bizSettings.color_theme);
       }
       setUrgentBillsCount(billsAttention.length);
       setPendingQuotationsCount(pendingQuotes?.length || 0);
@@ -78,6 +83,7 @@ export const App: React.FC = () => {
           formatPricesWithCommas: s.format_prices_with_commas,
           currency: s.currency,
         });
+        syncFromSettings(s.theme_mode, s.color_theme);
       }
     }).catch(() => {});
 
@@ -135,13 +141,14 @@ export const App: React.FC = () => {
     setCurrentTab('new_sale');
   };
 
-  // Keyboard shortcut F2 to open POS New Sale instantly
+  // Global keyboard shortcuts (Alt+1..9, F2, Alt+H, etc.)
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'F2') {
-        e.preventDefault();
-        setCurrentTab('new_sale');
-      }
+      dispatchGlobalShortcut(e, (tab) => {
+        if (tab !== 'returns') setReturnSaleId(undefined);
+        if (tab !== 'new_sale') setPreLoadedSellProduct(null);
+        setCurrentTab(tab);
+      });
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
@@ -152,7 +159,7 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans text-slate-800">
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden font-sans text-slate-800 dark:text-slate-100 transition-colors duration-200">
       {/* Sidebar */}
       <Sidebar
         currentTab={currentTab}
@@ -167,18 +174,30 @@ export const App: React.FC = () => {
       />
 
       {/* Main Viewport Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-200">
         <Topbar
           settings={settings}
           onNewSaleClick={() => {
             setPreLoadedSellProduct(null);
             setCurrentTab('new_sale');
           }}
+          onHubClick={() => setCurrentTab('hub')}
           onLogout={handleLogout}
         />
 
-        <main className="flex-1 overflow-y-auto p-6 md:p-8">
+        <main className={`flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 transition-colors duration-200 ${currentTab === 'hub' ? 'p-3 md:p-4' : 'p-6 md:p-8'}`}>
           <ErrorBoundary key={currentTab}>
+            {currentTab === 'hub' && (
+              <NavigationHubPage
+                settings={settings}
+                onNavigate={(tab) => {
+                  if (tab !== 'returns') setReturnSaleId(undefined);
+                  if (tab !== 'new_sale') setPreLoadedSellProduct(null);
+                  setCurrentTab(tab);
+                }}
+              />
+            )}
+
             {currentTab === 'dashboard' && (
               <DashboardPage
                 settings={settings}

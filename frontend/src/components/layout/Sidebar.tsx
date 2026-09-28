@@ -16,6 +16,7 @@ import {
   Zap,
   Pin,
   FileText,
+  Compass,
 } from 'lucide-react';
 
 interface NavItem {
@@ -55,6 +56,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       title: null,
       items: [
+        ...(settings?.enable_navigation_hub !== false
+          ? [
+              {
+                id: 'hub',
+                label: 'Navigation Hub',
+                icon: <Compass className="h-5 w-5 text-indigo-400" />,
+              },
+            ]
+          : []),
         { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" /> },
       ],
     },
@@ -63,7 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         {
           id: 'new_sale',
-          label: 'SELL NOW (F2)',
+          label: 'SELL NOW',
           icon: <Zap className="h-5 w-5 text-amber-300" />,
           isSellButton: true,
         },
@@ -126,23 +136,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
       onMouseLeave={() => setIsHovered(false)}
     >
       <aside
-        className={`h-screen bg-white border-r border-slate-200 flex flex-col select-none transition-all duration-300 ease-in-out ${
+        className={`h-screen bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col select-none transition-all duration-300 ease-in-out ${
           isExpanded
             ? 'w-64 shadow-2xl shadow-slate-900/15'
             : 'w-20 shadow-none'
         } ${!isPinned ? 'absolute inset-y-0 left-0' : 'w-64'}`}
       >
         {/* Brand Header */}
-        <div className="h-16 flex items-center px-4 border-b border-slate-100 justify-between overflow-hidden">
+        <div className="h-16 flex items-center px-4 border-b border-slate-100 dark:border-slate-800 justify-between overflow-hidden">
           {isExpanded ? (
             <>
               <div className="flex items-center gap-2 min-w-0">
                 <img
                   src={settings?.logo_path || '/stokflow-logo.png'}
                   alt={settings?.business_name || 'StokFlow'}
-                  className="h-8 w-auto max-w-[125px] object-contain"
+                  className="h-8 w-auto max-w-[125px] object-contain dark:brightness-110"
                 />
-                <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 tracking-wider shrink-0">
+                <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full bg-brand-50 text-brand-700 dark:bg-brand-950/60 dark:text-brand-300 tracking-wider shrink-0">
                   v1.0
                 </span>
               </div>
@@ -154,12 +164,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }}
                 className={`p-1.5 rounded-lg text-xs transition ${
                   isPinned
-                    ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
-                    : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                    ? 'text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-950/50 hover:bg-brand-100 dark:hover:bg-brand-900/50'
+                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
                 }`}
                 title={isPinned ? 'Unpin sidebar (collapse to icons)' : 'Pin sidebar expanded'}
               >
-                <Pin className={`h-4 w-4 transition-transform ${isPinned ? 'rotate-45 text-emerald-700' : ''}`} />
+                <Pin className={`h-4 w-4 transition-transform ${isPinned ? 'rotate-45 text-brand-700 dark:text-brand-300' : ''}`} />
               </button>
             </>
           ) : (
@@ -168,10 +178,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <img
                   src={settings.logo_path}
                   alt={settings.business_name || 'Logo'}
-                  className="h-9 w-9 object-contain rounded-xl"
+                  className="h-9 w-9 object-contain rounded-xl dark:brightness-110"
                 />
               ) : (
-                <div className="h-9 w-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black text-sm shadow-sm shadow-emerald-600/30">
+                <div className="h-9 w-9 rounded-xl bg-brand-600 text-white flex items-center justify-center font-black text-sm shadow-sm shadow-brand-600/30">
                   {(settings?.business_name || 'SF').substring(0, 2).toUpperCase()}
                 </div>
               )}
@@ -185,11 +195,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div key={idx}>
               {section.title && (
                 isExpanded ? (
-                  <p className="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 whitespace-nowrap">
+                  <p className="px-3 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5 whitespace-nowrap">
                     {section.title}
                   </p>
                 ) : (
-                  <div className="my-2 border-t border-slate-100 mx-1.5" />
+                  <div className="my-2 border-t border-slate-100 dark:border-slate-800 mx-1.5" />
                 )
               )}
               <div className="space-y-1">
@@ -207,8 +217,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             : 'w-11 h-11 mx-auto justify-center rounded-xl'
                         } ${
                           isActive
-                            ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-500'
-                            : 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white hover:opacity-95 shadow-md shadow-emerald-600/20'
+                            ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/30 ring-2 ring-brand-500'
+                            : 'bg-brand-600 hover:bg-brand-700 text-white hover:opacity-95 shadow-md shadow-brand-600/20'
                         }`}
                       >
                         <div className="flex items-center gap-2.5">
@@ -237,8 +247,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           : 'w-11 h-11 mx-auto justify-center rounded-xl'
                       } ${
                         isActive
-                          ? 'bg-slate-900 text-white shadow-sm font-bold'
-                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                          ? 'bg-slate-900 dark:bg-slate-800 text-white dark:text-slate-100 shadow-sm font-bold'
+                          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-slate-100'
                       }`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
@@ -255,7 +265,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             {item.badge}
                           </span>
                         ) : (
-                          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white" />
+                          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900" />
                         )
                       )}
                     </button>
@@ -267,7 +277,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
 
         {/* Footer info */}
-        <div className="p-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between text-xs text-slate-400 overflow-hidden">
+        <div className="p-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/60 flex items-center justify-between text-xs text-slate-400 dark:text-slate-500 overflow-hidden">
           {isExpanded ? (
             <>
               <span className="flex items-center gap-1.5 whitespace-nowrap text-[11px]">

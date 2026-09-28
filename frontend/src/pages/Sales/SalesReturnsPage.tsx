@@ -250,14 +250,14 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
     <div className="space-y-6 pb-12">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Customer Returns</h1>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <h1 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Customer Returns</h1>
+          <p className="text-xs text-slate-400 dark:text-slate-400 mt-0.5">
             Search sales by receipt #, customer, or phone. Automatic batch restoration and partial refund tracking.
           </p>
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex items-center gap-1 bg-slate-200/70 p-1.5 rounded-2xl">
+        <div className="flex items-center gap-1 bg-slate-200/70 dark:bg-slate-800 p-1.5 rounded-2xl">
           <button
             onClick={() => {
               setActiveTab('receipt');
@@ -265,7 +265,7 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
               setErrorMsg(null);
             }}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
-              activeTab === 'receipt' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
+              activeTab === 'receipt' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-400'
             }`}
           >
             Return from Sale
@@ -277,7 +277,7 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
               setErrorMsg(null);
             }}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
-              activeTab === 'manual' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
+              activeTab === 'manual' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-400'
             }`}
           >
             Manual Return
@@ -289,7 +289,7 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
               setErrorMsg(null);
             }}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
-              activeTab === 'history' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
+              activeTab === 'history' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-400'
             }`}
           >
             Return History
@@ -299,10 +299,10 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
 
       {/* Success Alert */}
       {successMsg && (
-        <div className="flex items-center gap-3 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-semibold">
+        <div className="flex items-center gap-3 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 text-emerald-800 dark:text-emerald-300 text-sm font-semibold">
           <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
           <div className="flex-1">{successMsg}</div>
-          <button onClick={() => setSuccessMsg(null)} className="text-xs text-emerald-700 font-bold">
+          <button onClick={() => setSuccessMsg(null)} className="text-xs text-emerald-700 dark:text-emerald-400 font-bold">
             Dismiss
           </button>
         </div>
@@ -310,7 +310,7 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
 
       {/* Error Alert */}
       {errorMsg && (
-        <div className="flex items-center gap-3 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-sm font-medium">
+        <div className="flex items-center gap-3 p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-400 text-sm font-medium">
           <AlertCircle className="h-5 w-5 shrink-0" />
           <div className="flex-1">{errorMsg}</div>
           <button onClick={() => setErrorMsg(null)} className="text-xs text-rose-500 font-bold">
@@ -322,7 +322,7 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
       {/* Tab 1: Return from Sale / Receipt */}
       {activeTab === 'receipt' && (
         <div className="space-y-6">
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm relative">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm relative">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
               Search Sale by Receipt #, Customer Name, or Phone
             </h3>
@@ -347,20 +347,20 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
 
               {/* Live Search Results Dropdown */}
               {showSearchResults && searchResults.length > 0 && (
-                <div className="absolute top-full left-0 right-32 mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden z-40 max-h-72 overflow-y-auto">
-                  <div className="p-2 bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <div className="absolute top-full left-0 right-32 mt-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden z-40 max-h-72 overflow-y-auto">
+                  <div className="p-2 bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                     Matching Sales ({searchResults.length})
                   </div>
                   {searchResults.map((s) => (
                     <div
                       key={s.id}
                       onClick={() => selectSaleForReturn(s)}
-                      className="p-3 hover:bg-emerald-50/70 border-b border-slate-100 last:border-0 cursor-pointer flex items-center justify-between transition"
+                      className="p-3 hover:bg-brand-50/70 dark:hover:bg-slate-800/60 border-b border-slate-100 dark:border-slate-800 last:border-0 cursor-pointer flex items-center justify-between transition"
                     >
                       <div>
-                        <div className="font-bold text-xs text-slate-900 flex items-center gap-2">
+                        <div className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-2">
                           <span>{s.receipt_number}</span>
-                          <span className="text-[11px] font-normal text-slate-500">
+                          <span className="text-[11px] font-normal text-slate-500 dark:text-slate-400">
                             • {s.customer_name || 'Walk-in'}
                           </span>
                         </div>
@@ -369,13 +369,13 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-bold text-xs text-slate-800">
+                        <div className="font-bold text-xs text-slate-800 dark:text-slate-200">
                           {formatCurrency(s.total_amount, currency)}
                         </div>
-                        <div className="text-[10px] font-semibold text-emerald-600">
+                        <div className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
                           Paid: {formatCurrency(s.paid_amount, currency)}
                           {Number(s.due_amount) > 0 && (
-                            <span className="text-rose-600 ml-1">
+                            <span className="text-rose-600 dark:text-rose-400 ml-1">
                               (Due: {formatCurrency(s.due_amount, currency)})
                             </span>
                           )}
@@ -391,14 +391,14 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
           {foundSale && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               {/* Items to return */}
-              <div className="lg:col-span-8 bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="lg:col-span-8 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
                   <div>
-                    <h3 className="font-bold text-slate-900 text-base">
+                    <h3 className="font-bold text-slate-900 dark:text-white text-base">
                       Receipt {foundSale.receipt_number}
                     </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Customer: <strong className="text-slate-800">{foundSale.customer_name || 'Walk-in Customer'}</strong> • Date: {new Date(foundSale.created_at).toLocaleString()}
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Customer: <strong className="text-slate-800 dark:text-slate-200">{foundSale.customer_name || 'Walk-in Customer'}</strong> • Date: {new Date(foundSale.created_at).toLocaleString()}
                     </p>
                   </div>
                   <button
@@ -406,7 +406,7 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
                       setFoundSale(null);
                       setReceiptSearch('');
                     }}
-                    className="text-xs text-slate-400 hover:text-slate-600 font-semibold"
+                    className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-semibold"
                   >
                     Close
                   </button>
@@ -415,7 +415,7 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
                 {/* Items List */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <div className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                    <div className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
                       Select quantities to return (remaining units on this sale):
                     </div>
                     {foundSale.items.length > 1 && (
@@ -423,14 +423,14 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
                         <button
                           type="button"
                           onClick={handleSelectAllReturn}
-                          className="text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-lg transition"
+                          className="text-[11px] font-bold text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-950/40 hover:bg-brand-100 dark:hover:bg-brand-900/50 px-2.5 py-1 rounded-lg transition"
                         >
                           Select All
                         </button>
                         <button
                           type="button"
                           onClick={handleClearAllReturn}
-                          className="text-[11px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition"
+                          className="text-[11px] font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-2.5 py-1 rounded-lg transition"
                         >
                           Clear
                         </button>
@@ -447,41 +447,41 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
                       <div
                         key={item.product_id}
                         className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition ${
-                          isFullyReturned ? 'bg-slate-100/70 border-slate-200 opacity-60' : 'bg-slate-50 border-slate-200/70'
+                          isFullyReturned ? 'bg-slate-100/70 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-60' : 'bg-slate-50 dark:bg-slate-800/70 border-slate-200/70 dark:border-slate-700'
                         }`}
                       >
                         <div>
                           <div className="flex items-center gap-2">
-                            <h4 className="font-bold text-slate-800 text-sm">{item.product_name}</h4>
+                            <h4 className="font-bold text-slate-800 dark:text-white text-sm">{item.product_name}</h4>
                             {isFullyReturned && (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300">
                                 Fully Returned
                               </span>
                             )}
                           </div>
-                          <p className="text-xs text-slate-500 mt-0.5">
-                            Purchased: <strong className="text-slate-700">{item.quantity} units</strong> @ {formatCurrency(item.unit_price, currency)} / unit
-                            {alreadyRet > 0 && <span className="text-purple-600 font-semibold ml-1">({alreadyRet} already returned)</span>}
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            Purchased: <strong className="text-slate-700 dark:text-slate-300">{item.quantity} units</strong> @ {formatCurrency(item.unit_price, currency)} / unit
+                            {alreadyRet > 0 && <span className="text-purple-600 dark:text-purple-400 font-semibold ml-1">({alreadyRet} already returned)</span>}
                           </p>
-                          <p className="text-[11px] text-slate-400">
+                          <p className="text-[11px] text-slate-400 dark:text-slate-500">
                             Line Total: {formatCurrency(item.total_price, currency)}
                           </p>
                         </div>
 
                         {/* Stepper Quantity Control */}
                         <div className="flex items-center gap-3">
-                          <label className="text-xs font-bold text-slate-600">Return Qty:</label>
-                          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-2xl p-1 shadow-sm">
+                          <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Return Qty:</label>
+                          <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl p-1 shadow-sm">
                             <button
                               type="button"
                               disabled={isFullyReturned || currentQty <= 0}
                               onClick={() =>
                                 setReturnQtys({
-                                  ...returnQtys,
+                                   ...returnQtys,
                                   [item.product_id]: Math.max(0, currentQty - 1),
                                 })
                               }
-                              className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-30 text-slate-700 font-black text-sm flex items-center justify-center transition"
+                              className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-30 text-slate-700 dark:text-slate-200 font-black text-sm flex items-center justify-center transition"
                             >
                               -
                             </button>
@@ -498,7 +498,7 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
                                   [item.product_id]: Math.min(maxQty, Math.max(0, isNaN(val) ? 0 : val)),
                                 });
                               }}
-                              className="w-14 text-center font-black text-sm text-slate-900 focus:outline-none disabled:bg-transparent"
+                              className="w-14 text-center font-black text-sm text-slate-900 dark:text-white bg-transparent focus:outline-none disabled:bg-transparent"
                             />
                             <button
                               type="button"
@@ -509,7 +509,7 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
                                   [item.product_id]: Math.min(maxQty, currentQty + 1),
                                 })
                               }
-                              className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-30 text-slate-700 font-black text-sm flex items-center justify-center transition"
+                              className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-30 text-slate-700 dark:text-slate-200 font-black text-sm flex items-center justify-center transition"
                             >
                               +
                             </button>
@@ -532,51 +532,51 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
               </div>
 
               {/* Refund Breakdown & Financial Rules */}
-              <div className="lg:col-span-4 bg-white rounded-3xl border border-slate-200 p-6 shadow-sm flex flex-col justify-between space-y-6">
+              <div className="lg:col-span-4 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm flex flex-col justify-between space-y-6">
                 <div>
-                  <h3 className="font-bold text-slate-800 border-b border-slate-100 pb-3 text-base">
+                  <h3 className="font-bold text-slate-800 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-3 text-base">
                     Financial & Refund Summary
                   </h3>
 
                   <div className="mt-4 space-y-3 text-xs">
-                    <div className="flex justify-between text-slate-600">
+                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
                       <span>Original Sale Bill:</span>
-                      <span className="font-bold text-slate-800">{formatCurrency(originalTotal, currency)}</span>
+                      <span className="font-bold text-slate-800 dark:text-white">{formatCurrency(originalTotal, currency)}</span>
                     </div>
-                    <div className="flex justify-between text-slate-600">
+                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
                       <span>Customer Cash Paid:</span>
-                      <span className="font-bold text-emerald-700">{formatCurrency(originalPaid, currency)}</span>
+                      <span className="font-bold text-emerald-700 dark:text-emerald-400">{formatCurrency(originalPaid, currency)}</span>
                     </div>
                     {currentSaleDue > 0 && (
-                      <div className="flex justify-between text-slate-600">
+                      <div className="flex justify-between text-slate-600 dark:text-slate-400">
                         <span>Current Outstanding Due:</span>
-                        <span className="font-bold text-rose-600">{formatCurrency(currentSaleDue, currency)}</span>
+                        <span className="font-bold text-rose-600 dark:text-rose-400">{formatCurrency(currentSaleDue, currency)}</span>
                       </div>
                     )}
 
-                    <div className="border-t border-slate-100 pt-3 flex justify-between text-sm">
-                      <span className="font-bold text-slate-700">Total Return Value:</span>
-                      <span className="font-black text-slate-900">{formatCurrency(totalReturnAmount, currency)}</span>
+                    <div className="border-t border-slate-100 dark:border-slate-800 pt-3 flex justify-between text-sm">
+                      <span className="font-bold text-slate-700 dark:text-slate-300">Total Return Value:</span>
+                      <span className="font-black text-slate-900 dark:text-white">{formatCurrency(totalReturnAmount, currency)}</span>
                     </div>
 
                     {/* Breakdown of how return value is applied */}
-                    <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 space-y-2 mt-3">
-                      <div className="flex justify-between font-bold text-emerald-900">
+                    <div className="p-3.5 rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 space-y-2 mt-3">
+                      <div className="flex justify-between font-bold text-emerald-900 dark:text-emerald-300">
                         <span>Cash Refund to Customer:</span>
                         <span>{formatCurrency(cashRefund, currency)}</span>
                       </div>
-                      <p className="text-[10px] text-emerald-700 leading-relaxed">
+                      <p className="text-[10px] text-emerald-700 dark:text-emerald-400 leading-relaxed">
                         (Only actual cash paid that exceeds remaining debt is refunded in cash)
                       </p>
                     </div>
 
                     {dueReduction > 0 && (
-                      <div className="p-3.5 rounded-2xl bg-blue-50/80 border border-blue-200 space-y-1">
-                        <div className="flex justify-between font-bold text-blue-900">
+                      <div className="p-3.5 rounded-2xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 space-y-1">
+                        <div className="flex justify-between font-bold text-blue-900 dark:text-blue-300">
                           <span>Customer Debt Reduced:</span>
                           <span>{formatCurrency(dueReduction, currency)}</span>
                         </div>
-                        <div className="text-[10px] text-blue-700 flex justify-between">
+                        <div className="text-[10px] text-blue-700 dark:text-blue-400 flex justify-between">
                           <span>Remaining debt after return:</span>
                           <strong>{formatCurrency(remainingDueAfterReturn, currency)}</strong>
                         </div>
@@ -603,17 +603,17 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
 
       {/* Tab 2: Manual Return */}
       {activeTab === 'manual' && (
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm max-w-xl">
-          <h3 className="font-bold text-slate-800 mb-4">Manual Return (Lost Receipt)</h3>
+        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm max-w-xl">
+          <h3 className="font-bold text-slate-800 dark:text-white mb-4">Manual Return (Lost Receipt)</h3>
           <form onSubmit={handleProcessManualReturn} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">
+              <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">
                 Customer
               </label>
               <select
                 value={manualCustomerId}
                 onChange={(e) => setManualCustomerId(Number(e.target.value))}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-brand-500"
               >
                 {customers.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -624,7 +624,7 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">
+              <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">
                 Product to Return
               </label>
               <select
@@ -635,7 +635,7 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
                   const prod = products.find((p) => p.id === pid);
                   if (prod) setManualPrice(prod.selling_price);
                 }}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-brand-500"
               >
                 {products.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -672,9 +672,9 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
               onChange={(e) => setManualReason(e.target.value)}
             />
 
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex justify-between items-center text-sm">
-              <span className="font-semibold text-slate-600">Total Refund Value:</span>
-              <span className="font-bold text-slate-900 text-lg">
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex justify-between items-center text-sm">
+              <span className="font-semibold text-slate-600 dark:text-slate-400">Total Refund Value:</span>
+              <span className="font-bold text-slate-900 dark:text-white text-lg">
                 {formatCurrency(manualQty * manualPrice, currency)}
               </span>
             </div>
@@ -694,11 +694,11 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
 
       {/* Tab 3: Returns History */}
       {activeTab === 'history' && (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden space-y-4 p-6">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden space-y-4 p-6">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
             <div>
-              <h3 className="font-bold text-slate-800 text-base">Customer Returns Log</h3>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <h3 className="font-bold text-slate-800 dark:text-white text-base">Customer Returns Log</h3>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                 Total {returnsHistory.length} return records processed
               </p>
             </div>
@@ -721,7 +721,7 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-800 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   <tr>
                     <th className="py-3 px-4">Return #</th>
                     <th className="py-3 px-4">Date</th>
@@ -734,11 +734,11 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
                     <th className="py-3 px-4">Reason</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {returnsHistory.map((ret) => (
-                    <tr key={ret.id} className="hover:bg-slate-50/60 transition">
-                      <td className="py-3.5 px-4 font-bold text-slate-900">{ret.return_number}</td>
-                      <td className="py-3.5 px-4 text-slate-500 text-xs whitespace-nowrap">
+                    <tr key={ret.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
+                      <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">{ret.return_number}</td>
+                      <td className="py-3.5 px-4 text-slate-500 dark:text-slate-400 text-xs whitespace-nowrap">
                         {new Date(ret.created_at).toLocaleString('en-GB', {
                           day: '2-digit',
                           month: 'short',
@@ -747,37 +747,37 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
                           minute: '2-digit',
                         })}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-700 font-semibold text-xs">
+                      <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300 font-semibold text-xs">
                         {ret.sale_receipt_number ? (
-                          <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-800 font-mono">
+                          <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-mono">
                             {ret.sale_receipt_number}
                           </span>
                         ) : (
-                          <span className="text-slate-400 italic">Manual</span>
+                          <span className="text-slate-400 dark:text-slate-500 italic">Manual</span>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 font-semibold text-slate-800 text-xs">{ret.customer_name}</td>
-                      <td className="py-3.5 px-4 text-xs text-slate-600">
+                      <td className="py-3.5 px-4 font-semibold text-slate-800 dark:text-slate-200 text-xs">{ret.customer_name}</td>
+                      <td className="py-3.5 px-4 text-xs text-slate-600 dark:text-slate-300">
                         <div className="space-y-1 max-w-xs">
                           {ret.items.map((item, i) => (
                             <div key={i} className="flex items-center gap-1.5">
-                              <span className="font-bold text-slate-800">{Number(item.quantity)}x</span>
+                              <span className="font-bold text-slate-800 dark:text-slate-200">{Number(item.quantity)}x</span>
                               <span className="truncate">{item.product_name}</span>
-                              <span className="text-[10px] text-slate-400">(@ {formatCurrency(item.unit_price, currency)})</span>
+                              <span className="text-[10px] text-slate-400 dark:text-slate-500">(@ {formatCurrency(item.unit_price, currency)})</span>
                             </div>
                           ))}
                         </div>
                       </td>
-                      <td className="py-3.5 px-4 text-right font-black text-slate-900">
+                      <td className="py-3.5 px-4 text-right font-black text-slate-900 dark:text-white">
                         {formatCurrency(ret.total_return_amount, currency)}
                       </td>
-                      <td className="py-3.5 px-4 text-right text-emerald-700 font-bold text-xs">
+                      <td className="py-3.5 px-4 text-right text-emerald-700 dark:text-emerald-400 font-bold text-xs">
                         {Number(ret.cash_refund_amount) > 0 ? formatCurrency(ret.cash_refund_amount, currency) : '—'}
                       </td>
-                      <td className="py-3.5 px-4 text-right text-blue-700 font-bold text-xs">
+                      <td className="py-3.5 px-4 text-right text-blue-700 dark:text-blue-400 font-bold text-xs">
                         {Number(ret.balance_credit_amount) > 0 ? formatCurrency(ret.balance_credit_amount, currency) : '—'}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-500 text-xs italic">{ret.reason || '—'}</td>
+                      <td className="py-3.5 px-4 text-slate-500 dark:text-slate-400 text-xs italic">{ret.reason || '—'}</td>
                     </tr>
                   ))}
                 </tbody>
