@@ -110,10 +110,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     settings?.thermal_header_style || 'logo_text'
   );
   const [thermalDarkness, setThermalDarkness] = useState<'maximum' | 'high' | 'normal'>(
-    settings?.thermal_darkness || 'maximum'
+    settings?.thermal_darkness || 'normal'
   );
   const [selectedThermalPrinter, setSelectedThermalPrinter] = useState<string>(
     settings?.selected_thermal_printer || ''
+  );
+  const [selectedA4Printer, setSelectedA4Printer] = useState<string>(
+    settings?.selected_a4_printer || ''
+  );
+  const [skipReceiptPreview, setSkipReceiptPreview] = useState<boolean>(
+    Boolean(settings?.skip_receipt_preview)
   );
   const [systemPrinters, setSystemPrinters] = useState<PrinterInfo[]>([]);
   const [loadingPrinters, setLoadingPrinters] = useState<boolean>(false);
@@ -254,8 +260,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setPrinterType(settings.receipt_printer_type);
       setThermalPrintMode(settings.thermal_print_mode || 'browser');
       setThermalHeaderStyle(settings.thermal_header_style || 'logo_text');
-      setThermalDarkness(settings.thermal_darkness || 'maximum');
+      setThermalDarkness(settings.thermal_darkness || 'normal');
       setSelectedThermalPrinter(settings.selected_thermal_printer || '');
+      setSelectedA4Printer(settings.selected_a4_printer || '');
+      setSkipReceiptPreview(Boolean(settings.skip_receipt_preview));
       setShowSku(settings.show_sku ?? true);
       setShowBarcode(settings.show_barcode ?? true);
       setDateFormat(settings.date_format || 'YYYY-MM-DD');
@@ -295,6 +303,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           const thermal = list.find((p) => p.is_thermal);
           const def = list.find((p) => p.is_default);
           return thermal ? thermal.name : (def ? def.name : list[0].name);
+        });
+        setSelectedA4Printer((prev) => {
+          if (prev && list.some((p) => p.name === prev)) return prev;
+          const a4Default = list.find((p) => !p.is_thermal && p.is_default);
+          const nonThermal = list.find((p) => !p.is_thermal);
+          const def = list.find((p) => p.is_default);
+          return a4Default ? a4Default.name : (nonThermal ? nonThermal.name : (def ? def.name : list[0].name));
         });
       }
     } catch (err) {
@@ -377,6 +392,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         thermal_header_style: thermalHeaderStyle,
         thermal_darkness: thermalDarkness,
         selected_thermal_printer: selectedThermalPrinter,
+        selected_a4_printer: selectedA4Printer,
+        skip_receipt_preview: skipReceiptPreview,
         show_letterhead: showLetterhead,
         hide_header_text_with_letterhead: hideHeaderTextWithLetterhead,
         receipt_letterhead_path: letterheadImage || null,
@@ -637,6 +654,71 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setNewPin('');
     } catch (err: any) {
       setErrorMsg(err.detail || 'Failed to change PIN');
+    }
+  };
+
+  const handleToggleSkipReceiptPreview = async (checked: boolean) => {
+    setSkipReceiptPreview(checked);
+    const targetMode = checked && thermalPrintMode === 'browser' ? 'direct_escpos' : thermalPrintMode;
+    if (targetMode !== thermalPrintMode) {
+      setThermalPrintMode(targetMode);
+    }
+    try {
+      await api.updateSettings({
+        skip_receipt_preview: checked,
+        thermal_print_mode: targetMode,
+      });
+      onSettingsUpdated();
+      setSuccessMsg(
+        checked
+          ? '1-Click Auto-Print enabled! Completing a sale will automatically print directly without preview.'
+          : 'Preview modal restored for POS checkout.'
+      );
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to update auto-print setting.');
+    }
+  };
+
+  const handleChangeThermalPrinter = async (printerName: string) => {
+    setSelectedThermalPrinter(printerName);
+    try {
+      await api.updateSettings({
+        selected_thermal_printer: printerName,
+      });
+      onSettingsUpdated();
+      setSuccessMsg(`Thermal printer assigned to "${printerName || 'Auto-detect'}"`);
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to save assigned thermal printer.');
+    }
+  };
+
+  const handleChangeA4Printer = async (printerName: string) => {
+    setSelectedA4Printer(printerName);
+    try {
+      await api.updateSettings({
+        selected_a4_printer: printerName,
+      });
+      onSettingsUpdated();
+      setSuccessMsg(`A4 document printer assigned to "${printerName || 'System Default'}"`);
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to save assigned A4 printer.');
+    }
+  };
+
+  const handleChangeThermalPrintMode = async (mode: 'browser' | 'direct_escpos') => {
+    setThermalPrintMode(mode);
+    try {
+      await api.updateSettings({
+        thermal_print_mode: mode,
+      });
+      onSettingsUpdated();
+      setSuccessMsg(
+        mode === 'direct_escpos'
+          ? 'Direct ESC/POS engine active! Fast 1-click instant receipt spooling.'
+          : 'Browser print dialog mode active.'
+      );
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to update printing mode.');
     }
   };
 
@@ -1333,11 +1415,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             {/* Left Column: Configuration Forms (7 cols on XL) */}
             <div className="xl:col-span-7 space-y-6">
               <form onSubmit={handleSaveSettings} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
-                <div>
-                  <h3 className="font-bold text-slate-800 text-base">Receipt & Invoice Formatting</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Configure thermal receipt printing, raw ESC/POS hardware spooling, and corporate PDF/A4 letterheads.
-                  </p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-base">Receipt & Invoice Formatting</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Configure thermal receipt printing, raw ESC/POS hardware spooling, and corporate PDF/A4 letterheads.
+                    </p>
+                  </div>
+                  <Button type="submit" variant="primary" loading={saving} size="sm" className="font-bold shrink-0 shadow-sm">
+                    Save Receipt Settings
+                  </Button>
                 </div>
 
                 {/* Receipt Format Selector Cards */}
@@ -1398,6 +1485,116 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   </div>
                 </div>
 
+                {/* POS Checkout Automation Card */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-emerald-600" />
+                      <span className="text-sm font-bold text-slate-800">
+                        Skip Receipt Preview (1-Click Auto-Print on Sale)
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${skipReceiptPreview ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}`}>
+                        {skipReceiptPreview ? 'Auto-Print Active' : 'Preview Modal'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed max-w-xl">
+                      When confirming a sale in POS, automatically send the receipt directly to your selected printer without showing the preview popup. Maximizes counter speed for high-volume checkout.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
+                    <input
+                      type="checkbox"
+                      checked={skipReceiptPreview}
+                      onChange={(e) => handleToggleSkipReceiptPreview(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                  </label>
+                </div>
+
+                {/* Dual Hardware Printer Devices (Avoid Hardware Conflicts) */}
+                <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <Printer className="h-4 w-4 text-emerald-600" />
+                        Hardware Printer Device Assignments
+                      </h4>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Assign independent physical printers for POS receipts vs A4 invoices/reports to prevent device conflicts.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={loadPrinters}
+                      disabled={loadingPrinters}
+                      className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-emerald-700 flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition"
+                      title="Rescan connected printers"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${loadingPrinters ? 'animate-spin text-emerald-600' : ''}`} />
+                      <span>Rescan</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Device 1: Thermal Receipt Printer */}
+                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                          <Receipt className="h-3.5 w-3.5 text-emerald-600" />
+                          POS Thermal Receipt Printer
+                        </label>
+                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60">
+                          POS Rolls
+                        </span>
+                      </div>
+                      <select
+                        value={selectedThermalPrinter}
+                        onChange={(e) => handleChangeThermalPrinter(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 shadow-xs"
+                      >
+                        <option value="">-- Auto-detect Thermal Printer --</option>
+                        {systemPrinters.map((p) => (
+                          <option key={p.name} value={p.name}>
+                            {p.name} {p.is_thermal ? '★ (Detected Thermal POS)' : ''} {p.is_default ? '(Default)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[11px] text-slate-500">
+                        Assigned to: <strong className="text-slate-800 font-mono">{selectedThermalPrinter || 'Auto-detect'}</strong>
+                      </p>
+                    </div>
+
+                    {/* Device 2: Document / A4 Invoice Printer */}
+                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                          <FileText className="h-3.5 w-3.5 text-blue-600" />
+                          Document & A4 Invoice Printer
+                        </label>
+                        <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/60">
+                          A4 Invoices & Reports
+                        </span>
+                      </div>
+                      <select
+                        value={selectedA4Printer}
+                        onChange={(e) => handleChangeA4Printer(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500 shadow-xs"
+                      >
+                        <option value="">-- System Default A4 Printer --</option>
+                        {systemPrinters.map((p) => (
+                          <option key={p.name} value={p.name}>
+                            {p.name} {!p.is_thermal ? '★ (Standard A4 / Laser)' : ''} {p.is_default ? '(Default)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[11px] text-slate-500">
+                        Assigned to: <strong className="text-slate-800 font-mono">{selectedA4Printer || 'System Default'}</strong>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Conditional Options for Thermal */}
                 {receiptType === 'thermal' && (
                   <div className="space-y-5 pt-3 border-t border-slate-100">
@@ -1416,7 +1613,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                         {/* Option 1: Direct ESC/POS */}
                         <button
                           type="button"
-                          onClick={() => setThermalPrintMode('direct_escpos')}
+                          onClick={() => handleChangeThermalPrintMode('direct_escpos')}
                           className={`p-4 rounded-2xl border-2 text-left transition-all flex flex-col justify-between ${
                             thermalPrintMode === 'direct_escpos'
                               ? 'border-emerald-600 bg-emerald-50/40 shadow-sm ring-1 ring-emerald-500/20'
@@ -1434,7 +1631,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                               </span>
                             </div>
                             <p className="text-[11px] text-slate-500 leading-relaxed">
-                              Dispatches raw binary commands straight to the thermal printer via system spooler. 1-click instant checkout, automatic paper cut, and completely immune to PostScript <code className="text-[10px] font-mono bg-slate-100 px-1 py-0.5 rounded">/imageType 3</code> errors.
+                              Dispatches raw binary commands straight to the thermal printer via system spooler. 1-click instant checkout, automatic continuous paper cut, and completely immune to PostScript errors.
                             </p>
                           </div>
                           <div className="mt-3 text-[10px] font-semibold text-emerald-700 flex items-center gap-1">
@@ -1445,7 +1642,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                         {/* Option 2: Browser Print Dialog */}
                         <button
                           type="button"
-                          onClick={() => setThermalPrintMode('browser')}
+                          onClick={() => handleChangeThermalPrintMode('browser')}
                           className={`p-4 rounded-2xl border-2 text-left transition-all flex flex-col justify-between ${
                             thermalPrintMode === 'browser'
                               ? 'border-emerald-600 bg-emerald-50/40 shadow-sm ring-1 ring-emerald-500/20'
@@ -1467,7 +1664,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                             </p>
                           </div>
                           <div className="mt-3 text-[10px] font-semibold text-slate-600 flex items-center gap-1">
-                            <span>Allows selecting printer, copies & scale manually</span>
+                            <span>Continuous single-loop roll without browser page breaks</span>
                           </div>
                         </button>
                       </div>
@@ -1478,16 +1675,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                           <div className="flex items-center gap-2">
                             <Info className="h-4 w-4 text-blue-600 shrink-0" />
                             <span className="text-xs font-bold text-blue-950">
-                              Browser Print Preview Configuration Guide (Optimal Continuous Output)
+                              Browser Print Configuration Guide (Optimal Continuous Output)
                             </span>
                           </div>
                           <p className="text-[11px] text-blue-900 leading-relaxed">
-                            To prevent browser pagination breaks and accidental mid-receipt cuts on long receipts, ensure your browser print dialog has these settings configured:
+                            Stock Manager overrides browser page heights dynamically. For flawless continuous loop printing without gaps or cuts:
                           </p>
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
                             <div className="bg-white p-2.5 rounded-xl border border-blue-100">
                               <span className="block text-[10px] font-bold uppercase text-slate-400">Margins</span>
-                              <span className="text-xs font-bold text-slate-800">None</span>
+                              <span className="text-xs font-bold text-slate-800">None (0mm)</span>
                             </div>
                             <div className="bg-white p-2.5 rounded-xl border border-blue-100">
                               <span className="block text-[10px] font-bold uppercase text-slate-400">Scale</span>
@@ -1502,61 +1699,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                               <span className="text-xs font-bold text-emerald-700">Roll / Continuous</span>
                             </div>
                           </div>
-                          <p className="text-[10px] text-blue-800/80">
-                            <strong>Tip:</strong> If your Mac/PC only lists standard &quot;Letter&quot; or &quot;A4&quot; for your thermal printer, click <em>Paper Size &gt; Manage Custom Sizes</em> and create <strong>&quot;Thermal 80mm Roll&quot;</strong> with Width: 80mm, Height: 2000mm, Margins: 0mm.
-                          </p>
                         </div>
                       )}
-                    </div>
-
-                    {/* Detected Thermal Hardware / Printer Selector */}
-                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
-                            Target Thermal Printer (System Hardware)
-                          </label>
-                          <p className="text-[11px] text-slate-400 mt-0.5">
-                            Select the physical printer used for direct ESC/POS receipt generation
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={loadPrinters}
-                          disabled={loadingPrinters}
-                          className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-emerald-700 flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition"
-                          title="Rescan connected printers"
-                        >
-                          <RefreshCw className={`h-3.5 w-3.5 ${loadingPrinters ? 'animate-spin text-emerald-600' : ''}`} />
-                          <span>Rescan</span>
-                        </button>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <select
-                          value={selectedThermalPrinter}
-                          onChange={(e) => setSelectedThermalPrinter(e.target.value)}
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 shadow-sm"
-                        >
-                          <option value="">-- Auto-detect Default Thermal Printer --</option>
-                          {systemPrinters.map((p) => (
-                            <option key={p.name} value={p.name}>
-                              {p.name} {p.is_thermal ? '★ (Detected Thermal POS)' : ''} {p.is_default ? '(System Default)' : ''}
-                            </option>
-                          ))}
-                        </select>
-
-                        {selectedThermalPrinter && (
-                          <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
-                            <span>Selected: <strong className="text-slate-800 font-mono">{selectedThermalPrinter}</strong></span>
-                            {systemPrinters.find((p) => p.name === selectedThermalPrinter)?.is_thermal && (
-                              <span className="text-emerald-700 font-bold flex items-center gap-1">
-                                <CheckCircle2 className="h-3 w-3" /> ESC/POS Thermal Ready
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
                     </div>
 
                     {/* Paper Size & Barcode Grid */}
@@ -1650,12 +1794,68 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                         <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
                           Thermal Print Darkness & Density
                         </label>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-900 text-amber-300 flex items-center gap-1 shadow-sm">
-                          <Flame className="h-3 w-3 text-amber-400" /> Max Thermal Contrast
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1 shadow-xs">
+                          <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Standard POS Contrast
                         </span>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* Standard POS (Recommended) */}
+                        <button
+                          type="button"
+                          onClick={() => setThermalDarkness('normal')}
+                          className={`p-3.5 rounded-2xl border-2 text-left transition-all flex flex-col justify-between ${
+                            thermalDarkness === 'normal'
+                              ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm ring-1 ring-emerald-500/20'
+                              : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between gap-1 mb-1.5">
+                              <span className="font-bold text-xs flex items-center gap-1.5">
+                                Standard POS
+                              </span>
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                                Recommended
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 leading-relaxed">
+                              Standard factory heating and single-burn density. Clean, crisp letters without bleeding or smudging, fast roll throughput.
+                            </p>
+                          </div>
+                          <div className="mt-3 text-[10px] font-bold text-emerald-700 flex items-center gap-1">
+                            <CheckCircle2 className="h-3 w-3" /> Standard in all POS systems
+                          </div>
+                        </button>
+
+                        {/* High Density */}
+                        <button
+                          type="button"
+                          onClick={() => setThermalDarkness('high')}
+                          className={`p-3.5 rounded-2xl border-2 text-left transition-all flex flex-col justify-between ${
+                            thermalDarkness === 'high'
+                              ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
+                              : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between gap-1 mb-1.5">
+                              <span className="font-bold text-xs flex items-center gap-1.5">
+                                High Density
+                              </span>
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                                75% Heat
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 leading-relaxed">
+                              Balanced heating duration + density 24. Crisp darker printout for high-volume receipting.
+                            </p>
+                          </div>
+                          <div className="mt-3 text-[10px] font-medium text-slate-400">
+                            Fast & clear
+                          </div>
+                        </button>
+
                         {/* Maximum Dark */}
                         <button
                           type="button"
@@ -1679,67 +1879,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                               </span>
                             </div>
                             <p className={`text-[11px] leading-relaxed ${thermalDarkness === 'maximum' ? 'text-slate-300' : 'text-slate-500'}`}>
-                              Full 2.55ms burn time + Density 31 + Double-Strike mode. Deep pitch-black printout.
+                              Full 2.55ms burn time + double-strike burn. Useful only for worn or faint thermal heads.
                             </p>
                           </div>
-                          <div className={`mt-3 text-[10px] font-bold flex items-center gap-1 ${thermalDarkness === 'maximum' ? 'text-amber-300' : 'text-emerald-700'}`}>
-                            <CheckCircle2 className="h-3 w-3" /> Recommended
-                          </div>
-                        </button>
-
-                        {/* High Density */}
-                        <button
-                          type="button"
-                          onClick={() => setThermalDarkness('high')}
-                          className={`p-3.5 rounded-2xl border-2 text-left transition-all flex flex-col justify-between ${
-                            thermalDarkness === 'high'
-                              ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
-                              : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
-                          }`}
-                        >
-                          <div>
-                            <div className="flex items-center justify-between gap-1 mb-1.5">
-                              <span className="font-bold text-xs flex items-center gap-1.5">
-                                High Density
-                              </span>
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                                75% Heat
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-slate-500 leading-relaxed">
-                              Balanced heating duration + density 24. Crisp dark printout for high-volume receipting.
-                            </p>
-                          </div>
-                          <div className="mt-3 text-[10px] font-medium text-slate-400">
-                            Fast & clear
-                          </div>
-                        </button>
-
-                        {/* Standard */}
-                        <button
-                          type="button"
-                          onClick={() => setThermalDarkness('normal')}
-                          className={`p-3.5 rounded-2xl border-2 text-left transition-all flex flex-col justify-between ${
-                            thermalDarkness === 'normal'
-                              ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
-                              : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
-                          }`}
-                        >
-                          <div>
-                            <div className="flex items-center justify-between gap-1 mb-1.5">
-                              <span className="font-bold text-xs flex items-center gap-1.5">
-                                Standard
-                              </span>
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
-                                50% Heat
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-slate-500 leading-relaxed">
-                              Factory default heating and dot density. Normal thermal print speed.
-                            </p>
-                          </div>
-                          <div className="mt-3 text-[10px] font-medium text-slate-400">
-                            Factory default
+                          <div className={`mt-3 text-[10px] font-medium ${thermalDarkness === 'maximum' ? 'text-amber-300' : 'text-slate-400'}`}>
+                            Extra dark burn
                           </div>
                         </button>
                       </div>
@@ -3012,6 +3156,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             thermal_header_style: thermalHeaderStyle,
             thermal_darkness: thermalDarkness,
             selected_thermal_printer: selectedThermalPrinter,
+            selected_a4_printer: selectedA4Printer,
+            skip_receipt_preview: skipReceiptPreview,
             show_barcode: showBarcode,
             show_sku: showSku,
           } as any}

@@ -53,8 +53,7 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
         lineHeight: '1.35',
         backgroundColor: '#ffffff',
         color: '#000000',
-        fontWeight: 700,
-        WebkitTextStroke: '0.25px #000000',
+        fontWeight: 500,
         overflow: 'visible',
       }}
     >

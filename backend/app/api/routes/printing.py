@@ -139,7 +139,7 @@ def print_thermal_receipt(data: ThermalPrintRequest, db: Session = Depends(get_d
             header_style=header_style,
             show_barcode=show_barcode,
             kick_drawer=bool(data.kick_drawer),
-            darkness=data.darkness or (settings.thermal_darkness if settings else "maximum"),
+            darkness=data.darkness or (settings.thermal_darkness if settings else "normal"),
         )
 
         res = send_to_thermal_printer(escpos_bytes, printer_name=printer_name)

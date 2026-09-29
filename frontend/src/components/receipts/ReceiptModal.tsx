@@ -63,10 +63,11 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
       setPrintSuccessMsg(null);
       const res = await api.printThermalDirect({
         sale_id: sale.id,
+        printer_name: settings?.selected_thermal_printer || undefined,
         paper_width: paperWidth,
         header_style: settings?.thermal_header_style || 'logo_text',
         show_barcode: settings?.show_barcode ?? true,
-        darkness: settings?.thermal_darkness || 'maximum',
+        darkness: settings?.thermal_darkness || 'normal',
       });
       setPrintSuccessMsg(`Receipt sent directly to ${res.printer}`);
       setTimeout(() => setPrintSuccessMsg(null), 4000);

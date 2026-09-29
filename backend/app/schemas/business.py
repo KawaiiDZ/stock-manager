@@ -26,7 +26,9 @@ class BusinessSettingsResponse(BaseModel):
     thermal_print_mode: str = "browser"
     thermal_header_style: str = "logo_text"
     selected_thermal_printer: str = ""
-    thermal_darkness: str = "maximum"
+    selected_a4_printer: str = ""
+    skip_receipt_preview: bool = False
+    thermal_darkness: str = "normal"
     receipt_letterhead_path: Optional[str] = None
     show_letterhead: bool = False
     hide_header_text_with_letterhead: bool = False
@@ -71,6 +73,8 @@ class BusinessSettingsUpdate(BaseModel):
     thermal_print_mode: Optional[str] = None
     thermal_header_style: Optional[str] = None
     selected_thermal_printer: Optional[str] = None
+    selected_a4_printer: Optional[str] = None
+    skip_receipt_preview: Optional[bool] = None
     thermal_darkness: Optional[str] = None
     receipt_letterhead_path: Optional[str] = None
     show_letterhead: Optional[bool] = None

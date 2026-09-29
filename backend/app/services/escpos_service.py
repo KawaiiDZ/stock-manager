@@ -1,6 +1,7 @@
 import logging
 import platform
 import re
+import shutil
 import subprocess
 from datetime import datetime
 from typing import List, Dict, Any, Optional
@@ -143,9 +144,9 @@ def generate_escpos_receipt(
     Configured for maximum thermal head heating and deep, pitch-black print density.
     """
     col_width = 32 if paper_width == "58mm" else 48
-    density_mode = darkness or getattr(settings, "thermal_darkness", "maximum") or "maximum"
+    density_mode = darkness or getattr(settings, "thermal_darkness", "normal") or "normal"
 
-    # Use solid double-divider in maximum darkness mode
+    # Use solid double-divider only in maximum darkness mode; otherwise crisp standard divider
     div_line = ("=" * col_width + "\n") if density_mode == "maximum" else ("-" * col_width + "\n")
     double_div = "=" * col_width + "\n"
 
@@ -365,11 +366,15 @@ def send_to_thermal_printer(escpos_bytes: bytes, printer_name: Optional[str] = N
     # Determine target printer
     target = None
     if printer_name and printer_name.strip():
-        # Match specified printer name
+        clean_name = printer_name.strip()
+        # Match specified printer name against available printers (case-insensitive)
         for p in available:
-            if p["name"].lower() == printer_name.strip().lower():
+            if p["name"].lower() == clean_name.lower():
                 target = p["name"]
                 break
+        # If not matched in available (e.g. transient cups query or direct queue), trust user's explicit printer
+        if not target:
+            target = clean_name
 
     if not target:
         # Auto-detect thermal printer
@@ -393,7 +398,8 @@ def send_to_thermal_printer(escpos_bytes: bytes, printer_name: Optional[str] = N
     logger.info(f"Dispatching raw ESC/POS payload ({len(escpos_bytes)} bytes) to printer: {target}")
 
     if sys_name in ("Darwin", "Linux"):
-        cmd = ["/usr/bin/lpr", "-P", target, "-l"]
+        lpr_bin = shutil.which("lpr") or "/usr/bin/lpr"
+        cmd = [lpr_bin, "-P", target, "-l"]
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = proc.communicate(input=escpos_bytes)
         if proc.returncode != 0:

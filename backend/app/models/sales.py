@@ -20,7 +20,7 @@ class Sale(Base):
     total_cost = Column(Numeric(12, 2), nullable=False, default=0.00)
     gross_profit = Column(Numeric(12, 2), nullable=False, default=0.00)
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=datetime.now, index=True)
 
     customer = relationship("Customer", back_populates="sales")
     items = relationship("SaleItem", back_populates="sale", cascade="all, delete-orphan")
@@ -75,7 +75,7 @@ class SalePayment(Base):
     amount = Column(Numeric(12, 2), nullable=False)
     payment_method = Column(String(30), nullable=False, default="Cash")
     customer_payment_id = Column(Integer, ForeignKey("customer_payments.id", ondelete="SET NULL"), nullable=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
     __table_args__ = (
         CheckConstraint('amount > 0', name='check_sale_payment_amount_positive'),
@@ -95,7 +95,7 @@ class SalesReturn(Base):
     cash_refund_amount = Column(Numeric(12, 2), nullable=False, default=0.00)
     balance_credit_amount = Column(Numeric(12, 2), nullable=False, default=0.00)
     reason = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=datetime.now, index=True)
 
     sale = relationship("Sale", back_populates="returns")
     customer = relationship("Customer", back_populates="returns")

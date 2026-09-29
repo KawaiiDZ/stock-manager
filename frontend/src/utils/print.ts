@@ -72,23 +72,29 @@ export const printElement = (
     const docTitle = options.title || document.title;
 
     // Dynamically calculate exact receipt height in mm from rendered DOM
-    let thermalHeightMm = 160;
+    let thermalHeightMm = 140;
     if (isThermal && targetElement) {
       const rect = targetElement.getBoundingClientRect();
       const scrollH = targetElement.scrollHeight;
       const offsetH = targetElement.offsetHeight;
       const measuredPx = Math.max(rect.height, scrollH, offsetH);
       if (measuredPx > 0) {
-        // 1px = 25.4 / 96 mm (~0.264583 mm). Add buffer for padding & cutter feed
-        thermalHeightMm = Math.ceil((measuredPx * 25.4) / 96) + 10;
-        thermalHeightMm = Math.max(60, thermalHeightMm);
+        // 1px = 25.4 / 96 mm (~0.264583 mm). Add small buffer for padding & cutter feed
+        thermalHeightMm = Math.ceil((measuredPx * 25.4) / 96) + 4;
+        thermalHeightMm = Math.max(50, thermalHeightMm);
       }
     }
 
     const buildThermalCss = (heightMm: number) => `
       @page {
-        size: ${rollWidth} auto !important;
+        size: ${rollWidth} ${heightMm}mm !important;
         margin: 0mm !important;
+      }
+      @media print {
+        @page {
+          size: ${rollWidth} ${heightMm}mm !important;
+          margin: 0mm !important;
+        }
       }
       *, *::before, *::after {
         box-sizing: border-box !important;
@@ -109,53 +115,81 @@ export const printElement = (
         width: ${rollWidth} !important;
         max-width: ${rollWidth} !important;
         height: auto !important;
-        min-height: 100% !important;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow: visible !important;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
-        overflow: visible !important;
+        page-break-before: avoid !important;
+        break-before: avoid !important;
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        orphans: 1 !important;
+        widows: 1 !important;
       }
       #print-root {
         width: ${rollWidth} !important;
         max-width: ${rollWidth} !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
         margin: 0 !important;
         padding: 0 !important;
         color: #000000 !important;
         overflow: visible !important;
+        page-break-before: avoid !important;
+        break-before: avoid !important;
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
       }
       #print-root * {
         color: #000000 !important;
         border-color: #000000 !important;
-        font-weight: 700 !important;
-        -webkit-text-stroke: 0.35px #000000 !important;
         text-rendering: geometricPrecision !important;
       }
       #print-root h1, #print-root h2, #print-root h3, #print-root strong, #print-root b, #print-root .font-bold, #print-root .font-black {
-        font-weight: 900 !important;
-        -webkit-text-stroke: 0.65px #000000 !important;
+        font-weight: 700 !important;
       }
       #print-root .border-dashed, #print-root .border-dotted {
         border-style: solid !important;
-        border-bottom-width: 1.5px !important;
+        border-bottom-width: 1px !important;
         border-color: #000000 !important;
       }
       #print-root > div {
         width: 100% !important;
         max-width: ${rollWidth} !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
         margin: 0 !important;
-        padding: 2mm ${is58mm ? '2mm' : '3mm'} 6mm ${is58mm ? '2mm' : '3mm'} !important;
+        padding: 2mm ${is58mm ? '1.5mm' : '3mm'} 4mm ${is58mm ? '1.5mm' : '3mm'} !important;
         box-shadow: none !important;
         border: none !important;
         border-radius: 0 !important;
         overflow: visible !important;
+        page-break-before: avoid !important;
+        break-before: avoid !important;
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
       }
       .no-print, button, .btn-no-print {
         display: none !important;
       }
       /* Prevent mid-receipt page breaks and cuts in continuous rolls */
-      table, tr, td, th, .sale-item, .receipt-section, .receipt-row, .receipt-totals, .receipt-barcode, .receipt-header, .receipt-footer {
+      table, thead, tbody, tfoot, tr, td, th, .sale-item, .receipt-section, .receipt-row, .receipt-totals, .receipt-barcode, .receipt-header, .receipt-footer {
         page-break-inside: avoid !important;
         break-inside: avoid !important;
+        page-break-before: avoid !important;
+        break-before: avoid !important;
+        page-break-after: avoid !important;
+        break-after: avoid !important;
       }
     `;
 
@@ -401,14 +435,15 @@ export const printElement = (
           if (isThermal) {
             try {
               const rootDiv = iframeDoc.querySelector('#print-root > div') as HTMLElement;
-              if (rootDiv) {
-                const actualH = Math.max(rootDiv.scrollHeight, rootDiv.offsetHeight);
+              const printRoot = iframeDoc.getElementById('print-root');
+              const target = rootDiv || printRoot;
+              if (target) {
+                const rect = target.getBoundingClientRect();
+                const actualH = Math.max(target.scrollHeight, target.offsetHeight, Math.ceil(rect.height));
                 if (actualH > 0) {
-                  const actualMm = Math.ceil((actualH * 25.4) / 96) + 10;
-                  if (actualMm !== thermalHeightMm) {
-                    thermalHeightMm = actualMm;
-                    printStyleEl.textContent = buildThermalCss(actualMm);
-                  }
+                  const actualMm = Math.max(50, Math.ceil((actualH * 25.4) / 96) + 4);
+                  thermalHeightMm = actualMm;
+                  printStyleEl.textContent = buildThermalCss(actualMm);
                 }
               }
             } catch {}

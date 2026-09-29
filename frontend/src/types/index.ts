@@ -21,7 +21,9 @@ export interface BusinessSettings {
   thermal_print_mode?: 'browser' | 'direct_escpos';
   thermal_header_style?: 'logo_text' | 'text_only';
   selected_thermal_printer?: string;
-  thermal_darkness?: 'maximum' | 'high' | 'normal';
+  selected_a4_printer?: string;
+  skip_receipt_preview?: boolean;
+  thermal_darkness?: 'normal' | 'high' | 'maximum';
   receipt_letterhead_path?: string | null;
   show_letterhead?: boolean;
   hide_header_text_with_letterhead?: boolean;

@@ -20,6 +20,9 @@ import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Modal } from '../../components/common/Modal';
 import { ReceiptModal } from '../../components/receipts/ReceiptModal';
+import { ThermalReceipt } from '../../components/receipts/ThermalReceipt';
+import { PdfInvoiceReceipt } from '../../components/receipts/PdfInvoiceReceipt';
+import { printElement } from '../../utils/print';
 import { QuotationModal } from '../../components/receipts/QuotationModal';
 import { UnregisteredBarcodeModal } from '../../components/barcode/UnregisteredBarcodeModal';
 import { QuickAddProductModal } from '../../components/products/QuickAddProductModal';
@@ -72,6 +75,38 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   const [showReceipt, setShowReceipt] = useState(false);
   const [createdQuotation, setCreatedQuotation] = useState<Quotation | null>(null);
   const [showQuotationModal, setShowQuotationModal] = useState(false);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
+
+  const [autoPrintEnabled, setAutoPrintEnabled] = useState<boolean>(Boolean(settings?.skip_receipt_preview));
+
+  useEffect(() => {
+    setAutoPrintEnabled(Boolean(settings?.skip_receipt_preview));
+  }, [settings?.skip_receipt_preview]);
+
+  const handleTogglePosAutoPrint = async () => {
+    const nextVal = !autoPrintEnabled;
+    setAutoPrintEnabled(nextVal);
+    try {
+      await api.updateSettings({
+        skip_receipt_preview: nextVal,
+        ...(nextVal && settings?.thermal_print_mode === 'browser' ? { thermal_print_mode: 'direct_escpos' } : {}),
+      });
+      setSuccessToast(
+        nextVal
+          ? '1-Click Auto-Print activated! Receipts will print automatically on checkout.'
+          : 'Print Preview modal restored for checkout.'
+      );
+    } catch (err: any) {
+      console.error('Failed to toggle auto-print from POS:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (successToast) {
+      const t = setTimeout(() => setSuccessToast(null), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [successToast]);
 
   // Unregistered Barcode & Quick Add Product state
   const [categories, setCategories] = useState<Category[]>([]);
@@ -535,7 +570,45 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
 
       // Sale succeeded!
       setCompletedSale(res);
-      setShowReceipt(true);
+
+      const isAutoPrint = autoPrintEnabled || Boolean(settings?.skip_receipt_preview);
+
+      if (isAutoPrint) {
+        setShowReceipt(false);
+        const isThermal = settings?.receipt_type !== 'pdf';
+        const pWidth = settings?.receipt_printer_type === '58mm' ? '58mm' : '80mm';
+
+        if (isThermal) {
+          // Direct ESC/POS is the only engine capable of true 1-click silent thermal printing without browser dialogs
+          api.printThermalDirect({
+            sale_id: res.id,
+            printer_name: settings?.selected_thermal_printer || undefined,
+            paper_width: pWidth,
+            header_style: settings?.thermal_header_style || 'logo_text',
+            show_barcode: settings?.show_barcode ?? true,
+            darkness: settings?.thermal_darkness || 'normal',
+          }).then((printRes) => {
+            setSuccessToast(`Sale #${res.receipt_number} completed & printed to ${printRes.printer || 'thermal printer'}!`);
+          }).catch((err: any) => {
+            console.error('Direct ESC/POS print failed:', err);
+            // Automatic fallback: open receipt modal so cashier is never blocked or left without receipt
+            setShowReceipt(true);
+            setErrorMsg(`Could not send directly to printer (${err.detail || err.message || 'offline'}). Preview modal opened.`);
+          });
+        } else {
+          // Standard PDF / A4 format
+          const invoiceName = (settings?.invoice_title || 'Invoice').replace(/\s+/g, '_');
+          setTimeout(() => {
+            printElement('autoprint-pdf-invoice', {
+              title: `${invoiceName}_${res.receipt_number}`,
+              isThermal: false,
+            });
+            setSuccessToast(`Sale #${res.receipt_number} completed & sent to document printer!`);
+          }, 100);
+        }
+      } else {
+        setShowReceipt(true);
+      }
 
       // Reset cart and fields
       setCart([]);
@@ -625,6 +698,25 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
 
   return (
     <div className="space-y-6 pb-12">
+      {/* Instant Auto-Print Success Toast Notification */}
+      {successToast && (
+        <div className="flex items-center justify-between p-4 rounded-2xl bg-emerald-600 text-white shadow-xl shadow-emerald-950/20 border border-emerald-500 animate-in fade-in duration-200">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="h-5 w-5 text-emerald-200 shrink-0" />
+            <span className="text-xs sm:text-sm font-bold tracking-tight">{successToast}</span>
+          </div>
+          {completedSale && (
+            <button
+              type="button"
+              onClick={() => setShowReceipt(true)}
+              className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition ml-3 shadow-xs"
+            >
+              Open Receipt Modal
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Top Banner with Quick Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-emerald-700 via-emerald-800 to-slate-900 rounded-3xl p-6 text-white shadow-xl shadow-emerald-950/15">
         <div className="flex items-center gap-3">
@@ -632,7 +724,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
             <Zap className="h-6 w-6 text-emerald-300 animate-pulse" />
           </div>
           <div>
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <h1 className="text-2xl font-black tracking-tight">Point of Sale (POS)</h1>
               {scannerEnabled && (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-400/20 border border-emerald-300/40 text-emerald-200 text-[11px] font-bold tracking-wide">
@@ -640,6 +732,23 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                   Scanner Active
                 </span>
               )}
+              <button
+                type="button"
+                onClick={handleTogglePosAutoPrint}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide transition border ${
+                  autoPrintEnabled
+                    ? 'bg-amber-400/25 border-amber-300/50 text-amber-200 hover:bg-amber-400/35 shadow-xs'
+                    : 'bg-white/10 border-white/20 text-slate-300 hover:bg-white/20'
+                }`}
+                title={
+                  autoPrintEnabled
+                    ? '1-Click Auto-Print is active. Completing sale prints automatically. Click to switch to Preview Modal.'
+                    : 'Receipt Preview Modal is active. Click to enable 1-Click Auto-Print.'
+                }
+              >
+                <Zap className={`h-3.5 w-3.5 ${autoPrintEnabled ? 'text-amber-300 animate-pulse' : 'text-slate-400'}`} />
+                <span>{autoPrintEnabled ? '1-Click Print: Active' : 'Preview Modal: Active'}</span>
+              </button>
             </div>
             <p className="text-emerald-200 text-xs mt-0.5 font-medium">
               {showBarcode ? 'Scan barcode or search product • ' : 'Search product • '}Press{' '}
@@ -649,7 +758,19 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3.5">
+          {completedSale && (
+            <button
+              type="button"
+              onClick={() => setShowReceipt(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/25 text-white text-xs font-bold transition shadow-xs"
+              title="View or reprint receipt for the previous sale"
+            >
+              <Printer className="h-3.5 w-3.5 text-emerald-300" />
+              <span>Reprint Sale (#{completedSale.receipt_number})</span>
+            </button>
+          )}
+
           <div className="text-right">
             <div className="text-xs text-emerald-100 font-semibold">Current Cart Total</div>
             <div className="text-2xl font-black tracking-tight">
@@ -1145,9 +1266,10 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                 onClick={handleCompleteSale}
                 disabled={cart.length === 0 || completing || savingQuotation}
                 loading={completing}
-                className="flex-1 py-3.5 text-base font-bold tracking-wide rounded-2xl shadow-lg shadow-brand-600/20"
+                className="flex-1 py-3.5 text-base font-bold tracking-wide rounded-2xl shadow-lg shadow-brand-600/20 flex items-center justify-center gap-2"
               >
-                Complete Sale ({formatCurrency(grandTotal, currency)})
+                {autoPrintEnabled && <Zap className="h-4 w-4 text-emerald-200 shrink-0" />}
+                <span>Complete Sale ({formatCurrency(grandTotal, currency)})</span>
               </Button>
             </div>
           </div>
@@ -1189,6 +1311,53 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
           </div>
         </div>
       </Modal>
+
+      {/* Off-screen Container for Instant Auto-Printing (0x0, fixed, zero layout impact) */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'fixed',
+          left: '-99999px',
+          top: '-99999px',
+          width: '0px',
+          height: '0px',
+          overflow: 'hidden',
+          visibility: 'hidden',
+        }}
+      >
+        {completedSale && (
+          <>
+            <div id="autoprint-thermal-receipt">
+              <ThermalReceipt
+                sale={completedSale}
+                settings={settings}
+                businessName={settings?.business_name}
+                phone={settings?.phone}
+                address={settings?.address}
+                currency={settings?.currency}
+                headerText={settings?.receipt_header}
+                footerText={settings?.receipt_footer}
+                paperWidth={settings?.receipt_printer_type === '58mm' ? '58mm' : '80mm'}
+                printerType={settings?.receipt_printer_type === '58mm' ? '58mm' : '80mm'}
+                headerStyle={settings?.thermal_header_style || 'logo_text'}
+                showBarcode={settings?.show_barcode ?? true}
+              />
+            </div>
+            <div id="autoprint-pdf-invoice">
+              <PdfInvoiceReceipt
+                sale={completedSale}
+                settings={settings}
+                businessName={settings?.business_name}
+                phone={settings?.phone}
+                address={settings?.address}
+                currency={settings?.currency}
+                headerText={settings?.receipt_header}
+                footerText={settings?.receipt_footer}
+              />
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Receipt Modal */}
       <ReceiptModal
