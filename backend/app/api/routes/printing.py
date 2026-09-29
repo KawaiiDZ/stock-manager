@@ -13,6 +13,7 @@ from backend.app.services.escpos_service import (
     list_system_printers,
     generate_escpos_receipt,
     send_to_thermal_printer,
+    clear_printer_queue,
 )
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ class PrinterItemResponse(BaseModel):
     is_thermal: bool
     device_uri: Optional[str] = ""
     status: Optional[str] = ""
+    is_online: Optional[bool] = True
 
 
 class ThermalPrintRequest(BaseModel):
@@ -44,12 +46,25 @@ class ThermalPrintResponse(BaseModel):
     printer: str
     bytes_sent: int
     message: str
+    is_online: Optional[bool] = True
+    warning: Optional[str] = None
+
+
+class ClearQueueRequest(BaseModel):
+    printer_name: Optional[str] = None
 
 
 @router.get("/printers", response_model=List[PrinterItemResponse])
 def get_printers():
     """Returns all detected printers on the host system with thermal printer auto-detection."""
     return list_system_printers()
+
+
+@router.post("/clear-queue")
+def clear_queue(data: Optional[ClearQueueRequest] = None):
+    """Cancels all stuck print jobs and resets the printer spooler."""
+    pname = data.printer_name if data else None
+    return clear_printer_queue(pname)
 
 
 @router.post("/receipt", response_model=ThermalPrintResponse)

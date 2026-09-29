@@ -50,6 +50,7 @@ export interface PrinterInfo {
   is_thermal: boolean;
   device_uri?: string;
   status?: string;
+  is_online?: boolean;
 }
 
 export interface CustomField {

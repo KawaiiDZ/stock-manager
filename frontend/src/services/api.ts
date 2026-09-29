@@ -401,8 +401,13 @@ export const api = {
     is_sample?: boolean;
     darkness?: string;
   }) =>
-    request<{ success: boolean; printer: string; bytes_sent: number; message: string }>('/printing/receipt', {
+    request<{ success: boolean; printer: string; bytes_sent: number; message: string; is_online?: boolean; warning?: string }>('/printing/receipt', {
       method: 'POST',
       body: JSON.stringify(data),
+    }),
+  clearPrinterQueue: (printerName?: string) =>
+    request<{ success: boolean; message: string }>('/printing/clear-queue', {
+      method: 'POST',
+      body: JSON.stringify({ printer_name: printerName }),
     }),
 };

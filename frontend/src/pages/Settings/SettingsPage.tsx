@@ -124,8 +124,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [systemPrinters, setSystemPrinters] = useState<PrinterInfo[]>([]);
   const [loadingPrinters, setLoadingPrinters] = useState<boolean>(false);
   const [directPrintingTest, setDirectPrintingTest] = useState<boolean>(false);
+  const [clearingQueue, setClearingQueue] = useState<boolean>(false);
   const [testPrintFeedback, setTestPrintFeedback] = useState<{
-    type: 'success' | 'error';
+    type: 'success' | 'warning' | 'error';
     message: string;
   } | null>(null);
 
@@ -722,6 +723,19 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     }
   };
 
+  const handleClearPrinterQueue = async () => {
+    setClearingQueue(true);
+    try {
+      const res = await api.clearPrinterQueue(selectedThermalPrinter || undefined);
+      setSuccessMsg(res.message);
+      await loadPrinters();
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to clear printer queue.');
+    } finally {
+      setClearingQueue(false);
+    }
+  };
+
   const handleTestDirectPrint = async () => {
     setDirectPrintingTest(true);
     setTestPrintFeedback(null);
@@ -734,10 +748,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         show_barcode: showBarcode,
         darkness: thermalDarkness,
       });
-      setTestPrintFeedback({
-        type: 'success',
-        message: `Direct ESC/POS test receipt sent to '${res.printer}' successfully! (${res.bytes_sent} bytes dispatched)`,
-      });
+      if (res.is_online === false || res.warning) {
+        setTestPrintFeedback({
+          type: 'warning',
+          message: `⚠️ Test receipt spooled for '${res.printer}', but printer is currently OFFLINE or Powered Off. Turn on printer power or check USB connection to complete printing.`,
+        });
+      } else {
+        setTestPrintFeedback({
+          type: 'success',
+          message: `Direct ESC/POS test receipt sent to '${res.printer}' successfully! (${res.bytes_sent} bytes dispatched)`,
+        });
+      }
     } catch (err: any) {
       setTestPrintFeedback({
         type: 'error',
@@ -1526,16 +1547,28 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                         Assign independent physical printers for POS receipts vs A4 invoices/reports to prevent device conflicts.
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={loadPrinters}
-                      disabled={loadingPrinters}
-                      className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-emerald-700 flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition"
-                      title="Rescan connected printers"
-                    >
-                      <RefreshCw className={`h-3.5 w-3.5 ${loadingPrinters ? 'animate-spin text-emerald-600' : ''}`} />
-                      <span>Rescan</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleClearPrinterQueue}
+                        disabled={clearingQueue}
+                        className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-rose-700 flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-rose-50 transition"
+                        title="Cancel all pending/stuck print jobs in the printer queue"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+                        <span>{clearingQueue ? 'Clearing...' : 'Clear Queue'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={loadPrinters}
+                        disabled={loadingPrinters}
+                        className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-emerald-700 flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition"
+                        title="Rescan connected printers"
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${loadingPrinters ? 'animate-spin text-emerald-600' : ''}`} />
+                        <span>Rescan</span>
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1558,7 +1591,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                         <option value="">-- Auto-detect Thermal Printer --</option>
                         {systemPrinters.map((p) => (
                           <option key={p.name} value={p.name}>
-                            {p.name} {p.is_thermal ? '★ (Detected Thermal POS)' : ''} {p.is_default ? '(Default)' : ''}
+                            {p.name} {p.is_online === false ? '● [Offline / Powered Off]' : '● [Online]'} {p.is_thermal ? '★ (Detected Thermal POS)' : ''} {p.is_default ? '(Default)' : ''}
                           </option>
                         ))}
                       </select>
@@ -1586,7 +1619,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                         <option value="">-- System Default A4 Printer --</option>
                         {systemPrinters.map((p) => (
                           <option key={p.name} value={p.name}>
-                            {p.name} {!p.is_thermal ? '★ (Standard A4 / Laser)' : ''} {p.is_default ? '(Default)' : ''}
+                            {p.name} {p.is_online === false ? '● [Offline / Powered Off]' : '● [Online]'} {!p.is_thermal ? '★ (Standard A4 / Laser)' : ''} {p.is_default ? '(Default)' : ''}
                           </option>
                         ))}
                       </select>
@@ -2274,6 +2307,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                     className={`p-3 rounded-xl text-xs font-semibold flex items-center justify-between gap-2 ${
                       testPrintFeedback.type === 'success'
                         ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                        : testPrintFeedback.type === 'warning'
+                        ? 'bg-amber-50 border border-amber-200 text-amber-800'
                         : 'bg-rose-50 border border-rose-200 text-rose-700'
                     }`}
                   >

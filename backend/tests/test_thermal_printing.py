@@ -171,3 +171,40 @@ def test_direct_thermal_print_endpoint_sample(mock_send, client):
     assert data['success'] is True
     assert data['printer'] == 'Test_POS80'
     assert mock_send.called
+
+@patch('backend.app.api.routes.printing.clear_printer_queue')
+def test_clear_printer_queue_endpoint(mock_clear, client):
+    mock_clear.return_value = {
+        'success': True,
+        'message': "Print queue for 'Test_POS80' successfully cleared and reset.",
+    }
+
+    res = client.post('/api/printing/clear-queue', json={'printer_name': 'Test_POS80'})
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data['success'] is True
+    assert 'Test_POS80' in data['message']
+    assert mock_clear.called
+
+@patch('backend.app.api.routes.printing.send_to_thermal_printer')
+def test_direct_thermal_print_offline_warning(mock_send, client):
+    mock_send.return_value = {
+        'success': True,
+        'printer': 'Test_Offline_POS',
+        'bytes_sent': 512,
+        'is_online': False,
+        'warning': 'Printer is currently OFFLINE / Powered Off.',
+        'message': 'Queued but offline',
+    }
+
+    payload = {
+        'printer_name': 'Test_Offline_POS',
+        'is_sample': True,
+    }
+    res = client.post('/api/printing/receipt', json=payload)
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data['success'] is True
+    assert data['is_online'] is False
+    assert data['warning'] is not None
+

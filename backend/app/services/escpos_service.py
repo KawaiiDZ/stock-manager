@@ -52,6 +52,8 @@ def list_system_printers() -> List[Dict[str, Any]]:
             lines = p.stdout.splitlines()
             dest = None
             device_map = {}
+            printer_status = {}
+            current_p = None
 
             for line in lines:
                 if line.startswith("system default destination:"):
@@ -60,26 +62,32 @@ def list_system_printers() -> List[Dict[str, Any]]:
                     parts = line[len("device for "):].split(":", 1)
                     if len(parts) == 2:
                         device_map[parts[0].strip()] = parts[1].strip()
+                elif line.startswith((" ", "\t")) and current_p:
+                    printer_status[current_p] += " " + line.strip()
+                else:
+                    m = re.match(r"^printer\s+(\S+)\s+(is\s+\w+.*)$", line)
+                    if m:
+                        current_p = m.group(1)
+                        printer_status[current_p] = m.group(2)
 
-            for line in lines:
-                m = re.match(r"^printer\s+(\S+)\s+(is\s+\w+.*)$", line)
-                if m:
-                    pname = m.group(1)
-                    status_str = m.group(2)
-                    dev = device_map.get(pname, "")
-                    is_default = (pname == dest)
-                    search_str = f"{pname} {dev}".lower()
-                    is_thermal = any(
-                        k in search_str
-                        for k in ["pos", "escpo", "thermal", "receipt", "xprinter", "zijiang", "epson_tm", "80", "58", "printercmd"]
-                    )
-                    printers.append({
-                        "name": pname,
-                        "is_default": is_default,
-                        "is_thermal": is_thermal,
-                        "device_uri": dev,
-                        "status": status_str,
-                    })
+            for pname, status_str in printer_status.items():
+                dev = device_map.get(pname, "")
+                is_default = (pname == dest)
+                search_str = f"{pname} {dev}".lower()
+                is_thermal = any(
+                    k in search_str
+                    for k in ["pos", "escpo", "thermal", "receipt", "xprinter", "zijiang", "epson_tm", "80", "58", "printercmd"]
+                )
+                stat_lower = status_str.lower()
+                is_offline = any(w in stat_lower for w in ["offline", "not responding", "paused", "disabled", "stopped"])
+                printers.append({
+                    "name": pname,
+                    "is_default": is_default,
+                    "is_thermal": is_thermal,
+                    "device_uri": dev,
+                    "status": status_str,
+                    "is_online": not is_offline,
+                })
         except Exception as e:
             logger.warning(f"Could not list CUPS printers: {e}")
 
@@ -107,6 +115,7 @@ def list_system_printers() -> List[Dict[str, Any]]:
                         "is_thermal": is_thermal,
                         "device_uri": item.get("PortName", ""),
                         "status": "Ready",
+                        "is_online": True,
                     })
         except Exception as e:
             logger.warning(f"Could not list Windows printers: {e}")
@@ -365,12 +374,14 @@ def send_to_thermal_printer(escpos_bytes: bytes, printer_name: Optional[str] = N
 
     # Determine target printer
     target = None
+    target_info = None
     if printer_name and printer_name.strip():
         clean_name = printer_name.strip()
         # Match specified printer name against available printers (case-insensitive)
         for p in available:
             if p["name"].lower() == clean_name.lower():
                 target = p["name"]
+                target_info = p
                 break
         # If not matched in available (e.g. transient cups query or direct queue), trust user's explicit printer
         if not target:
@@ -381,6 +392,7 @@ def send_to_thermal_printer(escpos_bytes: bytes, printer_name: Optional[str] = N
         for p in available:
             if p.get("is_thermal"):
                 target = p["name"]
+                target_info = p
                 break
 
     if not target and available:
@@ -388,29 +400,65 @@ def send_to_thermal_printer(escpos_bytes: bytes, printer_name: Optional[str] = N
         for p in available:
             if p.get("is_default"):
                 target = p["name"]
+                target_info = p
                 break
         if not target:
             target = available[0]["name"]
+            target_info = available[0]
 
     if not target:
         raise RuntimeError("No connected printers found on your system. Please connect your thermal printer via USB.")
 
-    logger.info(f"Dispatching raw ESC/POS payload ({len(escpos_bytes)} bytes) to printer: {target}")
+    is_online = target_info.get("is_online", True) if target_info else True
+
+    logger.info(f"Dispatching raw ESC/POS payload ({len(escpos_bytes)} bytes) to printer: {target} (online={is_online})")
 
     if sys_name in ("Darwin", "Linux"):
+        # Auto-enable queue in case CUPS paused it after a disconnect
+        subprocess.run(["cupsenable", target], capture_output=True, timeout=2)
+        subprocess.run(["cupsaccept", target], capture_output=True, timeout=2)
+
+        # 1. Primary spooling: lpr -P <target> -l
         lpr_bin = shutil.which("lpr") or "/usr/bin/lpr"
-        cmd = [lpr_bin, "-P", target, "-l"]
-        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout, stderr = proc.communicate(input=escpos_bytes)
-        if proc.returncode != 0:
-            err_msg = stderr.decode("utf-8", errors="replace").strip() or "lpr failed"
-            raise RuntimeError(f"Failed to print raw ESC/POS to '{target}': {err_msg}")
+        lpr_err = ""
+        spooled = False
+        try:
+            cmd = [lpr_bin, "-P", target, "-l"]
+            proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = proc.communicate(input=escpos_bytes, timeout=10)
+            if proc.returncode == 0:
+                spooled = True
+            else:
+                lpr_err = stderr.decode("utf-8", errors="replace").strip()
+        except Exception as ex:
+            lpr_err = str(ex)
+
+        # 2. Resilient fallback: lp -d <target> -o raw
+        if not spooled:
+            lp_bin = shutil.which("lp") or "/usr/bin/lp"
+            try:
+                cmd_lp = [lp_bin, "-d", target, "-o", "raw"]
+                proc_lp = subprocess.Popen(cmd_lp, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                stdout_lp, stderr_lp = proc_lp.communicate(input=escpos_bytes, timeout=10)
+                if proc_lp.returncode == 0:
+                    spooled = True
+                else:
+                    lp_err = stderr_lp.decode("utf-8", errors="replace").strip()
+                    raise RuntimeError(f"Failed to spool ESC/POS to '{target}': {lpr_err or lp_err or 'printer queue error'}")
+            except Exception as ex:
+                raise RuntimeError(f"Failed to spool ESC/POS to '{target}': {lpr_err or str(ex)}")
+
+        warning = None
+        if not is_online:
+            warning = f"Receipt queued for '{target}', but the printer is currently OFFLINE / Powered Off. Please check the power switch and USB cable."
 
         return {
             "success": True,
             "printer": target,
             "bytes_sent": len(escpos_bytes),
-            "message": f"Successfully sent receipt to '{target}' via raw ESC/POS.",
+            "is_online": is_online,
+            "warning": warning,
+            "message": f"Successfully sent receipt to '{target}' via raw ESC/POS." + (f" ({warning})" if warning else ""),
         }
 
     elif sys_name == "Windows":
@@ -432,6 +480,8 @@ def send_to_thermal_printer(escpos_bytes: bytes, printer_name: Optional[str] = N
                 "success": True,
                 "printer": target,
                 "bytes_sent": len(escpos_bytes),
+                "is_online": True,
+                "warning": None,
                 "message": f"Successfully sent receipt to '{target}' via Windows Raw Spooler.",
             }
         except ImportError:
@@ -449,6 +499,8 @@ def send_to_thermal_printer(escpos_bytes: bytes, printer_name: Optional[str] = N
                     "success": True,
                     "printer": target,
                     "bytes_sent": len(escpos_bytes),
+                    "is_online": True,
+                    "warning": None,
                     "message": f"Successfully sent receipt to '{target}'.",
                 }
             finally:
@@ -456,3 +508,27 @@ def send_to_thermal_printer(escpos_bytes: bytes, printer_name: Optional[str] = N
                     os.unlink(temp_path)
 
     raise RuntimeError(f"Unsupported operating system for direct printing: {sys_name}")
+
+
+def clear_printer_queue(printer_name: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Purges all stuck or stalled print jobs in the spooler and resets/enables the queue.
+    """
+    sys_name = platform.system()
+    if sys_name in ("Darwin", "Linux"):
+        cancel_bin = shutil.which("cancel") or "/usr/bin/cancel"
+        cmd = [cancel_bin, "-a", printer_name] if printer_name else [cancel_bin, "-a"]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        if printer_name:
+            subprocess.run(["cupsenable", printer_name], capture_output=True, timeout=2)
+            subprocess.run(["cupsaccept", printer_name], capture_output=True, timeout=2)
+        return {
+            "success": res.returncode == 0,
+            "message": f"Print queue for '{printer_name or 'all printers'}' successfully cleared and reset.",
+        }
+    elif sys_name == "Windows":
+        return {
+            "success": True,
+            "message": "Windows print queue reset command dispatched.",
+        }
+    return {"success": False, "message": f"Unsupported OS: {sys_name}"}

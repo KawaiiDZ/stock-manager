@@ -78,6 +78,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   const [createdQuotation, setCreatedQuotation] = useState<Quotation | null>(null);
   const [showQuotationModal, setShowQuotationModal] = useState(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [warningToast, setWarningToast] = useState<string | null>(null);
 
   const [autoPrintEnabled, setAutoPrintEnabled] = useState<boolean>(Boolean(settings?.skip_receipt_preview));
 
@@ -109,6 +110,13 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       return () => clearTimeout(t);
     }
   }, [successToast]);
+
+  useEffect(() => {
+    if (warningToast) {
+      const t = setTimeout(() => setWarningToast(null), 8000);
+      return () => clearTimeout(t);
+    }
+  }, [warningToast]);
 
   // Unregistered Barcode & Quick Add Product state
   const [categories, setCategories] = useState<Category[]>([]);
@@ -613,7 +621,13 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
             show_barcode: settings?.show_barcode ?? true,
             darkness: settings?.thermal_darkness || 'normal',
           }).then((printRes) => {
-            setSuccessToast(`Sale #${res.receipt_number} completed & printed to ${printRes.printer || 'thermal printer'}!`);
+            if (printRes.is_online === false || printRes.warning) {
+              setWarningToast(
+                `⚠️ Sale #${res.receipt_number} queued, but printer is OFFLINE / Powered Off. Please check power switch & USB cable.`
+              );
+            } else {
+              setSuccessToast(`Sale #${res.receipt_number} completed & printed to ${printRes.printer || 'thermal printer'}!`);
+            }
           }).catch((err: any) => {
             console.error('Direct ESC/POS print failed:', err);
             // Automatic fallback: open receipt modal so cashier is never blocked or left without receipt
@@ -729,6 +743,25 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
           <div className="flex items-center gap-2.5">
             <CheckCircle2 className="h-5 w-5 text-emerald-200 shrink-0" />
             <span className="text-xs sm:text-sm font-bold tracking-tight">{successToast}</span>
+          </div>
+          {completedSale && (
+            <button
+              type="button"
+              onClick={() => setShowReceipt(true)}
+              className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition ml-3 shadow-xs"
+            >
+              Open Receipt Modal
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Printer Offline / Warning Notification */}
+      {warningToast && (
+        <div className="flex items-center justify-between p-4 rounded-2xl bg-amber-600 text-white shadow-xl shadow-amber-950/20 border border-amber-500 animate-in fade-in duration-200">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="h-5 w-5 text-amber-200 shrink-0" />
+            <span className="text-xs sm:text-sm font-bold tracking-tight">{warningToast}</span>
           </div>
           {completedSale && (
             <button
