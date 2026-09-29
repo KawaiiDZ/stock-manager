@@ -34,6 +34,13 @@ export const QuotationModal: React.FC<QuotationModalProps> = ({
         e.preventDefault();
         e.stopPropagation();
         handlePrint();
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        handlePrint();
+        return;
       }
     };
     window.addEventListener('keydown', handleKeyDown, true);

@@ -5,8 +5,10 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
+from backend.app.core.errors import EntityNotFoundException
 from backend.app.models.business import BusinessSettings
 from backend.app.models.sales import Sale, SaleItem, SalePayment
+from backend.app.services.sales_service import get_sale
 from backend.app.services.escpos_service import (
     list_system_printers,
     generate_escpos_receipt,
@@ -100,34 +102,35 @@ def print_thermal_receipt(data: ThermalPrintRequest, db: Session = Depends(get_d
             ],
         }
     else:
-        sale = db.query(Sale).filter(Sale.id == data.sale_id).first()
-        if not sale:
-            raise HTTPException(status_code=404, detail="Sale not found.")
+        try:
+            sale_dto = get_sale(db, data.sale_id)
+        except EntityNotFoundException:
+            raise HTTPException(status_code=404, detail=f"Sale #{data.sale_id} not found.")
 
         sale_dict = {
-            "receipt_number": sale.receipt_number,
-            "created_at": sale.created_at,
-            "customer_name": sale.customer.name if sale.customer else "Counter Walk-in",
-            "subtotal": float(sale.subtotal or 0),
-            "discount_amount": float(sale.discount_amount or 0),
-            "tax_amount": float(sale.tax_amount or 0),
-            "tax_rate": float(sale.tax_rate or 0),
-            "total_amount": float(sale.total_amount or 0),
-            "total_returned_amount": float(sale.total_returned_amount or 0),
-            "paid_amount": float(sale.paid_amount or 0),
-            "due_amount": float(sale.due_amount or 0),
-            "payment_status": sale.payment_status,
-            "payments": [{"payment_method": p.payment_method} for p in sale.payments],
+            "receipt_number": sale_dto.receipt_number,
+            "created_at": sale_dto.created_at,
+            "customer_name": sale_dto.customer_name or "Counter Walk-in",
+            "subtotal": float(sale_dto.subtotal or 0),
+            "discount_amount": float(sale_dto.discount_amount or 0),
+            "tax_amount": float(sale_dto.tax_amount or 0),
+            "tax_rate": float(sale_dto.tax_rate or 0),
+            "total_amount": float(sale_dto.total_amount or 0),
+            "total_returned_amount": float(sale_dto.total_returned_amount or 0),
+            "paid_amount": float(sale_dto.paid_amount or 0),
+            "due_amount": float(sale_dto.due_amount or 0),
+            "payment_status": sale_dto.payment_status,
+            "payments": [{"payment_method": p.payment_method} for p in sale_dto.payments],
             "items": [
                 {
-                    "product_name": it.product.name if it.product else "Item",
+                    "product_name": it.product_name,
                     "quantity": float(it.quantity or 0),
                     "returned_quantity": float(it.returned_quantity or 0),
                     "unit_price": float(it.unit_price or 0),
                     "discount_amount": float(it.discount_amount or 0),
                     "total_price": float(it.total_price or 0),
                 }
-                for it in sale.items
+                for it in sale_dto.items
             ],
         }
 

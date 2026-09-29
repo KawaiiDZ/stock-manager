@@ -68,6 +68,10 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
   const [rowSearchQuery, setRowSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Keyboard navigation & mouse hover active index for dropdowns
+  const [supplierActiveIndex, setSupplierActiveIndex] = useState<number>(-1);
+  const [productActiveIndex, setProductActiveIndex] = useState<number>(-1);
+
   const currency = settings?.currency || 'Rs.';
   const showSku = settings?.show_sku !== false;
   const showBarcode = settings?.show_barcode !== false;
@@ -229,6 +233,29 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
       })
       .slice(0, 30);
   }, [products, rowSearchQuery, showBarcode, showSku]);
+
+  // Keep dropdown selection in sync
+  useEffect(() => {
+    setSupplierActiveIndex(filteredSuppliers.length > 0 ? 0 : -1);
+  }, [filteredSuppliers]);
+
+  useEffect(() => {
+    setProductActiveIndex(filteredProducts.length > 0 ? 0 : -1);
+  }, [filteredProducts, activeSearchIndex]);
+
+  useEffect(() => {
+    if (supplierActiveIndex >= 0 && showSupplierDropdown) {
+      const el = document.getElementById(`purchase-supplier-item-${supplierActiveIndex}`);
+      el?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [supplierActiveIndex, showSupplierDropdown]);
+
+  useEffect(() => {
+    if (productActiveIndex >= 0 && activeSearchIndex !== null) {
+      const el = document.getElementById(`purchase-product-item-${productActiveIndex}`);
+      el?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [productActiveIndex, activeSearchIndex]);
 
   const handleProceedToReview = (e: React.FormEvent) => {
     e.preventDefault();
@@ -595,6 +622,30 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                   onBlur={() => {
                     setTimeout(() => setShowSupplierDropdown(false), 250);
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      if (!showSupplierDropdown) {
+                        setShowSupplierDropdown(true);
+                      }
+                      setSupplierActiveIndex((prev) =>
+                        filteredSuppliers.length === 0 ? -1 : Math.min(prev + 1, filteredSuppliers.length - 1)
+                      );
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setSupplierActiveIndex((prev) => Math.max(prev - 1, 0));
+                    } else if (e.key === 'Enter') {
+                      if (showSupplierDropdown && supplierActiveIndex >= 0 && filteredSuppliers[supplierActiveIndex]) {
+                        e.preventDefault();
+                        setSupplierInput(filteredSuppliers[supplierActiveIndex].name);
+                        setShowSupplierDropdown(false);
+                      } else if (showSupplierDropdown && supplierInput.trim()) {
+                        setShowSupplierDropdown(false);
+                      }
+                    } else if (e.key === 'Escape') {
+                      setShowSupplierDropdown(false);
+                    }
+                  }}
                   placeholder="Type any supplier name or select from list..."
                   className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-none transition shadow-2xs pr-10"
                   required={!isNoSupplier}
@@ -617,22 +668,31 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
               {showSupplierDropdown && (
                 <div className="absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl max-h-56 overflow-y-auto z-50 py-1.5 divide-y divide-slate-100 dark:divide-slate-800">
                   {filteredSuppliers.length > 0 ? (
-                    filteredSuppliers.map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onMouseDown={() => {
-                          setSupplierInput(s.name);
-                          setShowSupplierDropdown(false);
-                        }}
-                        className="w-full text-left px-4 py-2.5 hover:bg-brand-50/70 dark:hover:bg-slate-800 flex items-center justify-between text-xs transition"
-                      >
-                        <span className="font-bold text-slate-800 dark:text-slate-200">{s.name}</span>
-                        {s.phone && (
-                          <span className="text-slate-400 dark:text-slate-500 font-mono text-[11px]">{s.phone}</span>
-                        )}
-                      </button>
-                    ))
+                    filteredSuppliers.map((s, sIdx) => {
+                      const isActive = supplierActiveIndex === sIdx;
+                      return (
+                        <button
+                          key={s.id}
+                          id={`purchase-supplier-item-${sIdx}`}
+                          type="button"
+                          onMouseDown={() => {
+                            setSupplierInput(s.name);
+                            setShowSupplierDropdown(false);
+                          }}
+                          onMouseEnter={() => setSupplierActiveIndex(sIdx)}
+                          className={`w-full text-left px-4 py-2.5 flex items-center justify-between text-xs transition ${
+                            isActive
+                              ? 'bg-brand-50/95 dark:bg-brand-950/60 ring-2 ring-inset ring-brand-500/40 text-brand-950 dark:text-brand-200 font-bold'
+                              : 'hover:bg-brand-50/70 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          <span className="font-bold text-slate-800 dark:text-slate-200">{s.name}</span>
+                          {s.phone && (
+                            <span className="text-slate-400 dark:text-slate-500 font-mono text-[11px]">{s.phone}</span>
+                          )}
+                        </button>
+                      );
+                    })
                   ) : (
                     <div className="px-4 py-2.5 text-xs text-slate-400 dark:text-slate-500 italic">
                       No matching existing suppliers
@@ -729,6 +789,26 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                               type="text"
                               value={rowSearchQuery}
                               onChange={(e) => setRowSearchQuery(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'ArrowDown') {
+                                  e.preventDefault();
+                                  setProductActiveIndex((prev) =>
+                                    filteredProducts.length === 0 ? -1 : Math.min(prev + 1, filteredProducts.length - 1)
+                                  );
+                                } else if (e.key === 'ArrowUp') {
+                                  e.preventDefault();
+                                  setProductActiveIndex((prev) => Math.max(prev - 1, 0));
+                                } else if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  if (productActiveIndex >= 0 && filteredProducts[productActiveIndex]) {
+                                    handleSelectProduct(idx, filteredProducts[productActiveIndex]);
+                                  }
+                                } else if (e.key === 'Escape') {
+                                  e.preventDefault();
+                                  setActiveSearchIndex(null);
+                                  setRowSearchQuery('');
+                                }
+                              }}
                               placeholder={`Search 500+ products by name${showSku ? ', SKU' : ''}${showBarcode ? ', barcode' : ''}...`}
                               className="w-full bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border-2 border-brand-500 rounded-xl pl-9 pr-8 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none shadow-sm"
                               autoFocus
@@ -749,32 +829,41 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                           {/* Dropdown Results */}
                           <div className="absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl max-h-52 overflow-y-auto z-50 divide-y divide-slate-100 dark:divide-slate-800">
                             {filteredProducts.length > 0 ? (
-                              filteredProducts.map((p) => (
-                                <button
-                                  key={p.id}
-                                  type="button"
-                                  onClick={() => handleSelectProduct(idx, p)}
-                                  className="w-full text-left px-3.5 py-2 hover:bg-brand-50/70 dark:hover:bg-slate-800/80 flex items-center justify-between text-xs transition gap-2"
-                                >
-                                  <div className="truncate">
-                                    <div className="font-bold text-slate-900 dark:text-white truncate">{p.name}</div>
-                                    <div className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-2">
-                                      {p.category_name && <span>{p.category_name}</span>}
-                                      {showBarcode && p.barcode && <span>• Barcode: {p.barcode}</span>}
-                                      {showSku && p.sku && <span>• SKU: {p.sku}</span>}
+                              filteredProducts.map((p, pIdx) => {
+                                const isActive = productActiveIndex === pIdx;
+                                return (
+                                  <button
+                                    key={p.id}
+                                    id={`purchase-product-item-${pIdx}`}
+                                    type="button"
+                                    onClick={() => handleSelectProduct(idx, p)}
+                                    onMouseEnter={() => setProductActiveIndex(pIdx)}
+                                    className={`w-full text-left px-3.5 py-2 flex items-center justify-between text-xs transition gap-2 ${
+                                      isActive
+                                        ? 'bg-brand-50/95 dark:bg-brand-950/60 ring-2 ring-inset ring-brand-500/40 text-brand-950 dark:text-brand-200 font-bold'
+                                        : 'hover:bg-brand-50/70 dark:hover:bg-slate-800/80'
+                                    }`}
+                                  >
+                                    <div className="truncate">
+                                      <div className={`font-bold truncate ${isActive ? 'text-brand-950 dark:text-brand-200' : 'text-slate-900 dark:text-white'}`}>{p.name}</div>
+                                      <div className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-2">
+                                        {p.category_name && <span>{p.category_name}</span>}
+                                        {showBarcode && p.barcode && <span>• Barcode: {p.barcode}</span>}
+                                        {showSku && p.sku && <span>• SKU: {p.sku}</span>}
+                                      </div>
                                     </div>
-                                  </div>
 
-                                  <div className="text-right shrink-0">
-                                    <div className="text-[11px] font-extrabold text-brand-600 dark:text-brand-400">
-                                      Stock: {p.current_stock}
+                                    <div className="text-right shrink-0">
+                                      <div className="text-[11px] font-extrabold text-brand-600 dark:text-brand-400">
+                                        Stock: {p.current_stock}
+                                      </div>
+                                      <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                                        Cost: {formatCurrency(p.purchase_price, currency)} | Sell: {formatCurrency(p.selling_price, currency)}
+                                      </div>
                                     </div>
-                                    <div className="text-[10px] text-slate-500 dark:text-slate-400">
-                                      Cost: {formatCurrency(p.purchase_price, currency)} | Sell: {formatCurrency(p.selling_price, currency)}
-                                    </div>
-                                  </div>
-                                </button>
-                              ))
+                                  </button>
+                                );
+                              })
                             ) : (
                               <div className="p-3 text-center text-xs text-slate-400 dark:text-slate-500">
                                 No products found matching "{rowSearchQuery}"

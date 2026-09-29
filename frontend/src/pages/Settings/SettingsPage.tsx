@@ -1485,31 +1485,33 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   </div>
                 </div>
 
-                {/* POS Checkout Automation Card */}
+                {/* POS Checkout Receipt Preview Modal & 1-Click Print Checkbox */}
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start justify-between gap-4">
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     <div className="flex items-center gap-2">
                       <Zap className="h-4 w-4 text-emerald-600" />
                       <span className="text-sm font-bold text-slate-800">
-                        Skip Receipt Preview (1-Click Auto-Print on Sale)
+                        Receipt Preview Pop-up Modal
                       </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${skipReceiptPreview ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}`}>
-                        {skipReceiptPreview ? 'Auto-Print Active' : 'Preview Modal'}
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${!skipReceiptPreview ? 'bg-indigo-100 text-indigo-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                        {!skipReceiptPreview ? 'Preview Modal Active' : '1-Click Silent Print'}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 leading-relaxed max-w-xl">
-                      When confirming a sale in POS, automatically send the receipt directly to your selected printer without showing the preview popup. Maximizes counter speed for high-volume checkout.
+                    <label className="flex items-center gap-2.5 cursor-pointer pt-1">
+                      <input
+                        type="checkbox"
+                        checked={!skipReceiptPreview}
+                        onChange={(e) => handleToggleSkipReceiptPreview(!e.target.checked)}
+                        className="h-4 w-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
+                      />
+                      <span className="text-xs font-bold text-slate-700">
+                        Show receipt preview pop-up modal before printing
+                      </span>
+                    </label>
+                    <p className="text-xs text-slate-500 leading-relaxed max-w-xl pl-6.5">
+                      Keep this checked to review receipts in the interactive pop-up before printing. Uncheck it to enable fast <strong>1-Click Silent Print</strong> directly to your assigned printer on sale confirmation.
                     </p>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
-                    <input
-                      type="checkbox"
-                      checked={skipReceiptPreview}
-                      onChange={(e) => handleToggleSkipReceiptPreview(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-                  </label>
                 </div>
 
                 {/* Dual Hardware Printer Devices (Avoid Hardware Conflicts) */}

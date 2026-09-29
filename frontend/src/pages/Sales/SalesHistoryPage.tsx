@@ -24,6 +24,7 @@ import { DateFilter, DatePreset } from '../../components/common/DateFilter';
 import { EmptyState } from '../../components/common/EmptyState';
 import { ReceiptModal } from '../../components/receipts/ReceiptModal';
 import { formatCurrency, formatMoney, formatDateTime } from '../../utils/format';
+import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 
 interface SalesHistoryPageProps {
   settings: BusinessSettings | null;
@@ -77,6 +78,25 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
   useEffect(() => {
     loadSales();
   }, [search, statusFilter, startDate, endDate]);
+
+  // Barcode scanner integration for instant receipt lookup
+  useBarcodeScanner({
+    enabled: !loading && !showReceiptModal && !paymentSale,
+    onScan: async (scannedCode) => {
+      const code = scannedCode.trim();
+      setSearch(code);
+      try {
+        const data = await api.getSales({ search: code });
+        if (data && data.length > 0) {
+          const exact = data.find(s => s.receipt_number.toLowerCase() === code.toLowerCase()) || data[0];
+          setSelectedSale(exact);
+          setShowReceiptModal(true);
+        }
+      } catch (err) {
+        console.error('Barcode lookup failed:', err);
+      }
+    },
+  });
 
   // Aggregate KPI summary metrics for the currently filtered set
   const metrics = useMemo(() => {
@@ -267,10 +287,18 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
         <div className="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-3 min-w-0">
           <div className="flex-1 min-w-[200px] max-w-md relative">
             <Input
-              placeholder="Search by Receipt #, Customer, or Product..."
+              placeholder="Search or scan Receipt # (press Enter to view)..."
               prefix={<Search className="h-4 w-4" />}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && search.trim() && sales.length > 0) {
+                  e.preventDefault();
+                  const exact = sales.find(s => s.receipt_number.toLowerCase() === search.trim().toLowerCase()) || sales[0];
+                  setSelectedSale(exact);
+                  setShowReceiptModal(true);
+                }
+              }}
             />
             {search && (
               <button

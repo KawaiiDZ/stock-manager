@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../../services/api';
 import { Product, Customer, BusinessSettings, Sale, Quotation, QuotationCreate, Category } from '../../types';
 import {
@@ -58,6 +58,8 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   const [inlineCustomerName, setInlineCustomerName] = useState('');
   const [inlineCustomerPhone, setInlineCustomerPhone] = useState('');
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [customerActiveIndex, setCustomerActiveIndex] = useState(0);
 
   // Financial inputs
   const [saleDiscount, setSaleDiscount] = useState<number>(0);
@@ -133,6 +135,29 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       el?.scrollIntoView({ block: 'nearest' });
     }
   }, [dropdownActiveIndex]);
+
+  // Filtered customers for Customer Selection Modal
+  const filteredModalCustomers = useMemo(() => {
+    if (!customerSearchQuery.trim()) return customers;
+    const q = customerSearchQuery.toLowerCase().trim();
+    return customers.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.phone && c.phone.includes(q)) ||
+        c.customer_id.toLowerCase().includes(q)
+    );
+  }, [customers, customerSearchQuery]);
+
+  useEffect(() => {
+    setCustomerActiveIndex(filteredModalCustomers.length > 0 ? 0 : -1);
+  }, [filteredModalCustomers]);
+
+  useEffect(() => {
+    if (customerActiveIndex >= 0 && showAddCustomerModal) {
+      const el = document.getElementById(`modal-customer-item-${customerActiveIndex}`);
+      el?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [customerActiveIndex, showAddCustomerModal]);
 
   const handleCartNavigateUp = (fromIndex: number) => {
     if (fromIndex > 0) {
@@ -1279,35 +1304,84 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       {/* Existing Customer Selector Modal */}
       <Modal
         isOpen={showAddCustomerModal}
-        onClose={() => setShowAddCustomerModal(false)}
+        onClose={() => {
+          setShowAddCustomerModal(false);
+          setCustomerSearchQuery('');
+        }}
         title="Select Customer"
         maxWidth="md"
       >
         <div className="space-y-3">
-          <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 border border-slate-100 rounded-2xl">
-            {customers.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => {
+          <Input
+            placeholder="Search customer by name, phone, or ID (Use ↑↓ arrows + Enter)..."
+            value={customerSearchQuery}
+            onChange={(e) => setCustomerSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setCustomerActiveIndex((prev) =>
+                  filteredModalCustomers.length === 0 ? -1 : Math.min(prev + 1, filteredModalCustomers.length - 1)
+                );
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setCustomerActiveIndex((prev) => Math.max(prev - 1, 0));
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (customerActiveIndex >= 0 && filteredModalCustomers[customerActiveIndex]) {
+                  const c = filteredModalCustomers[customerActiveIndex];
                   setSelectedCustomerId(c.id);
                   setInlineCustomerName(c.name);
                   setInlineCustomerPhone(c.phone || '');
                   setShowAddCustomerModal(false);
-                }}
-                className="w-full p-3 text-left hover:bg-slate-50 flex items-center justify-between"
-              >
-                <div>
-                  <div className="font-bold text-slate-800 text-sm">{c.name}</div>
-                  <div className="text-xs text-slate-400">{c.phone || 'No phone'}</div>
-                </div>
-                {Number(c.current_due || 0) > 0 && (
-                  <span className="text-xs font-bold text-rose-700 bg-rose-50 px-2 py-1 rounded-md">
-                    Due: {formatCurrency(c.current_due, currency)}
-                  </span>
-                )}
-              </button>
-            ))}
+                  setCustomerSearchQuery('');
+                }
+              }
+            }}
+            autoFocus
+          />
+
+          <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 border border-slate-100 rounded-2xl">
+            {filteredModalCustomers.length === 0 ? (
+              <div className="p-4 text-center text-xs text-slate-400">
+                No customers found matching "{customerSearchQuery}"
+              </div>
+            ) : (
+              filteredModalCustomers.map((c, idx) => {
+                const isActive = customerActiveIndex === idx;
+                return (
+                  <button
+                    key={c.id}
+                    id={`modal-customer-item-${idx}`}
+                    type="button"
+                    onClick={() => {
+                      setSelectedCustomerId(c.id);
+                      setInlineCustomerName(c.name);
+                      setInlineCustomerPhone(c.phone || '');
+                      setShowAddCustomerModal(false);
+                      setCustomerSearchQuery('');
+                    }}
+                    onMouseEnter={() => setCustomerActiveIndex(idx)}
+                    className={`w-full p-3 text-left flex items-center justify-between transition ${
+                      isActive
+                        ? 'bg-brand-50/95 dark:bg-brand-950/60 ring-2 ring-inset ring-brand-500/40 border-l-4 border-brand-600'
+                        : 'hover:bg-slate-50 border-l-4 border-transparent'
+                    }`}
+                  >
+                    <div>
+                      <div className={`font-bold text-sm ${isActive ? 'text-brand-900 font-extrabold' : 'text-slate-800'}`}>
+                        {c.name}
+                      </div>
+                      <div className="text-xs text-slate-400">{c.phone || 'No phone'}</div>
+                    </div>
+                    {Number(c.current_due || 0) > 0 && (
+                      <span className="text-xs font-bold text-rose-700 bg-rose-50 px-2 py-1 rounded-md">
+                        Due: {formatCurrency(c.current_due, currency)}
+                      </span>
+                    )}
+                  </button>
+                );
+              })
+            )}
           </div>
         </div>
       </Modal>

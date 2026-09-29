@@ -7,6 +7,7 @@ import { Input } from '../../components/common/Input';
 import { Modal } from '../../components/common/Modal';
 import { EmptyState } from '../../components/common/EmptyState';
 import { formatCurrency, formatMoney } from '../../utils/format';
+import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 
 interface SalesReturnsPageProps {
   settings: BusinessSettings | null;
@@ -136,6 +137,51 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
 
     return () => clearTimeout(timer);
   }, [receiptSearch]);
+
+  const [searchActiveIndex, setSearchActiveIndex] = useState<number>(-1);
+
+  // Sync active index with search results
+  useEffect(() => {
+    setSearchActiveIndex(searchResults.length > 0 ? 0 : -1);
+  }, [searchResults]);
+
+  // Keep highlighted item in view
+  useEffect(() => {
+    if (searchActiveIndex >= 0 && showSearchResults) {
+      const el = document.getElementById(`return-search-result-${searchActiveIndex}`);
+      el?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [searchActiveIndex, showSearchResults]);
+
+  // Hardware Barcode Scanner for instant receipt lookup
+  const handleScanReceipt = async (code: string) => {
+    const cleanCode = code.trim();
+    if (!cleanCode) return;
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const sales = await api.getSales({ search: cleanCode });
+      if (sales && sales.length > 0) {
+        const exact = sales.find(s => s.receipt_number.toLowerCase() === cleanCode.toLowerCase()) || sales[0];
+        selectSaleForReturn(exact);
+        setShowSearchResults(false);
+      } else {
+        setErrorMsg(`No sales found matching scanned barcode: '${cleanCode}'.`);
+      }
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Sale not found.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useBarcodeScanner({
+    enabled: activeTab === 'receipt' && !submitting,
+    onScan: (scannedCode) => {
+      setReceiptSearch(scannedCode.trim());
+      handleScanReceipt(scannedCode);
+    },
+  });
 
   const handleSearchReceiptSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -329,10 +375,32 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
             <form onSubmit={handleSearchReceiptSubmit} className="flex gap-3 max-w-2xl relative">
               <div className="relative flex-1">
                 <Input
-                  placeholder="Type Receipt # (R-000001), Customer Name, or Phone..."
+                  placeholder="Scan receipt barcode (RCP-...) or type customer name / phone..."
                   value={receiptSearch}
                   onChange={(e) => setReceiptSearch(e.target.value)}
                   onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      if (!showSearchResults && searchResults.length > 0) {
+                        setShowSearchResults(true);
+                      }
+                      setSearchActiveIndex((prev) =>
+                        searchResults.length === 0 ? -1 : Math.min(prev + 1, searchResults.length - 1)
+                      );
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setSearchActiveIndex((prev) => Math.max(prev - 1, 0));
+                    } else if (e.key === 'Enter') {
+                      if (showSearchResults && searchActiveIndex >= 0 && searchResults[searchActiveIndex]) {
+                        e.preventDefault();
+                        selectSaleForReturn(searchResults[searchActiveIndex]);
+                        setShowSearchResults(false);
+                      }
+                    } else if (e.key === 'Escape') {
+                      setShowSearchResults(false);
+                    }
+                  }}
                   autoFocus
                 />
               </div>
@@ -347,42 +415,55 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
 
               {/* Live Search Results Dropdown */}
               {showSearchResults && searchResults.length > 0 && (
-                <div className="absolute top-full left-0 right-32 mt-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden z-40 max-h-72 overflow-y-auto">
-                  <div className="p-2 bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    Matching Sales ({searchResults.length})
+                <div className="absolute top-full left-0 right-32 mt-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden z-40 max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                  <div className="p-2.5 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-100 dark:border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                    <span>Matching Sales ({searchResults.length})</span>
+                    <span className="text-[10px] font-medium text-slate-400">Use ↑↓ arrows + Enter to select</span>
                   </div>
-                  {searchResults.map((s) => (
-                    <div
-                      key={s.id}
-                      onClick={() => selectSaleForReturn(s)}
-                      className="p-3 hover:bg-brand-50/70 dark:hover:bg-slate-800/60 border-b border-slate-100 dark:border-slate-800 last:border-0 cursor-pointer flex items-center justify-between transition"
-                    >
-                      <div>
-                        <div className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-2">
-                          <span>{s.receipt_number}</span>
-                          <span className="text-[11px] font-normal text-slate-500 dark:text-slate-400">
-                            • {s.customer_name || 'Walk-in'}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">
-                          {new Date(s.created_at).toLocaleString()} • {s.items.length} item{s.items.length === 1 ? '' : 's'}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-bold text-xs text-slate-800 dark:text-slate-200">
-                          {formatCurrency(s.total_amount, currency)}
-                        </div>
-                        <div className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                          Paid: {formatCurrency(s.paid_amount, currency)}
-                          {Number(s.due_amount) > 0 && (
-                            <span className="text-rose-600 dark:text-rose-400 ml-1">
-                              (Due: {formatCurrency(s.due_amount, currency)})
+                  {searchResults.map((s, idx) => {
+                    const isActive = searchActiveIndex === idx;
+                    return (
+                      <div
+                        key={s.id}
+                        id={`return-search-result-${idx}`}
+                        onClick={() => {
+                          selectSaleForReturn(s);
+                          setShowSearchResults(false);
+                        }}
+                        onMouseEnter={() => setSearchActiveIndex(idx)}
+                        className={`p-3 cursor-pointer flex items-center justify-between transition ${
+                          isActive
+                            ? 'bg-brand-50/95 dark:bg-brand-950/60 ring-2 ring-inset ring-brand-500/40 border-l-4 border-brand-600'
+                            : 'hover:bg-brand-50/70 dark:hover:bg-slate-800/60 border-l-4 border-transparent'
+                        }`}
+                      >
+                        <div>
+                          <div className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-2">
+                            <span className={isActive ? 'text-brand-900 dark:text-brand-200 font-extrabold' : ''}>{s.receipt_number}</span>
+                            <span className="text-[11px] font-normal text-slate-500 dark:text-slate-400">
+                              • {s.customer_name || 'Walk-in'}
                             </span>
-                          )}
+                          </div>
+                          <div className="text-[11px] text-slate-400 mt-0.5">
+                            {new Date(s.created_at).toLocaleString()} • {s.items.length} item{s.items.length === 1 ? '' : 's'}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-bold text-xs text-slate-800 dark:text-slate-200">
+                            {formatCurrency(s.total_amount, currency)}
+                          </div>
+                          <div className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                            Paid: {formatCurrency(s.paid_amount, currency)}
+                            {Number(s.due_amount) > 0 && (
+                              <span className="text-rose-600 dark:text-rose-400 ml-1">
+                                (Due: {formatCurrency(s.due_amount, currency)})
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </form>

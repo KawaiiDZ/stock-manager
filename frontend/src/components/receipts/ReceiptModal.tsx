@@ -90,15 +90,33 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   useEffect(() => {
     if (!isOpen || !sale) return;
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd/Ctrl+P or Enter prints the current receipt format
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') {
         e.preventDefault();
         e.stopPropagation();
         handlePrint();
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        handlePrint();
+        return;
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setReceiptType('thermal');
+        return;
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setReceiptType('pdf');
+        return;
       }
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [isOpen, receiptType, paperWidth, sale, settings]);
+  }, [isOpen, receiptType, paperWidth, sale, settings, directPrinting]);
 
   if (!sale) return null;
 
@@ -225,36 +243,46 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
       )}
 
       {/* 3. Action Footer (Fixed Bottom) */}
-      <div className="px-6 py-3 bg-white shrink-0 border-t border-slate-200 flex flex-col sm:flex-row gap-3">
-        <Button
-          variant="primary"
-          size="lg"
-          className="flex-1 font-bold text-sm sm:text-base whitespace-nowrap bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5"
-          icon={<Printer className="h-5 w-5" />}
-          loading={directPrinting}
-          onClick={handlePrint}
-        >
-          {receiptType === 'thermal' ? `Print Thermal Receipt (${paperWidth})` : 'Print / Save as PDF'}
-        </Button>
-
-        {onNewSale ? (
+      <div className="px-6 py-3 bg-white shrink-0 border-t border-slate-200 flex flex-col gap-2.5">
+        <div className="flex flex-col sm:flex-row gap-3">
           <Button
-            variant="outline"
+            variant="primary"
             size="lg"
-            className="font-semibold"
-            icon={<Plus className="h-5 w-5" />}
-            onClick={() => {
-              onClose();
-              onNewSale();
-            }}
+            className="flex-1 font-bold text-sm sm:text-base whitespace-nowrap bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5"
+            icon={<Printer className="h-5 w-5" />}
+            loading={directPrinting}
+            onClick={handlePrint}
           >
-            Next Sale
+            {receiptType === 'thermal' ? `Print Thermal Receipt (${paperWidth})` : 'Print / Save as PDF'}
           </Button>
-        ) : (
-          <Button variant="secondary" size="lg" className="font-semibold" onClick={onClose}>
-            Close
-          </Button>
-        )}
+
+          {onNewSale ? (
+            <Button
+              variant="outline"
+              size="lg"
+              className="font-semibold"
+              icon={<Plus className="h-5 w-5" />}
+              onClick={() => {
+                onClose();
+                onNewSale();
+              }}
+            >
+              Next Sale
+            </Button>
+          ) : (
+            <Button variant="secondary" size="lg" className="font-semibold" onClick={onClose}>
+              Close
+            </Button>
+          )}
+        </div>
+
+        <div className="flex items-center justify-center gap-3 text-xs text-slate-400 font-medium">
+          <span>Press <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded text-[11px] font-mono font-bold text-slate-700 shadow-2xs">Enter</kbd> to Print</span>
+          <span>&bull;</span>
+          <span><kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded text-[11px] font-mono font-bold text-slate-700 shadow-2xs">←</kbd> <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded text-[11px] font-mono font-bold text-slate-700 shadow-2xs">→</kbd> Toggle Format</span>
+          <span>&bull;</span>
+          <span><kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded text-[11px] font-mono font-bold text-slate-700 shadow-2xs">Esc</kbd> Close</span>
+        </div>
       </div>
     </Modal>
   );
