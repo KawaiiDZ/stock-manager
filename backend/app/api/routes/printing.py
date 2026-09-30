@@ -35,6 +35,7 @@ class ThermalPrintRequest(BaseModel):
     printer_name: Optional[str] = None
     paper_width: Optional[str] = None  # "58mm" | "80mm"
     header_style: Optional[str] = None  # "logo_text" | "text_only"
+    layout: Optional[str] = None  # "classic" | "modern"
     show_barcode: Optional[bool] = None
     kick_drawer: Optional[bool] = False
     is_sample: Optional[bool] = False
@@ -155,6 +156,7 @@ def print_thermal_receipt(data: ThermalPrintRequest, db: Session = Depends(get_d
             settings=settings,
             paper_width=paper_width,
             header_style=header_style,
+            receipt_layout=data.layout or getattr(settings, "thermal_layout", "classic") or "classic",
             show_barcode=show_barcode,
             kick_drawer=bool(data.kick_drawer),
             darkness=data.darkness or (settings.thermal_darkness if settings else "normal"),

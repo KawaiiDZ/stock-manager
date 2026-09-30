@@ -1,10 +1,13 @@
+import base64
+import io
 import logging
+import os
 import platform
 import re
 import shutil
 import subprocess
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -243,22 +246,132 @@ def resolve_target_printer(
     return requested_name, None
 
 
+def image_to_escpos_raster(
+    img_source: Optional[Union[str, bytes, Any]] = None,
+    paper_width: str = "80mm",
+) -> Optional[bytes]:
+    """
+    Converts a business/app logo into a high-fidelity 1-bit monochrome ESC/POS raster bit image (GS v 0).
+    Automatically:
+    - Decodes base64 data URIs or loads image files from disk (fallback to StokFlow bundled logo).
+    - Pastes transparent RGBA layers cleanly over a pure white background.
+    - Scales smoothly to thermal roll dot limits (320 dots max for 80mm, 224 dots max for 58mm).
+    - Binarizes to sharp 1-bit black & white (0=white, 1=black in ESC/POS).
+    - Mathematically zero-pads each row so the logo is 100% horizontally centered across any thermal printer model.
+    """
+    try:
+        from PIL import Image
+    except ImportError:
+        logger.warning("Pillow not installed; skipping raster logo generation.")
+        return None
+
+    img = None
+    try:
+        if isinstance(img_source, Image.Image):
+            img = img_source
+        elif isinstance(img_source, str) and img_source.startswith("data:image/"):
+            raw_data = base64.b64decode(img_source.split(",", 1)[1])
+            img = Image.open(io.BytesIO(raw_data))
+        elif isinstance(img_source, str) and os.path.exists(img_source):
+            img = Image.open(img_source)
+        elif isinstance(img_source, bytes) and len(img_source) > 0:
+            img = Image.open(io.BytesIO(img_source))
+
+        if img is None:
+            # Fallback to default StokFlow receipt logo
+            candidate_paths = [
+                os.path.abspath("frontend/public/stokflow-receipt.png"),
+                os.path.join(os.path.dirname(__file__), "../../../frontend/public/stokflow-receipt.png"),
+                os.path.abspath("frontend/public/stokflow-logo.png"),
+            ]
+            for cp in candidate_paths:
+                if os.path.exists(cp):
+                    try:
+                        img = Image.open(cp)
+                        break
+                    except Exception:
+                        pass
+
+        if img is None:
+            return None
+
+        # Determine paper dot limits & line byte width
+        total_bytes_per_row = 32 if paper_width == "58mm" else 48
+        max_dots_w = (total_bytes_per_row - 8) * 8  # e.g. 320 dots for 80mm, 192 dots for 58mm
+
+        orig_w, orig_h = img.size
+        if orig_w <= 0 or orig_h <= 0:
+            return None
+
+        scale = min(1.0, max_dots_w / orig_w)
+        new_w = max(8, (int(orig_w * scale) // 8) * 8)
+        new_h = max(1, int(orig_h * (new_w / orig_w)))
+
+        # Resize smoothly
+        resample_filter = getattr(Image, "Resampling", Image).LANCZOS
+        img_resized = img.resize((new_w, new_h), resample=resample_filter)
+
+        # Flatten transparency to white
+        bg = Image.new("RGB", img_resized.size, (255, 255, 255))
+        if img_resized.mode in ("RGBA", "LA") or (img_resized.mode == "P" and "transparency" in img_resized.info):
+            img_rgba = img_resized.convert("RGBA")
+            bg.paste(img_rgba, mask=img_rgba.split()[3])
+        else:
+            bg.paste(img_resized.convert("RGB"))
+
+        # Convert to 1-bit B&W with smart threshold (185 separates black ink from subtle grey background)
+        bw = bg.convert("L").point(lambda x: 0 if x < 185 else 255, "1")
+
+        img_bytes_per_row = new_w // 8
+        left_pad = max(0, (total_bytes_per_row - img_bytes_per_row) // 2)
+        right_pad = max(0, total_bytes_per_row - img_bytes_per_row - left_pad)
+
+        raw_img_bytes = bw.tobytes()
+        raster_data = bytearray()
+
+        for row in range(new_h):
+            start = row * img_bytes_per_row
+            row_slice = raw_img_bytes[start : start + img_bytes_per_row]
+            # Left padding (white = 0x00)
+            raster_data.extend(b"\x00" * left_pad)
+            # Invert row bytes (PIL: 0=black, 1=white; ESC/POS: 1=black dot, 0=white dot)
+            for b in row_slice:
+                raster_data.append(~b & 0xFF)
+            # Right padding (white = 0x00)
+            raster_data.extend(b"\x00" * right_pad)
+
+        xL = total_bytes_per_row & 0xFF
+        xH = (total_bytes_per_row >> 8) & 0xFF
+        yL = new_h & 0xFF
+        yH = (new_h >> 8) & 0xFF
+
+        # GS v 0 0 xL xH yL yH <raster_data>
+        header = bytes([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH])
+        return header + bytes(raster_data)
+
+    except Exception as ex:
+        logger.warning(f"Failed to generate ESC/POS raster image logo: {ex}")
+        return None
+
+
 def generate_escpos_receipt(
     sale_data: Dict[str, Any],
     settings: Optional[Any] = None,
     paper_width: str = "80mm",
     header_style: str = "logo_text",
+    receipt_layout: Optional[str] = None,
     show_barcode: bool = True,
     kick_drawer: bool = False,
     darkness: Optional[str] = None,
 ) -> bytes:
     """
     Builds a complete, formatted ESC/POS binary receipt payload.
-    Supports 80mm (48 column) and 58mm (32 column) layouts.
+    Supports 80mm (48 column) and 58mm (32 column) layouts, with Classic and Modern styling.
     Configured for maximum thermal head heating and deep, pitch-black print density.
     """
     col_width = 32 if paper_width == "58mm" else 48
     density_mode = darkness or getattr(settings, "thermal_darkness", "normal") or "normal"
+    layout_mode = (receipt_layout or getattr(settings, "thermal_layout", "classic") or "classic").lower()
 
     # Use solid double-divider only in maximum darkness mode; otherwise crisp standard divider
     div_line = ("=" * col_width + "\n") if density_mode == "maximum" else ("-" * col_width + "\n")
@@ -288,15 +401,19 @@ def generate_escpos_receipt(
     # 2. Header
     buf.extend(CMD_ALIGN_CENTER)
 
-    if header_style == "logo_text":
-        buf.extend(CMD_BOLD_ON)
-        buf.extend(b"[ STOKFLOW POS ]\n")
-        buf.extend(CMD_BOLD_OFF)
+    # Raster Graphic Logo (printed by default whenever header_style is NOT text_only)
+    if header_style != "text_only":
+        logo_source = getattr(settings, "receipt_logo_path", None) or getattr(settings, "logo_path", None)
+        raster_logo = image_to_escpos_raster(logo_source, paper_width=paper_width)
+        if raster_logo:
+            buf.extend(raster_logo)
+            buf.extend(b"\n")
 
     # Store Name in Large Bold
     buf.extend(CMD_BOLD_ON)
     buf.extend(CMD_DOUBLE_SIZE)
-    buf.extend(safe_escpos_text(f"{shop_name}\n"))
+    display_shop_name = shop_name.upper() if layout_mode == "modern" else shop_name
+    buf.extend(safe_escpos_text(f"{display_shop_name}\n"))
     buf.extend(CMD_NORMAL_SIZE)
     buf.extend(CMD_BOLD_OFF)
 
@@ -342,7 +459,9 @@ def generate_escpos_receipt(
 
     # 4. Items Table Header
     buf.extend(CMD_BOLD_ON)
-    buf.extend(safe_escpos_text(format_row("Description", "Amount", col_width)))
+    col_desc = "DESCRIPTION" if layout_mode == "modern" else "Description"
+    col_amt = "AMOUNT" if layout_mode == "modern" else "Amount"
+    buf.extend(safe_escpos_text(format_row(col_desc, col_amt, col_width)))
     buf.extend(CMD_BOLD_OFF)
     buf.extend(safe_escpos_text(div_line))
 
@@ -381,10 +500,12 @@ def generate_escpos_receipt(
 
         # Line 3: Discount if any
         if disc_amt > 0 and not is_fully_returned:
-            buf.extend(safe_escpos_text(f"  -> Disc: -{currency} {disc_amt:,.2f}\n"))
+            disc_tag = "  ↳ Item Disc:" if layout_mode == "modern" else "  -> Disc:"
+            buf.extend(safe_escpos_text(f"{disc_tag} -{currency} {disc_amt:,.2f}\n"))
 
     buf.extend(safe_escpos_text(div_line))
-    buf.extend(safe_escpos_text(format_row("Lines / Units:", f"{len(items)} lines / {int(total_qty) if total_qty.is_integer() else total_qty:.1f} pcs", col_width)))
+    units_label = "Items / Units:" if layout_mode == "modern" else "Lines / Units:"
+    buf.extend(safe_escpos_text(format_row(units_label, f"{len(items)} lines / {int(total_qty) if total_qty.is_integer() else total_qty:.1f} pcs", col_width)))
     buf.extend(safe_escpos_text(div_line))
 
     # 5. Totals
@@ -420,7 +541,8 @@ def generate_escpos_receipt(
         buf.extend(safe_escpos_text(div_line))
 
     # 6. Payment & Due Balance
-    buf.extend(safe_escpos_text(format_row("Paid Amount:", f"{currency} {paid_amt:,.2f}", col_width)))
+    paid_label = "Paid:" if layout_mode == "modern" else "Paid Amount:"
+    buf.extend(safe_escpos_text(format_row(paid_label, f"{currency} {paid_amt:,.2f}", col_width)))
     if due_amt > 0:
         buf.extend(CMD_BOLD_ON)
         buf.extend(safe_escpos_text(format_row("REMAINING DUE:", f"{currency} {due_amt:,.2f}", col_width)))

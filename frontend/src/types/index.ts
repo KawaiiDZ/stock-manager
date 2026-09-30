@@ -20,6 +20,7 @@ export interface BusinessSettings {
   receipt_type?: 'thermal' | 'pdf';
   thermal_print_mode?: 'browser' | 'direct_escpos';
   thermal_header_style?: 'logo_text' | 'text_only';
+  thermal_layout?: 'classic' | 'modern';
   selected_thermal_printer?: string;
   selected_a4_printer?: string;
   skip_receipt_preview?: boolean;

@@ -371,4 +371,95 @@ def test_cash_drawer_kick_in_escpos_payload():
     assert CMD_CASH_DRAWER_KICK in buf_kick
 
 
+def test_image_to_escpos_raster():
+    from backend.app.services.escpos_service import image_to_escpos_raster
+    from PIL import Image
+
+    # Test with generated PIL Image
+    img = Image.new("RGBA", (100, 40), (255, 255, 255, 0))
+    # Draw simple black square
+    for x in range(20, 80):
+        for y in range(10, 30):
+            img.putpixel((x, y), (0, 0, 0, 255))
+
+    raster_bytes_80 = image_to_escpos_raster(img, paper_width="80mm")
+    assert raster_bytes_80 is not None
+    assert raster_bytes_80.startswith(b"\x1dv0\x00")
+
+    raster_bytes_58 = image_to_escpos_raster(img, paper_width="58mm")
+    assert raster_bytes_58 is not None
+    assert raster_bytes_58.startswith(b"\x1dv0\x00")
+    # 58mm should be narrower than 80mm
+    assert len(raster_bytes_58) < len(raster_bytes_80)
+
+
+def test_generate_escpos_receipt_classic_vs_modern_layouts():
+    settings = SimpleNamespace(
+        business_name="Solar Solutions",
+        phone="0321-1234567",
+        address="Bypass Road",
+        currency="Rs.",
+        receipt_header="",
+        receipt_footer="Visit again",
+    )
+    sale_data = {
+        "receipt_number": "TEST-LAYOUT-01",
+        "created_at": "2026-09-30 17:00:00",
+        "items": [
+            {
+                "product_name": "Inverter 3kW",
+                "quantity": 1,
+                "unit_price": 50000,
+                "discount_amount": 1000,
+                "total_price": 49000,
+            }
+        ],
+        "total_amount": 49000,
+        "paid_amount": 50000,
+    }
+
+    # Classic layout
+    classic_bytes = generate_escpos_receipt(sale_data, settings=settings, receipt_layout="classic")
+    assert b"Description" in classic_bytes
+    assert b"Lines / Units:" in classic_bytes
+    assert b"-> Disc:" in classic_bytes
+    assert b"Paid Amount:" in classic_bytes
+    assert b"Change:" in classic_bytes
+
+    # Modern layout
+    modern_bytes = generate_escpos_receipt(sale_data, settings=settings, receipt_layout="modern")
+    assert b"DESCRIPTION" in modern_bytes
+    assert b"Items / Units:" in modern_bytes
+    assert b"Paid:" in modern_bytes
+
+
+def test_generate_escpos_receipt_logo_inclusion_and_omission():
+    settings = SimpleNamespace(
+        business_name="Logo Test Store",
+        phone="123",
+        address="Test",
+        currency="Rs.",
+        receipt_header="",
+        receipt_footer="",
+        receipt_logo_path=None,
+        logo_path=None,
+    )
+    sale_data = {
+        "receipt_number": "TEST-LOGO-01",
+        "created_at": "2026-09-30 17:00:00",
+        "items": [],
+        "total_amount": 100,
+        "paid_amount": 100,
+    }
+
+    # With Logo (header_style="logo_text")
+    buf_logo = generate_escpos_receipt(sale_data, settings=settings, header_style="logo_text")
+    assert b"\x1dv0\x00" in buf_logo  # ESC/POS raster image command present
+
+    # Without Logo (header_style="text_only")
+    buf_no_logo = generate_escpos_receipt(sale_data, settings=settings, header_style="text_only")
+    assert b"\x1dv0\x00" not in buf_no_logo  # ESC/POS raster image command completely omitted
+
+
+
 

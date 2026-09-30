@@ -647,6 +647,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
             printer_name: settings?.selected_thermal_printer || undefined,
             paper_width: pWidth,
             header_style: settings?.thermal_header_style || 'logo_text',
+            layout: settings?.thermal_layout || 'classic',
             show_barcode: settings?.show_barcode ?? true,
             darkness: settings?.thermal_darkness || 'normal',
           }).then((printRes) => {
@@ -1481,6 +1482,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                 printerType={settings?.receipt_printer_type === '58mm' ? '58mm' : '80mm'}
                 headerStyle={settings?.thermal_header_style || 'logo_text'}
                 showBarcode={settings?.show_barcode ?? true}
+                layout={settings?.thermal_layout || 'classic'}
               />
             </div>
             <div id="autoprint-pdf-invoice">

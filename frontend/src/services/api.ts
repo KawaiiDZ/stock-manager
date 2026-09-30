@@ -398,6 +398,7 @@ export const api = {
     printer_name?: string;
     paper_width?: string;
     header_style?: string;
+    layout?: string;
     show_barcode?: boolean;
     kick_drawer?: boolean;
     is_sample?: boolean;

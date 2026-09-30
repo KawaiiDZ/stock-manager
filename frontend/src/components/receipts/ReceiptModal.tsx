@@ -25,6 +25,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
 }) => {
   const [receiptType, setReceiptType] = useState<'thermal' | 'pdf'>('thermal');
   const [paperWidth, setPaperWidth] = useState<'80mm' | '58mm'>('80mm');
+  const [receiptLayout, setReceiptLayout] = useState<'classic' | 'modern'>(settings?.thermal_layout || 'classic');
   const [directPrinting, setDirectPrinting] = useState<boolean>(false);
   const [printSuccessMsg, setPrintSuccessMsg] = useState<string | null>(null);
   const [printErrorMsg, setPrintErrorMsg] = useState<string | null>(null);
@@ -33,10 +34,11 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
     if (isOpen) {
       setReceiptType(settings?.receipt_type === 'pdf' ? 'pdf' : 'thermal');
       setPaperWidth(settings?.receipt_printer_type === '58mm' ? '58mm' : '80mm');
+      setReceiptLayout(settings?.thermal_layout || 'classic');
       setPrintSuccessMsg(null);
       setPrintErrorMsg(null);
     }
-  }, [isOpen, settings?.receipt_type, settings?.receipt_printer_type]);
+  }, [isOpen, settings?.receipt_type, settings?.receipt_printer_type, settings?.thermal_layout]);
 
   const handleBrowserPrint = () => {
     if (!sale) return;
@@ -68,6 +70,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         header_style: settings?.thermal_header_style || 'logo_text',
         show_barcode: settings?.show_barcode ?? true,
         darkness: settings?.thermal_darkness || 'normal',
+        layout: receiptLayout,
       });
       setPrintSuccessMsg(`Receipt sent directly to ${res.printer}`);
       setTimeout(() => setPrintSuccessMsg(null), 4000);
@@ -187,6 +190,33 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
               </button>
             </div>
 
+            {/* Layout Mode Selector (Classic POS vs Modern Clean) */}
+            <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1 rounded-xl border border-slate-200">
+              <span className="text-[11px] font-bold uppercase text-slate-400">Layout:</span>
+              <button
+                type="button"
+                onClick={() => setReceiptLayout('classic')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                  receiptLayout === 'classic'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                Classic POS
+              </button>
+              <button
+                type="button"
+                onClick={() => setReceiptLayout('modern')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                  receiptLayout === 'modern'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                Modern Clean
+              </button>
+            </div>
+
             <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-50 border border-slate-200 text-[11px] font-semibold text-slate-600">
               <span className={`w-2 h-2 rounded-full ${settings?.thermal_print_mode === 'direct_escpos' ? 'bg-emerald-500' : 'bg-blue-500'}`} />
               <span>
@@ -216,6 +246,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                 printerType={paperWidth}
                 headerStyle={settings?.thermal_header_style || 'logo_text'}
                 showBarcode={settings?.show_barcode ?? true}
+                layout={receiptLayout}
               />
             </div>
           </div>

@@ -25,6 +25,7 @@ class BusinessSettingsResponse(BaseModel):
     receipt_type: str = "thermal"
     thermal_print_mode: str = "browser"
     thermal_header_style: str = "logo_text"
+    thermal_layout: str = "classic"
     selected_thermal_printer: str = ""
     selected_a4_printer: str = ""
     skip_receipt_preview: bool = False
@@ -74,6 +75,7 @@ class BusinessSettingsUpdate(BaseModel):
     receipt_type: Optional[str] = None
     thermal_print_mode: Optional[str] = None
     thermal_header_style: Optional[str] = None
+    thermal_layout: Optional[str] = None
     selected_thermal_printer: Optional[str] = None
     selected_a4_printer: Optional[str] = None
     skip_receipt_preview: Optional[bool] = None

@@ -114,6 +114,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [thermalDarkness, setThermalDarkness] = useState<'maximum' | 'high' | 'normal'>(
     settings?.thermal_darkness || 'normal'
   );
+  const [thermalLayout, setThermalLayout] = useState<'classic' | 'modern'>(
+    settings?.thermal_layout || 'classic'
+  );
   const [selectedThermalPrinter, setSelectedThermalPrinter] = useState<string>(
     settings?.selected_thermal_printer || ''
   );
@@ -271,6 +274,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setThermalPrintMode(settings.thermal_print_mode || 'browser');
       setThermalHeaderStyle(settings.thermal_header_style || 'logo_text');
       setThermalDarkness(settings.thermal_darkness || 'normal');
+      setThermalLayout(settings.thermal_layout || 'classic');
       setSelectedThermalPrinter(settings.selected_thermal_printer || '');
       setSelectedA4Printer(settings.selected_a4_printer || '');
       setSkipReceiptPreview(Boolean(settings.skip_receipt_preview));
@@ -401,6 +405,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         receipt_type: receiptType,
         thermal_print_mode: thermalPrintMode,
         thermal_header_style: thermalHeaderStyle,
+        thermal_layout: thermalLayout,
         thermal_darkness: thermalDarkness,
         selected_thermal_printer: selectedThermalPrinter,
         selected_a4_printer: selectedA4Printer,
@@ -796,6 +801,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         printer_name: selectedThermalPrinter || undefined,
         paper_width: printerType,
         header_style: thermalHeaderStyle,
+        layout: thermalLayout,
         show_barcode: showBarcode,
         darkness: thermalDarkness,
       });
@@ -1826,6 +1832,64 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       </div>
                     </div>
 
+                    {/* Thermal Receipt Layout Style */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-bold uppercase text-slate-500">
+                          Thermal Receipt Layout Style
+                        </label>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                          Unified ESC/POS & Browser Output
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setThermalLayout('classic')}
+                          className={`p-3.5 rounded-2xl border-2 text-left transition flex items-start gap-3 ${
+                            thermalLayout === 'classic'
+                              ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
+                              : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                          }`}
+                        >
+                          <div className={`p-2 rounded-xl mt-0.5 ${thermalLayout === 'classic' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                            <Receipt className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-xs">Classic POS Terminal</span>
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                                Default
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                              Classic cash register style with dashed dividers, centered <code className="text-[10px] font-mono font-bold bg-slate-100 px-1 py-0.5 rounded">=== TOTAL ===</code> banner, and lines/units summary. Includes store logo.
+                            </p>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setThermalLayout('modern')}
+                          className={`p-3.5 rounded-2xl border-2 text-left transition flex items-start gap-3 ${
+                            thermalLayout === 'modern'
+                              ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
+                              : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                          }`}
+                        >
+                          <div className={`p-2 rounded-xl mt-0.5 ${thermalLayout === 'modern' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                            <FileText className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <div className="font-bold text-xs">Modern Clean</div>
+                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                              Contemporary layout with solid border lines, uppercase headers (<code className="text-[10px] font-mono font-bold bg-slate-100 px-1 py-0.5 rounded">DESCRIPTION AMOUNT</code>), and compact summary. Includes store logo.
+                            </p>
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+
                     {/* Thermal Header Style Cards */}
                     <div>
                       <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">
@@ -2305,6 +2369,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                     <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md">
                       {printerType === '58mm' ? '58mm Roll' : '80mm Roll'}
                     </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md">
+                      {thermalLayout === 'classic' ? 'Classic POS' : 'Modern Clean'}
+                    </span>
                     <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md">
                       {thermalHeaderStyle === 'logo_text' ? 'Logo + Text' : 'Text Only'}
                     </span>
@@ -2333,6 +2400,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                     footerText={receiptFooter}
                     paperWidth={printerType === '58mm' ? '58mm' : '80mm'}
                     headerStyle={thermalHeaderStyle}
+                    layout={thermalLayout}
                     showBarcode={showBarcode}
                     settings={{
                       ...(settings || {}),
@@ -2344,6 +2412,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       receipt_footer: receiptFooter,
                       receipt_printer_type: printerType as any,
                       thermal_header_style: thermalHeaderStyle,
+                      thermal_layout: thermalLayout,
                       thermal_darkness: thermalDarkness,
                       show_barcode: showBarcode,
                       receipt_logo_path: settings?.receipt_logo_path,
@@ -3334,6 +3403,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             receipt_printer_type: printerType as any,
             thermal_print_mode: thermalPrintMode,
             thermal_header_style: thermalHeaderStyle,
+            thermal_layout: thermalLayout,
             thermal_darkness: thermalDarkness,
             selected_thermal_printer: selectedThermalPrinter,
             selected_a4_printer: selectedA4Printer,
