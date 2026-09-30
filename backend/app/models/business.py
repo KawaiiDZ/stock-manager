@@ -31,6 +31,9 @@ class BusinessSettings(Base):
     selected_a4_printer = Column(String(100), nullable=False, default="")
     skip_receipt_preview = Column(Boolean, nullable=False, default=False)
     thermal_darkness = Column(String(20), nullable=False, default="normal")  # normal (standard POS), high, maximum
+    thermal_printer_profile = Column(String(30), nullable=False, default="standard_escpos")  # standard_escpos, xprinter_enhanced, star_line, generic_plain
+    thermal_feed_lines = Column(Integer, nullable=False, default=4)  # lines to feed before cut
+    thermal_cut_mode = Column(String(20), nullable=False, default="partial")  # partial, full, tear_only
     receipt_letterhead_path = Column(Text, nullable=True)
     show_letterhead = Column(Boolean, nullable=False, default=False)
     hide_header_text_with_letterhead = Column(Boolean, nullable=False, default=False)

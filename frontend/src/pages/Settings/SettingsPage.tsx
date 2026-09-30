@@ -22,6 +22,8 @@ import {
   Calendar,
   FileText,
   Barcode,
+  Scissors,
+  Cpu,
   Eye,
   EyeOff,
   ShieldCheck,
@@ -117,6 +119,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [thermalLayout, setThermalLayout] = useState<'classic' | 'modern'>(
     settings?.thermal_layout || 'classic'
   );
+  const [thermalPrinterProfile, setThermalPrinterProfile] = useState<
+    'standard_escpos' | 'xprinter_enhanced' | 'star_line' | 'generic_plain'
+  >(settings?.thermal_printer_profile || 'standard_escpos');
+  const [thermalCutMode, setThermalCutMode] = useState<'partial' | 'full' | 'tear_only'>(
+    settings?.thermal_cut_mode || 'partial'
+  );
+  const [thermalFeedLines, setThermalFeedLines] = useState<number>(
+    settings?.thermal_feed_lines ?? 4
+  );
   const [selectedThermalPrinter, setSelectedThermalPrinter] = useState<string>(
     settings?.selected_thermal_printer || ''
   );
@@ -129,6 +140,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [systemPrinters, setSystemPrinters] = useState<PrinterInfo[]>([]);
   const [loadingPrinters, setLoadingPrinters] = useState<boolean>(false);
   const [directPrintingTest, setDirectPrintingTest] = useState<boolean>(false);
+  const [diagnosticPrintingTest, setDiagnosticPrintingTest] = useState<boolean>(false);
   const [clearingQueue, setClearingQueue] = useState<boolean>(false);
   const [testPrintFeedback, setTestPrintFeedback] = useState<{
     type: 'success' | 'warning' | 'error';
@@ -275,6 +287,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setThermalHeaderStyle(settings.thermal_header_style || 'logo_text');
       setThermalDarkness(settings.thermal_darkness || 'normal');
       setThermalLayout(settings.thermal_layout || 'classic');
+      setThermalPrinterProfile(settings.thermal_printer_profile || 'standard_escpos');
+      setThermalCutMode(settings.thermal_cut_mode || 'partial');
+      setThermalFeedLines(settings.thermal_feed_lines ?? 4);
       setSelectedThermalPrinter(settings.selected_thermal_printer || '');
       setSelectedA4Printer(settings.selected_a4_printer || '');
       setSkipReceiptPreview(Boolean(settings.skip_receipt_preview));
@@ -409,6 +424,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         thermal_header_style: thermalHeaderStyle,
         thermal_layout: thermalLayout,
         thermal_darkness: thermalDarkness,
+        thermal_printer_profile: thermalPrinterProfile,
+        thermal_cut_mode: thermalCutMode,
+        thermal_feed_lines: thermalFeedLines,
         selected_thermal_printer: selectedThermalPrinter,
         selected_a4_printer: selectedA4Printer,
         skip_receipt_preview: skipReceiptPreview,
@@ -815,6 +833,59 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     }
   };
 
+  const handleChangePrinterProfile = async (
+    profile: 'standard_escpos' | 'xprinter_enhanced' | 'star_line' | 'generic_plain'
+  ) => {
+    setThermalPrinterProfile(profile);
+    try {
+      await api.updateSettings({
+        thermal_printer_profile: profile,
+      });
+      onSettingsUpdated();
+      setSuccessMsg(`Thermal printer hardware profile set to ${profile.toUpperCase()}`);
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to update printer profile.');
+    }
+  };
+
+  const handleChangeCutMode = async (mode: 'partial' | 'full' | 'tear_only') => {
+    setThermalCutMode(mode);
+    try {
+      await api.updateSettings({
+        thermal_cut_mode: mode,
+      });
+      onSettingsUpdated();
+      setSuccessMsg(`Auto-cutter action set to ${mode.toUpperCase()}`);
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to update cutter action.');
+    }
+  };
+
+  const handleChangeFeedLines = async (lines: number) => {
+    setThermalFeedLines(lines);
+    try {
+      await api.updateSettings({
+        thermal_feed_lines: lines,
+      });
+      onSettingsUpdated();
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to update feed spacing.');
+    }
+  };
+
+  const handleChangePrinterType = async (type: any) => {
+    setPrinterType(type);
+    try {
+      await api.updateSettings({
+        receipt_printer_type: type,
+      });
+      onSettingsUpdated();
+      setSuccessMsg(`Receipt roll width set to ${type}`);
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to update roll width.');
+    }
+  };
+
   const handleClearPrinterQueue = async () => {
     setClearingQueue(true);
     try {
@@ -840,6 +911,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         layout: thermalLayout,
         show_barcode: showBarcode,
         darkness: thermalDarkness,
+        printer_profile: thermalPrinterProfile,
+        cut_mode: thermalCutMode,
+        feed_lines: thermalFeedLines,
       });
       if (res.is_online === false || res.warning) {
         setTestPrintFeedback({
@@ -859,6 +933,39 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       });
     } finally {
       setDirectPrintingTest(false);
+    }
+  };
+
+  const handleTestDiagnosticPrint = async () => {
+    setDiagnosticPrintingTest(true);
+    setTestPrintFeedback(null);
+    try {
+      const res = await api.printThermalDiagnostic({
+        printer_name: selectedThermalPrinter || undefined,
+        paper_width: printerType,
+        printer_profile: thermalPrinterProfile,
+        darkness: thermalDarkness,
+        cut_mode: thermalCutMode,
+        feed_lines: thermalFeedLines,
+      });
+      if (res.is_online === false || res.warning) {
+        setTestPrintFeedback({
+          type: 'warning',
+          message: `⚠️ Diagnostic receipt spooled for '${res.printer}', but printer is currently OFFLINE or Powered Off. Turn on printer power or check USB connection to complete calibration.`,
+        });
+      } else {
+        setTestPrintFeedback({
+          type: 'success',
+          message: `Universal Diagnostic & Calibration receipt sent to '${res.printer}' successfully! (${res.bytes_sent} bytes dispatched)`,
+        });
+      }
+    } catch (err: any) {
+      setTestPrintFeedback({
+        type: 'error',
+        message: err.detail || 'Diagnostic print failed. Check printer connection or network IP.',
+      });
+    } finally {
+      setDiagnosticPrintingTest(false);
     }
   };
 
@@ -1836,15 +1943,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       {/* Receipt Printer Paper Size */}
                       <div>
                         <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">
-                          Receipt Paper Width
+                          Receipt Paper Width & Geometry
                         </label>
                         <select
                           value={printerType}
-                          onChange={(e) => setPrinterType(e.target.value as any)}
+                          onChange={(e) => handleChangePrinterType(e.target.value)}
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
                         >
                           <option value="80mm">80mm Thermal Roll (Standard Wide - 48 cols)</option>
-                          <option value="58mm">58mm Thermal Roll (Narrow Compact - 32 cols)</option>
+                          <option value="80mm_compact">80mm Compact / Star (42 cols)</option>
+                          <option value="58mm">58mm Thermal Roll (Standard - 32 cols)</option>
+                          <option value="58mm_narrow">58mm Narrow POS (Budget - 30 cols)</option>
                           <option value="standard">Standard A4 / Letter Page</option>
                         </select>
                       </div>
@@ -1865,6 +1974,130 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                             Print Barcode at Bottom
                           </span>
                         </label>
+                      </div>
+                    </div>
+
+                    {/* Printer Hardware Profile / Dialect */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-bold uppercase text-slate-500 flex items-center gap-1.5">
+                          <Cpu className="h-3.5 w-3.5 text-emerald-600" />
+                          Printer Hardware Protocol & Dialect
+                        </label>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                          Multi-Brand Universal
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => handleChangePrinterProfile('standard_escpos')}
+                          className={`p-3 rounded-2xl border-2 text-left transition flex flex-col justify-between ${
+                            thermalPrinterProfile === 'standard_escpos'
+                              ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
+                              : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                          }`}
+                        >
+                          <div>
+                            <span className="font-bold text-xs block">Standard ESC/POS</span>
+                            <span className="text-[10px] text-emerald-700 font-semibold">Universal Default</span>
+                            <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+                              Epson (TM-T88/T20), Bixolon, Citizen, Rongta, Munbyn, and standard POS printers.
+                            </p>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleChangePrinterProfile('xprinter_enhanced')}
+                          className={`p-3 rounded-2xl border-2 text-left transition flex flex-col justify-between ${
+                            thermalPrinterProfile === 'xprinter_enhanced'
+                              ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
+                              : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                          }`}
+                        >
+                          <div>
+                            <span className="font-bold text-xs block">Xprinter / POS-80</span>
+                            <span className="text-[10px] text-blue-700 font-semibold">Heating Booster</span>
+                            <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+                              POS-80, POS-58, Xprinter, Zijiang, Gprinter with hardware heating registers.
+                            </p>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleChangePrinterProfile('star_line')}
+                          className={`p-3 rounded-2xl border-2 text-left transition flex flex-col justify-between ${
+                            thermalPrinterProfile === 'star_line'
+                              ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
+                              : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                          }`}
+                        >
+                          <div>
+                            <span className="font-bold text-xs block">Star Micronics</span>
+                            <span className="text-[10px] text-indigo-700 font-semibold">Star Line Mode</span>
+                            <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+                              Star TSP100, TSP143, TSP650, TSP700, and mC-Print receipt printers.
+                            </p>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleChangePrinterProfile('generic_plain')}
+                          className={`p-3 rounded-2xl border-2 text-left transition flex flex-col justify-between ${
+                            thermalPrinterProfile === 'generic_plain'
+                              ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
+                              : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                          }`}
+                        >
+                          <div>
+                            <span className="font-bold text-xs block">Generic Plain Text</span>
+                            <span className="text-[10px] text-slate-600 font-semibold">Zero Escape Codes</span>
+                            <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+                              Clean ASCII only. For serial ticket loggers or basic dot-matrix printers.
+                            </p>
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Cutter Action & Feed Distance */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Cutter Action */}
+                      <div>
+                        <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5 flex items-center gap-1.5">
+                          <Scissors className="h-3.5 w-3.5 text-emerald-600" />
+                          Auto-Cutter Action
+                        </label>
+                        <select
+                          value={thermalCutMode}
+                          onChange={(e) => handleChangeCutMode(e.target.value as any)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
+                        >
+                          <option value="partial">Partial Cut (Recommended - Keeps receipt attached)</option>
+                          <option value="full">Full Cut (Completely slices off receipt)</option>
+                          <option value="tear_only">Manual Tear Bar Only (No mechanical blade command)</option>
+                        </select>
+                      </div>
+
+                      {/* Feed Lines Before Cut */}
+                      <div>
+                        <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">
+                          Paper Feed Spacing Before Cut / Tear
+                        </label>
+                        <select
+                          value={thermalFeedLines}
+                          onChange={(e) => handleChangeFeedLines(Number(e.target.value))}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
+                        >
+                          <option value="2">2 Lines (Ultra-compact)</option>
+                          <option value="3">3 Lines (Compact)</option>
+                          <option value="4">4 Lines (Standard POS Default)</option>
+                          <option value="5">5 Lines (Safe for manual tear bars)</option>
+                          <option value="6">6 Lines (Extended margin)</option>
+                        </select>
                       </div>
                     </div>
 
@@ -2481,30 +2714,45 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 )}
 
                 {/* Live Test Actions */}
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  <Button
-                    type="button"
-                    variant="primary"
-                    size="sm"
-                    loading={directPrintingTest}
-                    onClick={handleTestDirectPrint}
-                    className="font-bold text-xs flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 shadow-sm"
-                    title="Send raw ESC/POS commands directly to the selected thermal printer"
-                  >
-                    <Zap className="h-3.5 w-3.5" />
-                    Test Direct Print
-                  </Button>
+                <div className="space-y-2 pt-1">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      loading={directPrintingTest}
+                      onClick={handleTestDirectPrint}
+                      className="font-bold text-xs flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 shadow-sm"
+                      title="Send raw ESC/POS commands directly to the selected thermal printer"
+                    >
+                      <Zap className="h-3.5 w-3.5" />
+                      Test Direct Print
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleTestBrowserPrint}
+                      className="font-bold text-xs flex items-center justify-center gap-1.5"
+                      title="Open browser print dialog for the live receipt"
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                      Test Browser Print
+                    </Button>
+                  </div>
 
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={handleTestBrowserPrint}
-                    className="font-bold text-xs flex items-center justify-center gap-1.5"
-                    title="Open browser print dialog for the live receipt"
+                    loading={diagnosticPrintingTest}
+                    onClick={handleTestDiagnosticPrint}
+                    className="w-full font-bold text-xs flex items-center justify-center gap-1.5 bg-slate-50 hover:bg-slate-100 border-dashed border-slate-300 text-slate-700 shadow-xs"
+                    title="Print full hardware calibration test with column rulers, density test, and cutter check"
                   >
-                    <Printer className="h-3.5 w-3.5" />
-                    Test Browser Print
+                    <Sliders className="h-3.5 w-3.5 text-emerald-600" />
+                    Print Diagnostic & Calibration Test
                   </Button>
                 </div>
 

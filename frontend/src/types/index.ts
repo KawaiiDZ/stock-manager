@@ -10,7 +10,7 @@ export interface BusinessSettings {
   default_tax_rate: number;
   receipt_header: string;
   receipt_footer: string;
-  receipt_printer_type: '58mm' | '80mm' | 'standard';
+  receipt_printer_type: '58mm' | '58mm_narrow' | '80mm' | '80mm_compact' | 'standard';
   industry_preset?: string | null;
   setup_completed?: boolean;
   show_sku?: boolean;
@@ -25,6 +25,9 @@ export interface BusinessSettings {
   selected_a4_printer?: string;
   skip_receipt_preview?: boolean;
   thermal_darkness?: 'normal' | 'high' | 'maximum';
+  thermal_printer_profile?: 'standard_escpos' | 'xprinter_enhanced' | 'star_line' | 'generic_plain';
+  thermal_cut_mode?: 'partial' | 'full' | 'tear_only';
+  thermal_feed_lines?: number;
   receipt_letterhead_path?: string | null;
   show_letterhead?: boolean;
   hide_header_text_with_letterhead?: boolean;

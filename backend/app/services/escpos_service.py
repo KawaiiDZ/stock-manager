@@ -37,10 +37,52 @@ CMD_NORMAL_SIZE = GS + b"!\x00"
 
 CMD_CUT_FULL = GS + b"V\x41\x00"  # GS V 65 0 (feed and full cut)
 CMD_CUT_PARTIAL = GS + b"V\x42\x00"  # GS V 66 0 (feed and partial cut)
-# Dual-pin cash drawer kick (Pin 2 and Pin 5 standard RJ11 pulses)
+# Star Micronics cut commands
+CMD_STAR_CUT_PARTIAL = ESC + b"d\x02"  # ESC d 2
+CMD_STAR_CUT_FULL = ESC + b"d\x00"     # ESC d 0
+
+# Dual-pin cash drawer kick + Star BEL pulse (guarantees kick across all brands)
 CMD_CASH_DRAWER_KICK_PIN2 = ESC + b"p\x00\x19\xfa"
 CMD_CASH_DRAWER_KICK_PIN5 = ESC + b"p\x01\x19\xfa"
-CMD_CASH_DRAWER_KICK = CMD_CASH_DRAWER_KICK_PIN2 + CMD_CASH_DRAWER_KICK_PIN5
+CMD_CASH_DRAWER_KICK = CMD_CASH_DRAWER_KICK_PIN2 + CMD_CASH_DRAWER_KICK_PIN5 + b"\x07"
+
+# Universal Code Page Select
+CMD_CODEPAGE_CP1252 = ESC + b"t\x10"  # Select CP1252 (Windows Latin-1)
+CMD_CODEPAGE_CP437 = ESC + b"t\x00"   # Select CP437 (USA Standard OEM)
+
+# Column & Dot Geometry Profiles
+COLUMN_WIDTH_MAP = {
+    "80mm": 48,
+    "80mm_compact": 42,
+    "58mm": 32,
+    "58mm_narrow": 30,
+}
+
+DOTS_PER_LINE_MAP = {
+    "80mm": 576,        # 72 bytes/row
+    "80mm_compact": 512, # 64 bytes/row
+    "58mm": 384,        # 48 bytes/row
+    "58mm_narrow": 360, # 45 bytes/row
+}
+
+LOGO_TARGET_DOTS_MAP = {
+    "80mm": 224,        # 28 bytes wide
+    "80mm_compact": 208, # 26 bytes wide
+    "58mm": 160,        # 20 bytes wide
+    "58mm_narrow": 144, # 18 bytes wide
+}
+
+# Exhaustive Catalog of Thermal Printer Brand & Model Signatures
+THERMAL_SIGNATURES = [
+    "pos", "escpo", "thermal", "receipt", "xprinter", "zijiang",
+    "epson", "tm-", "t88", "t20", "t70", "t82", "m30",
+    "star", "tsp", "micronics", "citizen", "ct-s", "ct-e",
+    "bixolon", "srp-", "srp350", "srp330", "rongta", "rp80", "rp58", "rp32",
+    "munbyn", "itpp", "gprinter", "gp-", "hoin", "hop-", "netum",
+    "zj-", "posiflex", "aura", "sprt", "sp-pos", "black copper", "bc-",
+    "seiko", "dpu", "custom", "vkp", "tg2480", "printercmd",
+    "58mm", "80mm", "76mm", "direct thermal", "receipt printer"
+]
 
 
 def list_system_printers() -> List[Dict[str, Any]]:
@@ -80,10 +122,7 @@ def list_system_printers() -> List[Dict[str, Any]]:
                 dev = device_map.get(pname, "")
                 is_default = (pname == dest)
                 search_str = f"{pname} {dev}".lower()
-                is_thermal = any(
-                    k in search_str
-                    for k in ["pos", "escpo", "thermal", "receipt", "xprinter", "zijiang", "epson_tm", "80", "58", "printercmd"]
-                )
+                is_thermal = any(k in search_str for k in THERMAL_SIGNATURES)
                 stat_lower = status_str.lower()
                 is_offline = any(w in stat_lower for w in ["offline", "not responding", "paused", "disabled", "stopped"])
                 printers.append({
@@ -114,10 +153,7 @@ def list_system_printers() -> List[Dict[str, Any]]:
                     is_default = bool(item.get("IsDefault", False))
                     port = str(item.get("PortName", ""))
                     search_str = f"{pname} {port}".lower()
-                    is_thermal = any(
-                        k in search_str
-                        for k in ["pos", "escpo", "thermal", "receipt", "xprinter", "zijiang", "epson", "80", "58"]
-                    )
+                    is_thermal = any(k in search_str for k in THERMAL_SIGNATURES)
                     work_offline = bool(item.get("WorkOffline", False))
                     raw_status = str(item.get("PrinterStatus", "")).lower()
                     is_offline = (
@@ -178,18 +214,46 @@ def safe_escpos_text(text: Any) -> bytes:
         return s.encode("ascii", errors="replace")
 
 
+def is_network_printer_target(target: Optional[str]) -> bool:
+    """Checks if a printer destination is an IP address or network socket URL."""
+    if not target:
+        return False
+    clean = target.strip()
+    if clean.startswith(("tcp://", "socket://", "net://")):
+        return True
+    clean_host = re.sub(r"^(tcp|socket|net)://", "", clean).split("/")[0]
+    host_part = clean_host.split(":")[0]
+    parts = host_part.split(".")
+    if len(parts) == 4 and all(p.isdigit() and 0 <= int(p) <= 255 for p in parts):
+        return True
+    return False
+
+
 def resolve_target_printer(
     requested_name: Optional[str],
     available: List[Dict[str, Any]]
 ) -> tuple[Optional[str], Optional[Dict[str, Any]]]:
     """
-    Intelligently resolves the target printer using a 5-tier fuzzy matching algorithm:
+    Intelligently resolves the target printer using a multi-tier fuzzy matching algorithm:
+    0. Direct Network / TCP printer (IP:port)
     1. Exact case-sensitive match
     2. Case-insensitive exact match
     3. Alphanumeric slug match (ignores spaces, hyphens, underscores)
     4. Substring containment match (e.g. 'POS-80' matches 'POS-80 (Copy 1)')
     5. Fallback to first available online thermal printer, then system default
     """
+    if requested_name:
+        clean = requested_name.strip()
+        if is_network_printer_target(clean):
+            return clean, {
+                "name": clean,
+                "is_default": False,
+                "is_thermal": True,
+                "device_uri": clean,
+                "status": "Ready (Network)",
+                "is_online": True,
+            }
+
     if not available:
         return requested_name, None
 
@@ -295,10 +359,21 @@ def image_to_escpos_raster(
         if img is None:
             return None
 
-        # Determine paper dot limits & line byte width
-        total_bytes_per_row = 32 if paper_width == "58mm" else 48
-        # Match visual receipt header proportion (192 dots for 80mm, 144 dots for 58mm)
-        target_dots_w = 144 if paper_width == "58mm" else 192
+        # Determine paper dot limits & line byte width supporting all thermal models
+        if "58" in paper_width:
+            if "narrow" in paper_width:
+                total_bytes_per_row = 30
+                target_dots_w = 128
+            else:
+                total_bytes_per_row = 32
+                target_dots_w = 144
+        else:
+            if "compact" in paper_width:
+                total_bytes_per_row = 42
+                target_dots_w = 168
+            else:
+                total_bytes_per_row = 48
+                target_dots_w = 192
 
         orig_w, orig_h = img.size
         if orig_w <= 0 or orig_h <= 0:
@@ -369,15 +444,21 @@ def generate_escpos_receipt(
     show_barcode: bool = True,
     kick_drawer: bool = False,
     darkness: Optional[str] = None,
+    printer_profile: Optional[str] = None,
+    cut_mode: Optional[str] = None,
+    feed_lines: Optional[int] = None,
 ) -> bytes:
     """
     Builds a complete, formatted ESC/POS binary receipt payload.
-    Supports 80mm (48 column) and 58mm (32 column) layouts, with Classic and Modern styling.
-    Configured for maximum thermal head heating and deep, pitch-black print density.
+    Supports 80mm (48/42 column) and 58mm (32/30 column) layouts, with Classic and Modern styling.
+    Adapts cleanly to Standard ESC/POS, Xprinter/POS-80, Star Micronics, and Generic Plain Text profiles.
     """
-    col_width = 32 if paper_width == "58mm" else 48
+    col_width = COLUMN_WIDTH_MAP.get(paper_width, 32 if "58" in str(paper_width) else 48)
     density_mode = darkness or getattr(settings, "thermal_darkness", "normal") or "normal"
     layout_mode = (receipt_layout or getattr(settings, "thermal_layout", "classic") or "classic").lower()
+    profile = (printer_profile or getattr(settings, "thermal_printer_profile", "standard_escpos") or "standard_escpos").lower()
+    actual_cut_mode = (cut_mode or getattr(settings, "thermal_cut_mode", "partial") or "partial").lower()
+    actual_feed_lines = feed_lines if feed_lines is not None else getattr(settings, "thermal_feed_lines", 4) or 4
 
     # Use solid double-divider only in maximum darkness mode; otherwise crisp standard divider
     div_line = ("=" * col_width + "\n") if density_mode == "maximum" else ("-" * col_width + "\n")
@@ -390,25 +471,38 @@ def generate_escpos_receipt(
     footer_text = getattr(settings, "receipt_footer", "Thank you for your business!") or "Thank you for your business!"
     currency = getattr(settings, "currency", "Rs.") or "Rs."
 
+    is_escpos = (profile != "generic_plain")
+    cmd_bold_on = CMD_BOLD_ON if is_escpos else b""
+    cmd_bold_off = CMD_BOLD_OFF if is_escpos else b""
+    cmd_align_center = CMD_ALIGN_CENTER if is_escpos else b""
+    cmd_align_left = CMD_ALIGN_LEFT if is_escpos else b""
+    cmd_double_size = CMD_DOUBLE_SIZE if is_escpos else b""
+    cmd_normal_size = CMD_NORMAL_SIZE if is_escpos else b""
+
     buf = bytearray()
 
-    # 1. Initialize Printer & Set Maximum Thermal Heating Density
-    buf.extend(CMD_INIT)
-    if density_mode in ("maximum", "high"):
-        buf.extend(CMD_HEATING_MAX)        # 2.55ms max heating duration on POS-80/58
-        buf.extend(CMD_DENSITY_MAX)        # DC2 # 31: max darkness level 31/31
-        buf.extend(CMD_EPSON_DENSITY_MAX)  # GS ~ 1 4: Epson/Star density +4
-        buf.extend(CMD_DOUBLE_STRIKE_ON)   # ESC G 1: Double-strike mode for rich, pitch-black text
+    # 1. Initialize Printer & Set Density according to Profile
+    if is_escpos:
+        buf.extend(CMD_INIT)
+        buf.extend(CMD_CODEPAGE_CP1252)
+
+        # Heating & Density control based on hardware profile
+        if density_mode in ("maximum", "high"):
+            if profile == "xprinter_enhanced":
+                buf.extend(CMD_HEATING_MAX)        # 2.55ms max heating duration on POS-80/58
+                buf.extend(CMD_DENSITY_MAX)        # DC2 # 31: max darkness level 31/31
+            buf.extend(CMD_DOUBLE_STRIKE_ON)       # ESC G 1: Double-strike mode for rich, pitch-black text
+            buf.extend(CMD_BOLD_ON)
 
     # Cash drawer kick if requested
-    if kick_drawer:
+    if kick_drawer and is_escpos:
         buf.extend(CMD_CASH_DRAWER_KICK)
 
     # 2. Header
-    buf.extend(CMD_ALIGN_CENTER)
+    buf.extend(cmd_align_center)
 
-    # Raster Graphic Logo (printed by default whenever header_style is NOT text_only)
-    if header_style != "text_only":
+    # Raster Graphic Logo (printed by default whenever header_style is NOT text_only and in ESC/POS mode)
+    if header_style != "text_only" and is_escpos:
         logo_source = getattr(settings, "receipt_logo_path", None) or getattr(settings, "logo_path", None)
         raster_logo = image_to_escpos_raster(logo_source, paper_width=paper_width)
         if raster_logo:
@@ -416,12 +510,12 @@ def generate_escpos_receipt(
             buf.extend(b"\n")
 
     # Store Name in Large Bold
-    buf.extend(CMD_BOLD_ON)
-    buf.extend(CMD_DOUBLE_SIZE)
+    buf.extend(cmd_bold_on)
+    buf.extend(cmd_double_size)
     display_shop_name = shop_name.upper() if layout_mode == "modern" else shop_name
     buf.extend(safe_escpos_text(f"{display_shop_name}\n"))
-    buf.extend(CMD_NORMAL_SIZE)
-    buf.extend(CMD_BOLD_OFF)
+    buf.extend(cmd_normal_size)
+    buf.extend(cmd_bold_off)
 
     if shop_address:
         for line in shop_address.splitlines():
@@ -431,7 +525,7 @@ def generate_escpos_receipt(
     if custom_header and custom_header.strip().lower() != shop_name.strip().lower():
         buf.extend(safe_escpos_text(f"{custom_header.strip()}\n"))
 
-    buf.extend(CMD_ALIGN_LEFT)
+    buf.extend(cmd_align_left)
     buf.extend(safe_escpos_text(div_line))
 
     # 3. Receipt Info
@@ -464,11 +558,11 @@ def generate_escpos_receipt(
     buf.extend(safe_escpos_text(div_line))
 
     # 4. Items Table Header
-    buf.extend(CMD_BOLD_ON)
+    buf.extend(cmd_bold_on)
     col_desc = "DESCRIPTION" if layout_mode == "modern" else "Description"
     col_amt = "AMOUNT" if layout_mode == "modern" else "Amount"
     buf.extend(safe_escpos_text(format_row(col_desc, col_amt, col_width)))
-    buf.extend(CMD_BOLD_OFF)
+    buf.extend(cmd_bold_off)
     buf.extend(safe_escpos_text(div_line))
 
     items = sale_data.get("items", [])
@@ -490,9 +584,9 @@ def generate_escpos_receipt(
 
         # Line 1: Item Name
         tag = " (RETURNED)" if is_fully_returned else (f" ({int(ret_qty) if ret_qty.is_integer() else ret_qty} RET)" if is_partially_returned else "")
-        buf.extend(CMD_BOLD_ON)
+        buf.extend(cmd_bold_on)
         buf.extend(safe_escpos_text(f"{p_name}{tag}\n"))
-        buf.extend(CMD_BOLD_OFF)
+        buf.extend(cmd_bold_off)
 
         # Line 2: Qty x Unit Price ... Line Total
         qty_disp = int(orig_qty) if orig_qty.is_integer() else orig_qty
@@ -533,26 +627,26 @@ def generate_escpos_receipt(
 
     # TOTAL IN BOLD
     buf.extend(safe_escpos_text(double_div))
-    buf.extend(CMD_BOLD_ON)
+    buf.extend(cmd_bold_on)
     buf.extend(safe_escpos_text(format_row("TOTAL:", f"{currency} {total_amt:,.2f}", col_width)))
-    buf.extend(CMD_BOLD_OFF)
+    buf.extend(cmd_bold_off)
     buf.extend(safe_escpos_text(double_div))
 
     if total_ret_amt > 0:
         net_payable = max(0.0, total_amt - total_ret_amt)
         buf.extend(safe_escpos_text(format_row("Less Returns:", f"-{currency} {total_ret_amt:,.2f}", col_width)))
-        buf.extend(CMD_BOLD_ON)
+        buf.extend(cmd_bold_on)
         buf.extend(safe_escpos_text(format_row("NET PAYABLE:", f"{currency} {net_payable:,.2f}", col_width)))
-        buf.extend(CMD_BOLD_OFF)
+        buf.extend(cmd_bold_off)
         buf.extend(safe_escpos_text(div_line))
 
     # 6. Payment & Due Balance
     paid_label = "Paid:" if layout_mode == "modern" else "Paid Amount:"
     buf.extend(safe_escpos_text(format_row(paid_label, f"{currency} {paid_amt:,.2f}", col_width)))
     if due_amt > 0:
-        buf.extend(CMD_BOLD_ON)
+        buf.extend(cmd_bold_on)
         buf.extend(safe_escpos_text(format_row("REMAINING DUE:", f"{currency} {due_amt:,.2f}", col_width)))
-        buf.extend(CMD_BOLD_OFF)
+        buf.extend(cmd_bold_off)
     else:
         status_text = "PAID IN FULL"
         if payment_status == "RETURNED":
@@ -569,46 +663,240 @@ def generate_escpos_receipt(
 
     # 7. Code 128 Barcode with Code Set B prefix
     if show_barcode and receipt_no:
-        buf.extend(CMD_ALIGN_CENTER)
-        try:
-            # Code 128 in ESC/POS: GS k 73 (0x49) <len> {B <data>
-            clean_bc = re.sub(r"[^A-Za-z0-9_-]", "", receipt_no)
-            if clean_bc:
-                bc_payload = b"\x7b\x42" + clean_bc.encode("ascii")
-                buf.extend(GS + b"h\x48")  # Height = 72 dots
-                buf.extend(GS + b"w\x03" if paper_width != "58mm" else GS + b"w\x02")  # Width multiplier
-                buf.extend(GS + b"H\x02")  # HRI text below
-                buf.extend(GS + b"k\x49" + bytes([len(bc_payload)]) + bc_payload)
-                buf.extend(b"\n")
-        except Exception as e:
-            logger.warning(f"Barcode ESC/POS generation failed: {e}")
+        if is_escpos:
+            buf.extend(cmd_align_center)
+            try:
+                # Code 128 in ESC/POS: GS k 73 (0x49) <len> {B <data>
+                clean_bc = re.sub(r"[^A-Za-z0-9_-]", "", receipt_no)
+                if clean_bc:
+                    bc_payload = b"\x7b\x42" + clean_bc.encode("ascii")
+                    buf.extend(GS + b"h\x48")  # Height = 72 dots
+                    buf.extend(GS + b"w\x03" if "58" not in str(paper_width) else GS + b"w\x02")  # Width multiplier
+                    buf.extend(GS + b"H\x02")  # HRI text below
+                    buf.extend(GS + b"k\x49" + bytes([len(bc_payload)]) + bc_payload)
+                    buf.extend(b"\n")
+            except Exception as e:
+                logger.warning(f"Barcode ESC/POS generation failed: {e}")
+                buf.extend(safe_escpos_text(f"* {receipt_no} *\n"))
+        else:
             buf.extend(safe_escpos_text(f"* {receipt_no} *\n"))
 
     # 8. Footer Message
-    buf.extend(CMD_ALIGN_CENTER)
+    if profile != "generic_plain":
+        buf.extend(CMD_ALIGN_CENTER)
     buf.extend(b"\n")
     buf.extend(safe_escpos_text(f"{footer_text}\n"))
-    buf.extend(b"\n\n\n\n")
 
-    # 9. Partial or Full Cut
-    buf.extend(CMD_CUT_PARTIAL)
+    # Feed lines before cutter/tear bar
+    feed_count = max(2, min(8, actual_feed_lines))
+    buf.extend(b"\n" * feed_count)
+
+    # 9. Cutter Action
+    if profile != "generic_plain" and actual_cut_mode != "tear_only":
+        if profile == "star_line":
+            buf.extend(CMD_STAR_CUT_FULL if actual_cut_mode == "full" else CMD_STAR_CUT_PARTIAL)
+        else:
+            buf.extend(CMD_CUT_FULL if actual_cut_mode == "full" else CMD_CUT_PARTIAL)
 
     return bytes(buf)
 
 
+def generate_diagnostic_receipt(
+    settings: Optional[Any] = None,
+    paper_width: str = "80mm",
+    printer_profile: str = "standard_escpos",
+    printer_name: Optional[str] = None,
+    darkness: str = "normal",
+    cut_mode: str = "partial",
+    feed_lines: int = 4,
+) -> bytes:
+    """
+    Generates a universal hardware calibration and diagnostic test receipt.
+    Allows testing character column rulers, density swatches, raster logo banding,
+    barcode scanning, and cutter geometry across ANY thermal printer brand.
+    """
+    col_width = COLUMN_WIDTH_MAP.get(paper_width, 32 if "58" in str(paper_width) else 48)
+    profile = (printer_profile or "standard_escpos").lower()
+
+    div = "=" * col_width + "\n"
+    sub_div = "-" * col_width + "\n"
+
+    buf = bytearray()
+
+    # 1. Initialize
+    if profile != "generic_plain":
+        buf.extend(CMD_INIT)
+        buf.extend(CMD_CODEPAGE_CP1252)
+        if darkness in ("high", "maximum") and profile == "xprinter_enhanced":
+            buf.extend(CMD_HEATING_MAX)
+            buf.extend(CMD_DENSITY_MAX)
+        if darkness in ("high", "maximum"):
+            buf.extend(CMD_DOUBLE_STRIKE_ON)
+
+    # 2. Header & Logo
+    if profile != "generic_plain":
+        buf.extend(CMD_ALIGN_CENTER)
+    logo_source = getattr(settings, "receipt_logo_path", None) or getattr(settings, "logo_path", None)
+    raster_logo = image_to_escpos_raster(logo_source, paper_width=paper_width)
+    if raster_logo and profile != "generic_plain":
+        buf.extend(raster_logo)
+        buf.extend(b"\n")
+
+    biz_name = getattr(settings, "business_name", "StockFlow POS") or "StockFlow POS"
+    if profile != "generic_plain":
+        buf.extend(CMD_BOLD_ON)
+        buf.extend(CMD_DOUBLE_SIZE)
+    buf.extend(safe_escpos_text(f"{biz_name}\n"))
+    if profile != "generic_plain":
+        buf.extend(CMD_NORMAL_SIZE)
+    buf.extend(safe_escpos_text("THERMAL CALIBRATION & DIAGNOSTIC\n"))
+    if profile != "generic_plain":
+        buf.extend(CMD_BOLD_OFF)
+    buf.extend(safe_escpos_text(div))
+
+    # 3. System & Target Diagnostics
+    if profile != "generic_plain":
+        buf.extend(CMD_ALIGN_LEFT)
+    buf.extend(safe_escpos_text(format_row("System OS:", f"{platform.system()} {platform.release()[:10]}", col_width)))
+    buf.extend(safe_escpos_text(format_row("Target Printer:", str(printer_name or "Auto-Resolved Default"), col_width)))
+    buf.extend(safe_escpos_text(format_row("Dialect Profile:", profile.upper(), col_width)))
+    buf.extend(safe_escpos_text(format_row("Roll / Columns:", f"{paper_width} ({col_width} cols)", col_width)))
+    buf.extend(safe_escpos_text(format_row("Print Darkness:", darkness.upper(), col_width)))
+    buf.extend(safe_escpos_text(format_row("Cutter Mode:", cut_mode.upper(), col_width)))
+    buf.extend(safe_escpos_text(format_row("Feed Spacing:", f"{feed_lines} lines", col_width)))
+    buf.extend(safe_escpos_text(format_row("Timestamp:", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), col_width)))
+    buf.extend(safe_escpos_text(div))
+
+    # 4. Column Alignment Ruler
+    if profile != "generic_plain":
+        buf.extend(CMD_ALIGN_CENTER)
+        buf.extend(CMD_BOLD_ON)
+    buf.extend(safe_escpos_text("--- COLUMN ALIGNMENT RULER ---\n"))
+    if profile != "generic_plain":
+        buf.extend(CMD_BOLD_OFF)
+        buf.extend(CMD_ALIGN_LEFT)
+
+    ruler_digits = "".join(str(i % 10) for i in range(1, col_width + 1)) + "\n"
+    ticks = []
+    for i in range(1, col_width + 1):
+        if i % 10 == 0:
+            ticks.append(str(i // 10))
+        elif i % 5 == 0:
+            ticks.append("+")
+        elif i == 1 or i == col_width:
+            ticks.append("|")
+        else:
+            ticks.append(".")
+    ruler_ticks = "".join(ticks) + "\n"
+
+    buf.extend(safe_escpos_text(ruler_digits))
+    buf.extend(safe_escpos_text(ruler_ticks))
+    buf.extend(safe_escpos_text("(If digits wrap to next line, select a narrower column mode)\n"))
+    buf.extend(safe_escpos_text(sub_div))
+
+    # 5. Density & Print Head Test
+    if profile != "generic_plain":
+        buf.extend(CMD_ALIGN_CENTER)
+        buf.extend(CMD_BOLD_ON)
+    buf.extend(safe_escpos_text("--- PRINT HEAD DENSITY TEST ---\n"))
+    if profile != "generic_plain":
+        buf.extend(CMD_BOLD_OFF)
+    buf.extend(safe_escpos_text("100% Solid: [################################]\n"))
+    buf.extend(safe_escpos_text("50% Dither: [::::::::::::::::::::::::::::::::]\n"))
+    buf.extend(safe_escpos_text("Double-Burn: Rs. 1,234.50 (Bold/Double Strike)\n"))
+    buf.extend(safe_escpos_text(sub_div))
+
+    # 6. Barcode Test
+    if profile != "generic_plain":
+        buf.extend(CMD_ALIGN_CENTER)
+        buf.extend(CMD_BOLD_ON)
+    buf.extend(safe_escpos_text("--- HARDWARE BARCODE TEST ---\n"))
+    if profile != "generic_plain":
+        buf.extend(CMD_BOLD_OFF)
+    test_bc = "DIAG-TEST-01"
+    if profile != "generic_plain":
+        try:
+            bc_payload = b"\x7b\x42" + test_bc.encode("ascii")
+            buf.extend(GS + b"h\x40")  # 64 dots height
+            buf.extend(GS + b"w\x02")  # width multiplier 2
+            buf.extend(GS + b"H\x02")  # HRI below
+            buf.extend(GS + b"k\x49" + bytes([len(bc_payload)]) + bc_payload)
+            buf.extend(b"\n")
+        except Exception:
+            buf.extend(safe_escpos_text(f"* {test_bc} *\n"))
+    else:
+        buf.extend(safe_escpos_text(f"* {test_bc} *\n"))
+
+    buf.extend(safe_escpos_text(div))
+    if profile != "generic_plain":
+        buf.extend(CMD_ALIGN_CENTER)
+    buf.extend(safe_escpos_text("CALIBRATION OK - PRINTER READY\n"))
+    buf.extend(safe_escpos_text(f"- - - - [ CUT / TEAR HERE ({feed_lines} lines) ] - - - -\n"))
+
+    # 7. Feed lines & Cutter
+    feed_count = max(2, min(8, feed_lines))
+    buf.extend(b"\n" * feed_count)
+    if cut_mode != "tear_only" and profile != "generic_plain":
+        if profile == "star_line":
+            buf.extend(CMD_STAR_CUT_FULL if cut_mode == "full" else CMD_STAR_CUT_PARTIAL)
+        else:
+            buf.extend(CMD_CUT_FULL if cut_mode == "full" else CMD_CUT_PARTIAL)
+
+    return bytes(buf)
+
+
+def send_network_socket_escpos(target: str, data: bytes, timeout: int = 5) -> int:
+    """Connects directly to an Ethernet or Wi-Fi thermal printer via TCP port 9100."""
+    import socket
+    clean = re.sub(r"^(tcp|socket|net)://", "", target.strip()).split("/")[0]
+    if ":" in clean:
+        host, port_str = clean.split(":", 1)
+        port = int(port_str)
+    else:
+        host = clean
+        port = 9100  # Default standard RAW JetDirect thermal print port
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(timeout)
+        s.connect((host, port))
+        s.sendall(data)
+        try:
+            s.shutdown(socket.SHUT_WR)
+        except Exception:
+            pass
+    return len(data)
+
+
 def send_to_thermal_printer(escpos_bytes: bytes, printer_name: Optional[str] = None) -> Dict[str, Any]:
     """
-    Sends raw ESC/POS binary data to the designated local thermal printer.
-    On macOS / Linux: uses `/usr/bin/lpr -P <name> -l` (raw mode, zero PostScript translation).
-    On Windows: uses Windows Print Spooler raw API.
+    Sends raw ESC/POS binary data to the designated local or network thermal printer.
+    - Network / IP printer (e.g. 192.168.1.100:9100): Direct TCP socket stream (0 drivers needed).
+    - macOS / Linux: CUPS raw mode `/usr/bin/lpr -P <name> -l` with auto queue recovery.
+    - Windows: 3-tier raw spooler (win32print / winspool.drv / PowerShell).
     """
+    # 1. Direct Network / TCP Thermal Printer Dispatch
+    if printer_name and is_network_printer_target(printer_name):
+        logger.info(f"Dispatching raw ESC/POS payload ({len(escpos_bytes)} bytes) to Network Thermal Printer: {printer_name}")
+        try:
+            bytes_sent = send_network_socket_escpos(printer_name, escpos_bytes, timeout=5)
+            return {
+                "success": True,
+                "printer": printer_name,
+                "bytes_sent": bytes_sent,
+                "is_online": True,
+                "warning": None,
+                "message": f"Successfully sent receipt to Network Thermal Printer at '{printer_name}' via raw TCP socket.",
+            }
+        except Exception as ex:
+            raise RuntimeError(f"Failed to connect to Network Thermal Printer at '{printer_name}': {ex}")
+
     sys_name = platform.system()
     available = list_system_printers()
 
     # Determine target printer using resilient multi-tier resolver
     target, target_info = resolve_target_printer(printer_name, available)
     if not target:
-        raise RuntimeError("No connected printers found on your system. Please connect your thermal printer via USB.")
+        raise RuntimeError("No connected printers found on your system. Please connect your thermal printer via USB or specify a network IP.")
 
     is_online = target_info.get("is_online", True) if target_info else True
 

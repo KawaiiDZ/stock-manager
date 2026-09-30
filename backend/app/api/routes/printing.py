@@ -15,6 +15,7 @@ from backend.app.services.sales_service import get_sale
 from backend.app.services.escpos_service import (
     list_system_printers,
     generate_escpos_receipt,
+    generate_diagnostic_receipt,
     send_to_thermal_printer,
     clear_printer_queue,
 )
@@ -36,13 +37,25 @@ class PrinterItemResponse(BaseModel):
 class ThermalPrintRequest(BaseModel):
     sale_id: Optional[int] = None
     printer_name: Optional[str] = None
-    paper_width: Optional[str] = None  # "58mm" | "80mm"
+    paper_width: Optional[str] = None  # "58mm" | "58mm_narrow" | "80mm" | "80mm_compact"
     header_style: Optional[str] = None  # "logo_text" | "text_only"
     layout: Optional[str] = None  # "classic" | "modern"
     show_barcode: Optional[bool] = None
     kick_drawer: Optional[bool] = False
     is_sample: Optional[bool] = False
     darkness: Optional[str] = None  # "maximum" | "high" | "normal"
+    printer_profile: Optional[str] = None  # "standard_escpos" | "xprinter_enhanced" | "star_line" | "generic_plain"
+    cut_mode: Optional[str] = None  # "partial" | "full" | "tear_only"
+    feed_lines: Optional[int] = None  # 2 to 8 lines
+
+
+class DiagnosticPrintRequest(BaseModel):
+    printer_name: Optional[str] = None
+    paper_width: Optional[str] = None
+    printer_profile: Optional[str] = None
+    darkness: Optional[str] = None
+    cut_mode: Optional[str] = None
+    feed_lines: Optional[int] = None
 
 
 class ThermalPrintResponse(BaseModel):
@@ -171,6 +184,9 @@ def print_thermal_receipt(data: ThermalPrintRequest, db: Session = Depends(get_d
             show_barcode=show_barcode,
             kick_drawer=bool(data.kick_drawer),
             darkness=data.darkness or (settings.thermal_darkness if settings else "normal"),
+            printer_profile=data.printer_profile or getattr(settings, "thermal_printer_profile", "standard_escpos") or "standard_escpos",
+            cut_mode=data.cut_mode or getattr(settings, "thermal_cut_mode", "partial") or "partial",
+            feed_lines=data.feed_lines if data.feed_lines is not None else getattr(settings, "thermal_feed_lines", 4),
         )
 
         res = send_to_thermal_printer(escpos_bytes, printer_name=printer_name)
@@ -178,4 +194,38 @@ def print_thermal_receipt(data: ThermalPrintRequest, db: Session = Depends(get_d
         return ThermalPrintResponse(**res)
     except Exception as e:
         logger.error(f"Thermal print failure: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/diagnostic", response_model=ThermalPrintResponse)
+def print_thermal_diagnostic(data: Optional[DiagnosticPrintRequest] = None, db: Session = Depends(get_db)):
+    """
+    Renders and prints a universal thermal hardware diagnostic & calibration receipt.
+    Allows verifying ruler columns, density swatches, raster logo banding, and cutting.
+    """
+    settings = db.query(BusinessSettings).filter(BusinessSettings.id == 1).first()
+    data = data or DiagnosticPrintRequest()
+
+    paper_width = data.paper_width or (settings.receipt_printer_type if settings else "80mm") or "80mm"
+    printer_name = data.printer_name or (settings.selected_thermal_printer if settings else None)
+    profile = data.printer_profile or getattr(settings, "thermal_printer_profile", "standard_escpos") or "standard_escpos"
+    darkness = data.darkness or getattr(settings, "thermal_darkness", "normal") or "normal"
+    cut_mode = data.cut_mode or getattr(settings, "thermal_cut_mode", "partial") or "partial"
+    feed_lines = data.feed_lines if data.feed_lines is not None else getattr(settings, "thermal_feed_lines", 4)
+
+    try:
+        diag_bytes = generate_diagnostic_receipt(
+            settings=settings,
+            paper_width=paper_width,
+            printer_profile=profile,
+            printer_name=printer_name,
+            darkness=darkness,
+            cut_mode=cut_mode,
+            feed_lines=feed_lines,
+        )
+
+        res = send_to_thermal_printer(diag_bytes, printer_name=printer_name)
+        return ThermalPrintResponse(**res)
+    except Exception as e:
+        logger.error(f"Diagnostic print failure: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

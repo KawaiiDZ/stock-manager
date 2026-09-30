@@ -656,6 +656,9 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
             layout: settings?.thermal_layout || 'classic',
             show_barcode: settings?.show_barcode ?? true,
             darkness: settings?.thermal_darkness || 'normal',
+            printer_profile: settings?.thermal_printer_profile || 'standard_escpos',
+            cut_mode: settings?.thermal_cut_mode || 'partial',
+            feed_lines: settings?.thermal_feed_lines ?? 4,
           }).then((printRes) => {
             if (printRes.is_online === false || printRes.warning) {
               setWarningToast(

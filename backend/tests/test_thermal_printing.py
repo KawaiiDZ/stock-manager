@@ -489,3 +489,153 @@ def test_direct_thermal_print_deduplication(mock_send, client):
     assert res2.status_code == 200, res2.text
     assert mock_send.call_count == 1
     assert res2.json()['success'] is True
+
+
+def test_universal_printer_profiles():
+    from backend.app.services.escpos_service import (
+        generate_escpos_receipt,
+        CMD_HEATING_MAX,
+        CMD_DENSITY_MAX,
+        CMD_STAR_CUT_PARTIAL,
+        CMD_CUT_PARTIAL,
+        ESC,
+    )
+    settings = SimpleNamespace(
+        business_name="Universal POS Store",
+        phone="0300-1112223",
+        address="Main Boulevard",
+        currency="Rs.",
+        receipt_header="",
+        receipt_footer="Visit again",
+    )
+    sale_data = {
+        "receipt_number": "UNI-001",
+        "created_at": "2026-09-30 20:00:00",
+        "items": [],
+        "total_amount": 500,
+        "paid_amount": 500,
+    }
+
+    # 1. Standard ESC/POS (Epson/Bixolon/Citizen/Universal default): Clean standard codes, no vendor-specific ESC 7 / DC2
+    std_bytes = generate_escpos_receipt(
+        sale_data, settings=settings, printer_profile="standard_escpos", darkness="maximum"
+    )
+    assert CMD_HEATING_MAX not in std_bytes
+    assert CMD_DENSITY_MAX not in std_bytes
+    assert CMD_CUT_PARTIAL in std_bytes
+
+    # 2. Xprinter Enhanced: Hardware heating booster included in maximum darkness
+    xp_bytes = generate_escpos_receipt(
+        sale_data, settings=settings, printer_profile="xprinter_enhanced", darkness="maximum"
+    )
+    assert CMD_HEATING_MAX in xp_bytes
+    assert CMD_DENSITY_MAX in xp_bytes
+
+    # 3. Star Line mode: Uses Star Micronics cut command (ESC d 2)
+    star_bytes = generate_escpos_receipt(
+        sale_data, settings=settings, printer_profile="star_line", cut_mode="partial"
+    )
+    assert CMD_STAR_CUT_PARTIAL in star_bytes
+
+    # 4. Generic Plain text mode: Zero binary ESC control codes
+    plain_bytes = generate_escpos_receipt(
+        sale_data, settings=settings, printer_profile="generic_plain"
+    )
+    assert ESC not in plain_bytes
+    assert b"Universal POS Store" in plain_bytes
+    assert b"TOTAL:" in plain_bytes
+
+
+def test_universal_column_geometries():
+    from backend.app.services.escpos_service import generate_escpos_receipt
+
+    settings = SimpleNamespace(
+        business_name="Width Geometry Store",
+        phone="123",
+        address="",
+        currency="$",
+        receipt_header="",
+        receipt_footer="",
+    )
+    sale_data = {
+        "receipt_number": "WIDTH-001",
+        "created_at": "2026-09-30 20:00:00",
+        "items": [],
+        "total_amount": 100,
+        "paid_amount": 100,
+    }
+
+    # 80mm compact (42 cols)
+    compact_80 = generate_escpos_receipt(sale_data, settings=settings, paper_width="80mm_compact")
+    assert b"-" * 42 in compact_80
+
+    # 58mm narrow (30 cols)
+    narrow_58 = generate_escpos_receipt(sale_data, settings=settings, paper_width="58mm_narrow")
+    assert b"-" * 30 in narrow_58
+
+
+def test_network_printer_target_detection():
+    from backend.app.services.escpos_service import is_network_printer_target
+
+    assert is_network_printer_target("192.168.1.100") is True
+    assert is_network_printer_target("192.168.1.200:9100") is True
+    assert is_network_printer_target("tcp://10.0.0.5:9100") is True
+    assert is_network_printer_target("socket://192.168.0.50") is True
+    assert is_network_printer_target("PrinterCMD_ESCPO_POS80_Printer_USB") is False
+    assert is_network_printer_target("HP_LaserJet_M2727nf") is False
+    assert is_network_printer_target("") is False
+    assert is_network_printer_target(None) is False
+
+
+def test_generate_diagnostic_receipt():
+    from backend.app.services.escpos_service import generate_diagnostic_receipt
+
+    settings = SimpleNamespace(
+        business_name="Calibration Diagnostic Lab",
+        receipt_logo_path=None,
+        logo_path=None,
+    )
+
+    diag_bytes = generate_diagnostic_receipt(
+        settings=settings,
+        paper_width="80mm",
+        printer_profile="standard_escpos",
+        printer_name="POS-80-Test",
+        darkness="normal",
+        cut_mode="partial",
+        feed_lines=4,
+    )
+
+    assert isinstance(diag_bytes, bytes)
+    assert b"THERMAL CALIBRATION & DIAGNOSTIC" in diag_bytes
+    assert b"COLUMN ALIGNMENT RULER" in diag_bytes
+    assert b"PRINT HEAD DENSITY TEST" in diag_bytes
+    assert b"HARDWARE BARCODE TEST" in diag_bytes
+    assert b"CALIBRATION OK - PRINTER READY" in diag_bytes
+
+
+@patch('backend.app.api.routes.printing.send_to_thermal_printer')
+def test_diagnostic_endpoint(mock_send, client):
+    mock_send.return_value = {
+        'success': True,
+        'printer': 'Test_POS_Printer',
+        'bytes_sent': 850,
+        'message': 'Successfully sent calibration receipt',
+    }
+
+    payload = {
+        'printer_name': 'Test_POS_Printer',
+        'paper_width': '80mm',
+        'printer_profile': 'standard_escpos',
+        'darkness': 'normal',
+        'cut_mode': 'partial',
+        'feed_lines': 4,
+    }
+
+    res = client.post('/api/printing/diagnostic', json=payload)
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data['success'] is True
+    assert data['printer'] == 'Test_POS_Printer'
+    assert mock_send.called
+

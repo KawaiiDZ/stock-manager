@@ -403,10 +403,25 @@ export const api = {
     kick_drawer?: boolean;
     is_sample?: boolean;
     darkness?: string;
+    printer_profile?: string;
+    cut_mode?: string;
+    feed_lines?: number;
   }) =>
     request<{ success: boolean; printer: string; bytes_sent: number; message: string; is_online?: boolean; warning?: string }>('/printing/receipt', {
       method: 'POST',
       body: JSON.stringify(data),
+    }),
+  printThermalDiagnostic: (data?: {
+    printer_name?: string;
+    paper_width?: string;
+    printer_profile?: string;
+    darkness?: string;
+    cut_mode?: string;
+    feed_lines?: number;
+  }) =>
+    request<{ success: boolean; printer: string; bytes_sent: number; message: string; is_online?: boolean; warning?: string }>('/printing/diagnostic', {
+      method: 'POST',
+      body: JSON.stringify(data || {}),
     }),
   clearPrinterQueue: (printerName?: string) =>
     request<{ success: boolean; message: string }>('/printing/clear-queue', {

@@ -78,6 +78,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         show_barcode: settings?.show_barcode ?? true,
         darkness: settings?.thermal_darkness || 'normal',
         layout: receiptLayout,
+        printer_profile: settings?.thermal_printer_profile || 'standard_escpos',
+        cut_mode: settings?.thermal_cut_mode || 'partial',
+        feed_lines: settings?.thermal_feed_lines ?? 4,
       });
       setPrintSuccessMsg(`Receipt sent directly to ${res.printer}`);
       setTimeout(() => setPrintSuccessMsg(null), 4000);
