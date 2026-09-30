@@ -1,5 +1,8 @@
+import time
 import logging
 from typing import Optional, List, Dict, Any
+
+_recent_print_cache: Dict[str, Dict[str, Any]] = {}
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -80,6 +83,14 @@ def print_thermal_receipt(data: ThermalPrintRequest, db: Session = Depends(get_d
     header_style = data.header_style or (settings.thermal_header_style if settings else "logo_text") or "logo_text"
     show_barcode = data.show_barcode if data.show_barcode is not None else (settings.show_barcode if settings else True)
     printer_name = data.printer_name or (settings.selected_thermal_printer if settings else None)
+
+    # Deduplicate rapid concurrent submissions (e.g. double-click, double Enter key within 3.0 seconds)
+    dedup_key = f"{data.sale_id}_{printer_name}_{data.is_sample}_{data.layout}"
+    now = time.time()
+    cached = _recent_print_cache.get(dedup_key)
+    if cached and (now - cached["timestamp"] < 3.0):
+        logger.info(f"Deduplicated rapid print request for '{dedup_key}' (elapsed: {now - cached['timestamp']:.2f}s)")
+        return ThermalPrintResponse(**cached["response"])
 
     sale_dict: Dict[str, Any] = {}
 
@@ -163,6 +174,7 @@ def print_thermal_receipt(data: ThermalPrintRequest, db: Session = Depends(get_d
         )
 
         res = send_to_thermal_printer(escpos_bytes, printer_name=printer_name)
+        _recent_print_cache[dedup_key] = {"timestamp": now, "response": res}
         return ThermalPrintResponse(**res)
     except Exception as e:
         logger.error(f"Thermal print failure: {e}", exc_info=True)

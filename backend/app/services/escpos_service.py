@@ -71,7 +71,7 @@ def list_system_printers() -> List[Dict[str, Any]]:
                 elif line.startswith((" ", "\t")) and current_p:
                     printer_status[current_p] += " " + line.strip()
                 else:
-                    m = re.match(r"^printer\s+(\S+)\s+(is\s+\w+.*)$", line)
+                    m = re.match(r"^printer\s+(\S+)\s+(.*)$", line)
                     if m:
                         current_p = m.group(1)
                         printer_status[current_p] = m.group(2)
@@ -297,15 +297,16 @@ def image_to_escpos_raster(
 
         # Determine paper dot limits & line byte width
         total_bytes_per_row = 32 if paper_width == "58mm" else 48
-        max_dots_w = (total_bytes_per_row - 8) * 8  # e.g. 320 dots for 80mm, 192 dots for 58mm
+        # Match visual receipt header proportion (192 dots for 80mm, 144 dots for 58mm)
+        target_dots_w = 144 if paper_width == "58mm" else 192
 
         orig_w, orig_h = img.size
         if orig_w <= 0 or orig_h <= 0:
             return None
 
-        scale = min(1.0, max_dots_w / orig_w)
-        new_w = max(8, (int(orig_w * scale) // 8) * 8)
-        new_h = max(1, int(orig_h * (new_w / orig_w)))
+        scale = target_dots_w / orig_w
+        new_w = target_dots_w
+        new_h = max(1, int(orig_h * scale))
 
         # Resize smoothly
         resample_filter = getattr(Image, "Resampling", Image).LANCZOS
@@ -327,27 +328,32 @@ def image_to_escpos_raster(
         right_pad = max(0, total_bytes_per_row - img_bytes_per_row - left_pad)
 
         raw_img_bytes = bw.tobytes()
-        raster_data = bytearray()
 
-        for row in range(new_h):
-            start = row * img_bytes_per_row
-            row_slice = raw_img_bytes[start : start + img_bytes_per_row]
-            # Left padding (white = 0x00)
-            raster_data.extend(b"\x00" * left_pad)
-            # Invert row bytes (PIL: 0=black, 1=white; ESC/POS: 1=black dot, 0=white dot)
-            for b in row_slice:
-                raster_data.append(~b & 0xFF)
-            # Right padding (white = 0x00)
-            raster_data.extend(b"\x00" * right_pad)
+        # Emit in buffer-safe vertical bands (max 24 dots height per chunk)
+        # Prevents receive buffer overflow on POS-80 / POS-58 hardware with 2KB-4KB RAM
+        band_h_limit = 24
+        raster_chunks = bytearray()
 
-        xL = total_bytes_per_row & 0xFF
-        xH = (total_bytes_per_row >> 8) & 0xFF
-        yL = new_h & 0xFF
-        yH = (new_h >> 8) & 0xFF
+        for start_row in range(0, new_h, band_h_limit):
+            chunk_h = min(band_h_limit, new_h - start_row)
+            chunk_data = bytearray()
+            for r in range(start_row, start_row + chunk_h):
+                r_slice = raw_img_bytes[r * img_bytes_per_row : (r + 1) * img_bytes_per_row]
+                chunk_data.extend(b"\x00" * left_pad)
+                for b in r_slice:
+                    chunk_data.append(~b & 0xFF)
+                chunk_data.extend(b"\x00" * right_pad)
 
-        # GS v 0 0 xL xH yL yH <raster_data>
-        header = bytes([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH])
-        return header + bytes(raster_data)
+            xL = total_bytes_per_row & 0xFF
+            xH = (total_bytes_per_row >> 8) & 0xFF
+            yL = chunk_h & 0xFF
+            yH = (chunk_h >> 8) & 0xFF
+
+            # GS v 0 0 xL xH yL yH <chunk_data>
+            header = bytes([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH])
+            raster_chunks.extend(header + chunk_data)
+
+        return bytes(raster_chunks)
 
     except Exception as ex:
         logger.warning(f"Failed to generate ESC/POS raster image logo: {ex}")

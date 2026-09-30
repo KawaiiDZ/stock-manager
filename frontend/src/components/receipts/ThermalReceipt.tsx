@@ -17,6 +17,7 @@ export interface ThermalReceiptProps {
   headerStyle?: 'logo_text' | 'text_only';
   layout?: 'classic' | 'modern';
   showBarcode?: boolean;
+  id?: string;
 }
 
 export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
@@ -33,6 +34,7 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
   headerStyle: propHeaderStyle,
   layout: propLayout,
   showBarcode = true,
+  id = 'printable-thermal-receipt',
 }) => {
   const currency = propCurrency || settings?.currency || 'Rs.';
   const shopName = businessName || settings?.business_name || 'My Local Business';
@@ -49,7 +51,7 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
 
   return (
     <div
-      id="printable-thermal-receipt"
+      id={id}
       className={`bg-white text-black font-mono transition-all mx-auto print:m-0 print:p-0 print:w-full print:max-w-none ${
         is58mm ? 'w-[58mm] max-w-[58mm] text-[10.5px] p-2.5 shadow-sm' : 'w-[80mm] max-w-[80mm] text-xs p-3.5 sm:p-4 shadow-sm'
       }`}

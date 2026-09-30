@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { ThermalReceipt } from './ThermalReceipt';
@@ -29,6 +29,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   const [directPrinting, setDirectPrinting] = useState<boolean>(false);
   const [printSuccessMsg, setPrintSuccessMsg] = useState<string | null>(null);
   const [printErrorMsg, setPrintErrorMsg] = useState<string | null>(null);
+  const isPrintingRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -41,7 +42,12 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   }, [isOpen, settings?.receipt_type, settings?.receipt_printer_type, settings?.thermal_layout]);
 
   const handleBrowserPrint = () => {
-    if (!sale) return;
+    if (!sale || isPrintingRef.current) return;
+    isPrintingRef.current = true;
+    setTimeout(() => {
+      isPrintingRef.current = false;
+    }, 1200);
+
     if (receiptType === 'thermal') {
       printElement('printable-thermal-receipt', {
         title: `Receipt_${sale.receipt_number}`,
@@ -58,8 +64,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   };
 
   const handleDirectPrint = async () => {
-    if (!sale) return;
+    if (!sale || isPrintingRef.current) return;
     try {
+      isPrintingRef.current = true;
       setDirectPrinting(true);
       setPrintErrorMsg(null);
       setPrintSuccessMsg(null);
@@ -76,13 +83,18 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
       setTimeout(() => setPrintSuccessMsg(null), 4000);
     } catch (err: any) {
       setPrintErrorMsg(err.detail || 'Direct ESC/POS print failed. Opening browser print dialog...');
+      isPrintingRef.current = false;
       handleBrowserPrint();
     } finally {
       setDirectPrinting(false);
+      setTimeout(() => {
+        isPrintingRef.current = false;
+      }, 1000);
     }
   };
 
   const handlePrint = () => {
+    if (isPrintingRef.current) return;
     if (receiptType === 'thermal' && settings?.thermal_print_mode === 'direct_escpos') {
       handleDirectPrint();
     } else {
@@ -97,12 +109,14 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') {
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
         handlePrint();
         return;
       }
       if (e.key === 'Enter') {
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
         handlePrint();
         return;
       }
@@ -119,7 +133,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [isOpen, receiptType, paperWidth, sale, settings, directPrinting]);
+  }, [isOpen, receiptType, paperWidth, receiptLayout, sale, settings]);
 
   if (!sale) return null;
 

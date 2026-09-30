@@ -314,10 +314,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setSystemPrinters(list);
       if (list.length > 0) {
         setSelectedThermalPrinter((prev) => {
-          if (prev && list.some((p) => p.name === prev)) return prev;
           const thermal = list.find((p) => p.is_thermal);
+          if (prev && list.some((p) => p.name === prev && p.is_thermal)) return prev;
+          if (thermal) return thermal.name;
+          if (prev && list.some((p) => p.name === prev)) return prev;
           const def = list.find((p) => p.is_default);
-          return thermal ? thermal.name : (def ? def.name : list[0].name);
+          return def ? def.name : list[0].name;
         });
         setSelectedA4Printer((prev) => {
           if (prev && list.some((p) => p.name === prev)) return prev;
@@ -779,6 +781,40 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     }
   };
 
+  const handleChangeThermalLayout = async (layout: 'classic' | 'modern') => {
+    setThermalLayout(layout);
+    try {
+      await api.updateSettings({
+        thermal_layout: layout,
+      });
+      onSettingsUpdated();
+      setSuccessMsg(
+        layout === 'classic'
+          ? 'Thermal receipt layout set to Classic POS Terminal (Default)!'
+          : 'Thermal receipt layout set to Modern Clean!'
+      );
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to update layout setting.');
+    }
+  };
+
+  const handleChangeThermalHeaderStyle = async (style: 'logo_text' | 'text_only') => {
+    setThermalHeaderStyle(style);
+    try {
+      await api.updateSettings({
+        thermal_header_style: style,
+      });
+      onSettingsUpdated();
+      setSuccessMsg(
+        style === 'logo_text'
+          ? 'Thermal receipt header set to Logo + Text (Active)!'
+          : 'Thermal receipt header set to Clean Text-Only (No Logo)!'
+      );
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to update header style setting.');
+    }
+  };
+
   const handleClearPrinterQueue = async () => {
     setClearingQueue(true);
     try {
@@ -827,7 +863,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   };
 
   const handleTestBrowserPrint = () => {
-    printElement('printable-thermal-receipt', {
+    printElement('settings-preview-thermal-receipt', {
       title: 'Sample_Test_Receipt',
       isThermal: true,
       paperWidth: (printerType === '58mm' ? '58mm' : '80mm'),
@@ -1845,7 +1881,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <button
                           type="button"
-                          onClick={() => setThermalLayout('classic')}
+                          onClick={() => handleChangeThermalLayout('classic')}
                           className={`p-3.5 rounded-2xl border-2 text-left transition flex items-start gap-3 ${
                             thermalLayout === 'classic'
                               ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
@@ -1870,7 +1906,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
                         <button
                           type="button"
-                          onClick={() => setThermalLayout('modern')}
+                          onClick={() => handleChangeThermalLayout('modern')}
                           className={`p-3.5 rounded-2xl border-2 text-left transition flex items-start gap-3 ${
                             thermalLayout === 'modern'
                               ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
@@ -1898,7 +1934,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <button
                           type="button"
-                          onClick={() => setThermalHeaderStyle('logo_text')}
+                          onClick={() => handleChangeThermalHeaderStyle('logo_text')}
                           className={`p-3.5 rounded-2xl border-2 text-left transition flex items-start gap-3 ${
                             thermalHeaderStyle === 'logo_text'
                               ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
@@ -1918,7 +1954,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
                         <button
                           type="button"
-                          onClick={() => setThermalHeaderStyle('text_only')}
+                          onClick={() => handleChangeThermalHeaderStyle('text_only')}
                           className={`p-3.5 rounded-2xl border-2 text-left transition flex items-start gap-3 ${
                             thermalHeaderStyle === 'text_only'
                               ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
@@ -2391,6 +2427,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 {/* Live Thermal Receipt Component Display */}
                 <div className="bg-slate-100/90 p-3 sm:p-4 rounded-2xl border border-slate-200 max-h-[520px] overflow-y-auto flex justify-center shadow-inner">
                   <ThermalReceipt
+                    id="settings-preview-thermal-receipt"
                     sale={sampleTestSale}
                     businessName={bizName}
                     phone={bizPhone}

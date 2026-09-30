@@ -461,5 +461,31 @@ def test_generate_escpos_receipt_logo_inclusion_and_omission():
     assert b"\x1dv0\x00" not in buf_no_logo  # ESC/POS raster image command completely omitted
 
 
+@patch('backend.app.api.routes.printing.send_to_thermal_printer')
+def test_direct_thermal_print_deduplication(mock_send, client):
+    mock_send.return_value = {
+        'success': True,
+        'printer': 'Test_Dedup_POS',
+        'bytes_sent': 512,
+        'message': 'Successfully sent 512 bytes',
+    }
 
+    payload = {
+        'printer_name': 'Test_Dedup_POS',
+        'paper_width': '80mm',
+        'header_style': 'logo_text',
+        'show_barcode': True,
+        'is_sample': True,
+        'layout': 'modern',
+    }
 
+    # First call: should reach the printer
+    res1 = client.post('/api/printing/receipt', json=payload)
+    assert res1.status_code == 200, res1.text
+    assert mock_send.call_count == 1
+
+    # Immediate second call with identical payload: should be deduplicated (return cached response, NOT calling printer again)
+    res2 = client.post('/api/printing/receipt', json=payload)
+    assert res2.status_code == 200, res2.text
+    assert mock_send.call_count == 1
+    assert res2.json()['success'] is True

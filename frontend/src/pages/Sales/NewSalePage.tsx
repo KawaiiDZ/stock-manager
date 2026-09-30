@@ -81,6 +81,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   const [warningToast, setWarningToast] = useState<string | null>(null);
 
   const [autoPrintEnabled, setAutoPrintEnabled] = useState<boolean>(Boolean(settings?.skip_receipt_preview));
+  const isCompletingRef = useRef<boolean>(false);
 
   useEffect(() => {
     setAutoPrintEnabled(Boolean(settings?.skip_receipt_preview));
@@ -281,6 +282,8 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       // Ctrl+Enter or F9 to complete sale
       if ((e.ctrlKey && e.key === 'Enter') || e.key === 'F9') {
         e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         handleCompleteSale();
         return;
       }
@@ -485,6 +488,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
     // Complete sale from search bar via Ctrl+Enter or F9
     if ((e.ctrlKey && e.key === 'Enter') || e.key === 'F9') {
       e.preventDefault();
+      e.stopPropagation();
       handleCompleteSale();
       return;
     }
@@ -585,6 +589,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
 
   // Complete Sale Execution
   const handleCompleteSale = async () => {
+    if (completing || isCompletingRef.current) return;
     if (cart.length === 0) {
       setErrorMsg('Cannot complete an empty sale. Please add items to cart.');
       return;
@@ -603,6 +608,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       return;
     }
 
+    isCompletingRef.current = true;
     setCompleting(true);
     setErrorMsg(null);
 
@@ -703,6 +709,9 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       setErrorMsg(err.detail || 'Failed to complete sale. Please verify quantities.');
     } finally {
       setCompleting(false);
+      setTimeout(() => {
+        isCompletingRef.current = false;
+      }, 500);
     }
   };
 
@@ -1470,6 +1479,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
           <>
             <div id="autoprint-thermal-receipt">
               <ThermalReceipt
+                id="autoprint-thermal-receipt-element"
                 sale={completedSale}
                 settings={settings}
                 businessName={settings?.business_name}
