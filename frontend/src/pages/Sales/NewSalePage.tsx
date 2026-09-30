@@ -266,14 +266,20 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         searchInputRef.current?.select();
         return;
       }
+      // F8 to open customer selector modal
+      if (e.key === 'F8') {
+        e.preventDefault();
+        setShowAddCustomerModal(true);
+        return;
+      }
       // Escape to reset keyboard navigation to search
       if (e.key === 'Escape') {
         setKeyboardActiveTarget(null);
         searchInputRef.current?.focus();
         return;
       }
-      // Ctrl+Enter to complete sale
-      if (e.ctrlKey && e.key === 'Enter') {
+      // Ctrl+Enter or F9 to complete sale
+      if ((e.ctrlKey && e.key === 'Enter') || e.key === 'F9') {
         e.preventDefault();
         handleCompleteSale();
         return;
@@ -346,6 +352,15 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
           e.preventDefault();
           const targetItem = cart[keyboardActiveTarget];
           updateQuantity(targetItem.product.id, targetItem.quantity + 1);
+        }
+        return;
+      }
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (typeof keyboardActiveTarget === 'number' && cart[keyboardActiveTarget]) {
+          e.preventDefault();
+          const targetItem = cart[keyboardActiveTarget];
+          removeItem(targetItem.product.id);
         }
         return;
       }
@@ -467,6 +482,20 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
     : [];
 
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    // Complete sale from search bar via Ctrl+Enter or F9
+    if ((e.ctrlKey && e.key === 'Enter') || e.key === 'F9') {
+      e.preventDefault();
+      handleCompleteSale();
+      return;
+    }
+
+    // F8 to open customer selector modal
+    if (e.key === 'F8') {
+      e.preventDefault();
+      setShowAddCustomerModal(true);
+      return;
+    }
+
     const hasDropdownResults = searchQuery.trim().length > 0 && filteredProducts.length > 0;
 
     if (e.key === 'ArrowDown') {
@@ -808,10 +837,11 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                 <span>{autoPrintEnabled ? '1-Click Print: Active' : 'Preview Modal: Active'}</span>
               </button>
             </div>
-            <p className="text-emerald-200 text-xs mt-0.5 font-medium">
-              {showBarcode ? 'Scan barcode or search product • ' : 'Search product • '}Press{' '}
-              <kbd className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-mono">F4</kbd> to
-              search
+            <p className="text-emerald-200 text-xs mt-0.5 font-medium flex items-center gap-1.5 flex-wrap">
+              <span>{showBarcode ? 'Scan barcode or search •' : 'Search product •'}</span>
+              <span>Press <kbd className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-mono">F4</kbd> Search</span>
+              <span>• <kbd className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-mono">F8</kbd> Customer</span>
+              <span>• <kbd className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-mono">F9 / Ctrl+Enter</kbd> Checkout</span>
             </p>
           </div>
         </div>
@@ -1328,6 +1358,9 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
               >
                 {autoPrintEnabled && <Zap className="h-4 w-4 text-emerald-200 shrink-0" />}
                 <span>Complete Sale ({formatCurrency(grandTotal, currency)})</span>
+                <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded-md bg-white/20 text-white text-[10px] font-mono font-bold tracking-tight shadow-xs">
+                  F9
+                </kbd>
               </Button>
             </div>
           </div>

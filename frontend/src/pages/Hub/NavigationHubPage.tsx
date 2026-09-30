@@ -165,7 +165,10 @@ export const NavigationHubPage: React.FC<NavigationHubPageProps> = ({
       stats: [
         {
           label: "Today's Sales",
-          value: formatCurrency(stats?.today_sales_revenue || 0, currency),
+          value:
+            localStorage.getItem('sm_hide_dashboard_finances') === 'true'
+              ? '••••••'
+              : formatCurrency(stats?.today_sales_revenue || 0, currency),
           highlight: (stats?.today_sales_revenue || 0) > 0,
         },
       ],

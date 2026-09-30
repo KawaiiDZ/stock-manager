@@ -6,7 +6,8 @@ from backend.app.schemas.auth import (
     ChangePasswordRequest, ChangePinRequest
 )
 from backend.app.services.auth_service import (
-    authenticate_user, verify_settings_pin, change_user_password, change_settings_pin
+    authenticate_user, verify_settings_pin, change_user_password, change_settings_pin,
+    verify_dashboard_financials_unlock
 )
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -27,6 +28,14 @@ def verify_pin(data: PinVerifyRequest, db: Session = Depends(get_db)):
     return PinVerifyResponse(
         valid=valid,
         message="PIN verified" if valid else "Incorrect PIN"
+    )
+
+@router.post("/verify-dashboard-pin", response_model=PinVerifyResponse)
+def verify_dashboard_pin(data: PinVerifyRequest, db: Session = Depends(get_db)):
+    valid = verify_dashboard_financials_unlock(db, data.pin)
+    return PinVerifyResponse(
+        valid=valid,
+        message="Unlocked" if valid else "Incorrect PIN or Password"
     )
 
 @router.post("/change-password")

@@ -157,12 +157,7 @@ export const dispatchGlobalShortcut = (
     return true;
   }
 
-  // If user is typing inside an input/textarea, do not intercept normal typing or Alt-key accents
-  if (isInputFocused()) {
-    return false;
-  }
-
-  // All application shortcuts use Alt (Option on macOS)
+  // All application shortcuts use Alt (Option on macOS) or dedicated function keys
   if (!e.altKey || e.ctrlKey || e.metaKey) {
     return false;
   }

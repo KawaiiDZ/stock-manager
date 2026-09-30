@@ -23,6 +23,8 @@ import {
   FileText,
   Barcode,
   Eye,
+  EyeOff,
+  ShieldCheck,
   Receipt,
   RotateCcw,
   Zap,
@@ -165,6 +167,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [currentPin, setCurrentPin] = useState('');
   const [newPin, setNewPin] = useState('');
 
+  // Dashboard Financial Privacy State
+  const [lockDashboardFinances, setLockDashboardFinances] = useState<boolean>(
+    Boolean(settings?.lock_dashboard_finances)
+  );
+  const [dashboardFinancialsPin, setDashboardFinancialsPin] = useState<string>('');
+  const [savingPrivacy, setSavingPrivacy] = useState<boolean>(false);
+
   // Reset / Wipe Data State
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetWipeMode, setResetWipeMode] = useState<'sales_only' | 'inventory_only' | 'all_data'>('sales_only');
@@ -290,6 +299,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setBarcodeLabelShowPrice(settings.barcode_label_show_price ?? true);
       setBarcodeLabelShowSku(settings.barcode_label_show_sku ?? true);
       setBarcodeLabelCustomText(settings.barcode_label_custom_text || '');
+      setLockDashboardFinances(Boolean(settings.lock_dashboard_finances));
     }
   }, [settings]);
 
@@ -655,6 +665,47 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setNewPin('');
     } catch (err: any) {
       setErrorMsg(err.detail || 'Failed to change PIN');
+    }
+  };
+
+  const handleToggleLockDashboardFinances = async (checked: boolean) => {
+    setLockDashboardFinances(checked);
+    setSaving(true);
+    setErrorMsg(null);
+    try {
+      await api.updateSettings({
+        lock_dashboard_finances: checked,
+      });
+      onSettingsUpdated();
+      setSuccessMsg(
+        checked
+          ? 'Dashboard financial lock enabled! Unmasking revenue and profit on the dashboard will require a PIN or password.'
+          : 'Dashboard financial lock disabled. Financials can now be toggled freely.'
+      );
+    } catch (err: any) {
+      setLockDashboardFinances(!checked);
+      setErrorMsg(err.detail || 'Failed to update dashboard financial privacy lock.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUpdateDashboardPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dashboardFinancialsPin.trim()) return;
+    setSavingPrivacy(true);
+    setErrorMsg(null);
+    try {
+      await api.updateSettings({
+        dashboard_financials_pin: dashboardFinancialsPin.trim(),
+      });
+      onSettingsUpdated();
+      setSuccessMsg('Dashboard Financial Unlock PIN updated successfully!');
+      setDashboardFinancialsPin('');
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to update dashboard unlock PIN.');
+    } finally {
+      setSavingPrivacy(false);
     }
   };
 
@@ -2807,52 +2858,144 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
       {/* Tab: Security */}
       {activeTab === 'security' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl">
-          {/* Change Password */}
-          <form onSubmit={handleChangePassword} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
-            <h3 className="font-bold text-slate-800 text-base mb-1">Change Admin Password</h3>
-            <Input
-              label="Current Password *"
-              type="password"
-              value={currentPass}
-              onChange={(e) => setCurrentPass(e.target.value)}
-              required
-            />
-            <Input
-              label="New Password *"
-              type="password"
-              value={newPass}
-              onChange={(e) => setNewPass(e.target.value)}
-              required
-            />
-            <Button type="submit" variant="primary">
-              Update Password
-            </Button>
-          </form>
+        <div className="space-y-6 max-w-4xl">
+          {/* Dashboard Financial Privacy Card */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
+            <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+                  <ShieldCheck className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-lg">Dashboard Financial Privacy & Masking</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Control who can view daily revenue, gross profit, and sensitive financial statistics on the dashboard.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                  lockDashboardFinances 
+                    ? 'bg-amber-50 text-amber-700 border border-amber-200' 
+                    : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {lockDashboardFinances ? 'Password / PIN Locked' : 'Unlocked Mode'}
+                </span>
+              </div>
+            </div>
 
-          {/* Change Settings PIN */}
-          <form onSubmit={handleChangePin} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
-            <h3 className="font-bold text-slate-800 text-base mb-1">Change Configuration PIN</h3>
-            <Input
-              label="Current PIN *"
-              type="password"
-              maxLength={6}
-              value={currentPin}
-              onChange={(e) => setCurrentPin(e.target.value)}
-              required
-            />
-            <Input
-              label="New PIN *"
-              type="password"
-              maxLength={6}
-              value={newPin}
-              onChange={(e) => setNewPin(e.target.value)}
-              required
-            />
-            <Button type="submit" variant="primary">
-              Update PIN
-            </Button>
-          </form>
+            {/* Toggle Switch */}
+            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
+              <div className="space-y-1 pr-4">
+                <div className="flex items-center gap-2">
+                  <Eye className="h-4 w-4 text-slate-700" />
+                  <span className="font-semibold text-slate-800 text-sm">
+                    Lock Revenue & Profit Behind PIN / Password
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500">
+                  When enabled, clicking the eye icon on the dashboard to reveal masked revenue or profits prompts for a PIN or admin password.
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                <input
+                  type="checkbox"
+                  checked={lockDashboardFinances}
+                  onChange={(e) => handleToggleLockDashboardFinances(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+              </label>
+            </div>
+
+            {/* Optional Custom Unlock PIN Form */}
+            {lockDashboardFinances && (
+              <form onSubmit={handleUpdateDashboardPin} className="space-y-4 pt-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-semibold text-slate-800 text-sm">Custom Financial Unlock PIN (Optional)</h4>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Set a dedicated quick PIN to reveal financials. If not set, your Configuration PIN (default: 1234) or Admin Password can also be used.
+                    </p>
+                  </div>
+                  {settings?.has_dashboard_financials_pin && (
+                    <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      Custom PIN Active
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex gap-3 items-end max-w-md">
+                  <div className="flex-1">
+                    <Input
+                      label="New Financial Unlock PIN"
+                      type="password"
+                      placeholder="e.g. 5555"
+                      maxLength={8}
+                      value={dashboardFinancialsPin}
+                      onChange={(e) => setDashboardFinancialsPin(e.target.value)}
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    disabled={savingPrivacy || !dashboardFinancialsPin.trim()}
+                    className="mb-0.5"
+                  >
+                    {savingPrivacy ? 'Saving...' : 'Set PIN'}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Change Password */}
+            <form onSubmit={handleChangePassword} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+              <h3 className="font-bold text-slate-800 text-base mb-1">Change Admin Password</h3>
+              <Input
+                label="Current Password *"
+                type="password"
+                value={currentPass}
+                onChange={(e) => setCurrentPass(e.target.value)}
+                required
+              />
+              <Input
+                label="New Password *"
+                type="password"
+                value={newPass}
+                onChange={(e) => setNewPass(e.target.value)}
+                required
+              />
+              <Button type="submit" variant="primary">
+                Update Password
+              </Button>
+            </form>
+
+            {/* Change Settings PIN */}
+            <form onSubmit={handleChangePin} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+              <h3 className="font-bold text-slate-800 text-base mb-1">Change Configuration PIN</h3>
+              <Input
+                label="Current PIN *"
+                type="password"
+                maxLength={6}
+                value={currentPin}
+                onChange={(e) => setCurrentPin(e.target.value)}
+                required
+              />
+              <Input
+                label="New PIN *"
+                type="password"
+                maxLength={6}
+                value={newPin}
+                onChange={(e) => setNewPin(e.target.value)}
+                required
+              />
+              <Button type="submit" variant="primary">
+                Update PIN
+              </Button>
+            </form>
+          </div>
         </div>
       )}
 

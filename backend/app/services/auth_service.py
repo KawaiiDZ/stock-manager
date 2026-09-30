@@ -144,3 +144,24 @@ def change_settings_pin(db: Session, current_pin: str, new_pin: str) -> bool:
     db.commit()
     return True
 
+def verify_dashboard_financials_unlock(db: Session, key: str) -> bool:
+    clean = str(key or "").strip()
+    if not clean:
+        return False
+    settings = db.query(BusinessSettings).filter(BusinessSettings.id == 1).first() or db.query(BusinessSettings).first()
+    # 1. Dedicated dashboard financial PIN if set
+    if settings and getattr(settings, 'dashboard_financials_pin_hash', None):
+        if verify_password(settings.dashboard_financials_pin_hash, clean):
+            return True
+    # 2. General settings configuration PIN
+    if settings and settings.config_pin_hash:
+        if verify_password(settings.config_pin_hash, clean):
+            return True
+    elif clean == "1234":
+        return True
+    # 3. Admin user login password
+    admin = db.query(User).filter(User.username == "admin").first() or db.query(User).first()
+    if admin and verify_password(admin.password_hash, clean):
+        return True
+    return False
+

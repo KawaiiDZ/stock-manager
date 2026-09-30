@@ -9,6 +9,9 @@ import {
   AlertTriangle,
   Calendar,
   Eye,
+  EyeOff,
+  Lock,
+  Unlock,
   Plus,
   ArrowRight,
   RefreshCw,
@@ -31,6 +34,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [loading, setLoading] = useState(true);
 
+  // Financial Privacy State (mask revenue & gross profit)
+  const [isFinancesHidden, setIsFinancesHidden] = useState<boolean>(() => {
+    return localStorage.getItem('sm_hide_dashboard_finances') === 'true';
+  });
+  const [showUnlockModal, setShowUnlockModal] = useState<boolean>(false);
+  const [unlockPin, setUnlockPin] = useState<string>('');
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+  const [unlocking, setUnlocking] = useState<boolean>(false);
+
   // Day detail modal state
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [daySalesDetail, setDaySalesDetail] = useState<{
@@ -42,6 +54,53 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
   const [loadingDay, setLoadingDay] = useState(false);
 
   const currency = settings?.currency || 'Rs.';
+
+  const maskFinancial = (val: any) => {
+    if (isFinancesHidden) {
+      return '••••••';
+    }
+    return formatCurrency(val, currency);
+  };
+
+  const handleToggleFinancesPrivacy = () => {
+    if (isFinancesHidden) {
+      // User wants to reveal financials
+      if (settings?.lock_dashboard_finances) {
+        setUnlockPin('');
+        setUnlockError(null);
+        setShowUnlockModal(true);
+      } else {
+        setIsFinancesHidden(false);
+        localStorage.setItem('sm_hide_dashboard_finances', 'false');
+      }
+    } else {
+      // User wants to hide financials (always 1-click, no password required)
+      setIsFinancesHidden(true);
+      localStorage.setItem('sm_hide_dashboard_finances', 'true');
+    }
+  };
+
+  const handleConfirmUnlock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!unlockPin.trim()) return;
+    setUnlocking(true);
+    setUnlockError(null);
+    try {
+      const res = await api.verifyDashboardPin(unlockPin.trim());
+      if (res.valid) {
+        setIsFinancesHidden(false);
+        localStorage.setItem('sm_hide_dashboard_finances', 'false');
+        setShowUnlockModal(false);
+        setUnlockPin('');
+      } else {
+        setUnlockError(res.message || 'Incorrect PIN or Password.');
+      }
+    } catch (err: any) {
+      setUnlockError(err.detail || err.message || 'Failed to verify PIN.');
+    } finally {
+      setUnlocking(false);
+    }
+  };
 
   const loadDashboardData = async () => {
     setLoading(true);
@@ -97,7 +156,38 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
             Here is your live daily business and inventory summary.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Privacy Eye Toggle Button */}
+          <button
+            type="button"
+            onClick={handleToggleFinancesPrivacy}
+            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-xs border ${
+              isFinancesHidden
+                ? 'bg-amber-500/25 hover:bg-amber-500/35 text-amber-200 border-amber-300/40 shadow-amber-950/20'
+                : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
+            }`}
+            title={
+              isFinancesHidden
+                ? settings?.lock_dashboard_finances
+                  ? 'Revenue & profits are hidden (Password protected). Click to unlock.'
+                  : 'Revenue & profits are hidden. Click to reveal.'
+                : 'Click to hide revenue and profits (Privacy Mode)'
+            }
+          >
+            {isFinancesHidden ? (
+              <>
+                <EyeOff className="h-4 w-4 text-amber-300 shrink-0" />
+                <span>Financials: Hidden</span>
+                {settings?.lock_dashboard_finances && <Lock className="h-3 w-3 text-amber-300 ml-0.5" />}
+              </>
+            ) : (
+              <>
+                <Eye className="h-4 w-4 text-emerald-300 shrink-0" />
+                <span>Hide Financials</span>
+              </>
+            )}
+          </button>
+
           <Button
             variant="primary"
             size="md"
@@ -132,32 +222,32 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
           </div>
           <div>
             <div className="text-2xl font-black text-slate-900 dark:text-white">
-              {formatCurrency(stats?.today_sales_revenue, currency)}
+              {maskFinancial(stats?.today_sales_revenue)}
             </div>
             {stats && (stats.today_past_debt_collected || 0) > 0 ? (
               <div className="mt-1 space-y-0.5">
                 <div className="flex items-center justify-between text-xs font-semibold">
                   <span className="text-slate-400 dark:text-slate-500">Cash from Sales:</span>
-                  <span className="text-emerald-600 dark:text-emerald-400 font-bold">{formatCurrency(stats.today_sales_cash || 0, currency)}</span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-bold">{maskFinancial(stats.today_sales_cash || 0)}</span>
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-medium">
                   <span className="text-slate-400 dark:text-slate-500">+ Past Debt Collected:</span>
-                  <span className="text-slate-600 dark:text-slate-300 font-semibold">+{formatCurrency(stats.today_past_debt_collected, currency)}</span>
+                  <span className="text-slate-600 dark:text-slate-300 font-semibold">+{maskFinancial(stats.today_past_debt_collected)}</span>
                 </div>
               </div>
             ) : (
               <div className="flex items-center justify-between text-xs mt-1 font-semibold">
                 <span className="text-slate-400 dark:text-slate-500">Cash Collected:</span>
-                <span className="text-emerald-700 font-bold">
-                  {formatCurrency(stats?.today_sales_cash !== undefined ? stats.today_sales_cash : (stats?.today_collected_cash || 0), currency)}
-                  {stats && Number(stats.today_sales_revenue) > 0 && Number(stats.today_sales_cash ?? stats.today_collected_cash ?? 0) >= Number(stats.today_sales_revenue) ? ' (100%)' : ''}
+                <span className="text-emerald-700 dark:text-emerald-400 font-bold">
+                  {maskFinancial(stats?.today_sales_cash !== undefined ? stats.today_sales_cash : (stats?.today_collected_cash || 0))}
+                  {stats && Number(stats.today_sales_revenue) > 0 && Number(stats.today_sales_cash ?? stats.today_collected_cash ?? 0) >= Number(stats.today_sales_revenue) && !isFinancesHidden ? ' (100%)' : ''}
                 </span>
               </div>
             )}
             {stats && Number(stats.today_sales_revenue) > Number(stats.today_sales_cash ?? stats.today_collected_cash ?? 0) && !(stats.today_past_debt_collected || 0) && (
               <div className="flex items-center justify-between text-[11px] mt-0.5 text-amber-600 font-medium">
                 <span>Credit / Due:</span>
-                <span className="font-semibold">{formatCurrency(Number(stats.today_sales_revenue) - Number(stats.today_sales_cash ?? stats.today_collected_cash ?? 0), currency)}</span>
+                <span className="font-semibold">{maskFinancial(Number(stats.today_sales_revenue) - Number(stats.today_sales_cash ?? stats.today_collected_cash ?? 0))}</span>
               </div>
             )}
           </div>
@@ -175,32 +265,32 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
           </div>
           <div>
             <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-              {formatCurrency(stats?.today_gross_profit, currency)}
+              {maskFinancial(stats?.today_gross_profit)}
             </div>
             {stats && (stats.today_past_debt_profit || 0) > 0 ? (
               <div className="mt-1 space-y-0.5">
                 <div className="flex items-center justify-between text-xs font-semibold">
                   <span className="text-slate-400 dark:text-slate-500">Realized on Sales:</span>
-                  <span className="text-emerald-600 dark:text-emerald-400 font-bold">{formatCurrency(stats.today_realized_profit || 0, currency)}</span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-bold">{maskFinancial(stats.today_realized_profit || 0)}</span>
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-medium">
                   <span className="text-slate-400 dark:text-slate-500">+ Past Debt Profit:</span>
-                  <span className="text-slate-600 dark:text-slate-300 font-semibold">+{formatCurrency(stats.today_past_debt_profit, currency)}</span>
+                  <span className="text-slate-600 dark:text-slate-300 font-semibold">+{maskFinancial(stats.today_past_debt_profit)}</span>
                 </div>
               </div>
             ) : (
               <div className="flex items-center justify-between text-xs mt-1 font-semibold">
                 <span className="text-slate-400 dark:text-slate-500">Realized (Cash):</span>
                 <span className="text-slate-700 dark:text-slate-300 font-bold">
-                  {formatCurrency(stats?.today_realized_profit || 0, currency)}
-                  {stats && Number(stats.today_gross_profit) > 0 && Number(stats.today_realized_profit) >= Number(stats.today_gross_profit) ? ' (100%)' : ''}
+                  {maskFinancial(stats?.today_realized_profit || 0)}
+                  {stats && Number(stats.today_gross_profit) > 0 && Number(stats.today_realized_profit) >= Number(stats.today_gross_profit) && !isFinancesHidden ? ' (100%)' : ''}
                 </span>
               </div>
             )}
             {stats && Number(stats.today_unrealized_profit || 0) > 0 && (
               <div className="flex items-center justify-between text-[11px] mt-0.5 text-amber-600 dark:text-amber-400 font-medium">
                 <span>Credit Pending:</span>
-                <span className="font-semibold">{formatCurrency(stats.today_unrealized_profit || 0, currency)}</span>
+                <span className="font-semibold">{maskFinancial(stats.today_unrealized_profit || 0)}</span>
               </div>
             )}
           </div>
@@ -315,10 +405,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
                 <div className="relative">
                   <div className="flex flex-col justify-between absolute -left-1 top-0 bottom-6 right-0 pointer-events-none opacity-40">
                     <div className="border-b border-dashed border-slate-200 dark:border-slate-800 text-[9px] font-bold text-slate-400 dark:text-slate-500 pl-1">
-                      {formatCurrency(peakSale, currency)}
+                      {isFinancesHidden ? '••••' : formatCurrency(peakSale, currency)}
                     </div>
                     <div className="border-b border-dashed border-slate-200 dark:border-slate-800 text-[9px] font-bold text-slate-400 dark:text-slate-500 pl-1">
-                      {formatCurrency(peakSale / 2, currency)}
+                      {isFinancesHidden ? '••••' : formatCurrency(peakSale / 2, currency)}
                     </div>
                     <div className="border-b border-slate-200 dark:border-slate-800 text-[9px] font-bold text-slate-400 dark:text-slate-500 pl-1">
                       0
@@ -344,7 +434,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
                           {/* Tooltip */}
                           <div className="absolute -top-12 opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 bg-slate-900 dark:bg-slate-800 text-white text-[11px] py-1.5 px-2.5 rounded-xl shadow-xl whitespace-nowrap z-30 font-semibold border border-slate-700/50">
                             <div className="font-bold text-brand-400">Day {d.day} ({d.date})</div>
-                            <div>{formatCurrency(revenueNum, currency)} • {d.transaction_count} sale{d.transaction_count === 1 ? '' : 's'}</div>
+                            <div>{maskFinancial(revenueNum)} • {d.transaction_count} sale{d.transaction_count === 1 ? '' : 's'}</div>
                           </div>
 
                           {/* Bar */}
@@ -383,7 +473,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
               <span>
                 Total Month Revenue:{' '}
                 <strong className="text-slate-800 dark:text-slate-100 font-bold">
-                  {formatCurrency(monthlyChart.reduce((sum, d) => sum + Number(d.sales_revenue || 0), 0), currency)}
+                  {maskFinancial(monthlyChart.reduce((sum, d) => sum + Number(d.sales_revenue || 0), 0))}
                 </strong>
               </span>
               <span>
@@ -494,7 +584,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
                   Total Day Sales Revenue
                 </span>
                 <div className="text-2xl font-black text-brand-900 dark:text-brand-100">
-                  {formatCurrency(daySalesDetail?.sales_revenue, currency)}
+                  {maskFinancial(daySalesDetail?.sales_revenue)}
                 </div>
               </div>
               <div className="text-right">
@@ -519,7 +609,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
                   </div>
                   <div className="text-right">
                     <div className="font-bold text-slate-900 dark:text-white">
-                      {formatCurrency(sale.total_amount, currency)}
+                      {maskFinancial(sale.total_amount)}
                     </div>
                     <Badge status={sale.payment_status} />
                   </div>
@@ -528,6 +618,69 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Financials Unlock PIN / Password Modal */}
+      <Modal
+        isOpen={showUnlockModal}
+        onClose={() => {
+          setShowUnlockModal(false);
+          setUnlockPin('');
+          setUnlockError(null);
+        }}
+        title="Unlock Dashboard Financials"
+        subtitle="Enter your PIN or Admin Password to reveal revenue and profits"
+        maxWidth="sm"
+      >
+        <form onSubmit={handleConfirmUnlock} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+              Enter PIN or Admin Password
+            </label>
+            <input
+              type="password"
+              autoFocus
+              value={unlockPin}
+              onChange={(e) => {
+                setUnlockPin(e.target.value);
+                setUnlockError(null);
+              }}
+              placeholder="e.g. 1234 or Admin Password"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-800 dark:text-white focus:outline-none focus:border-brand-500 shadow-xs"
+              required
+            />
+          </div>
+
+          {unlockError && (
+            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-300 text-xs font-semibold">
+              {unlockError}
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setShowUnlockModal(false);
+                setUnlockPin('');
+                setUnlockError(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              loading={unlocking}
+              icon={<Unlock className="h-4 w-4" />}
+            >
+              Unlock Financials
+            </Button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

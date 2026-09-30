@@ -80,6 +80,8 @@ export const api = {
     request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
   verifyPin: (pin: string) =>
     request<{ valid: boolean; message: string }>('/auth/verify-pin', { method: 'POST', body: JSON.stringify({ pin }) }),
+  verifyDashboardPin: (pin: string) =>
+    request<{ valid: boolean; message: string }>('/auth/verify-dashboard-pin', { method: 'POST', body: JSON.stringify({ pin }) }),
   changePassword: (data: { current_password: string; new_password: string }) =>
     request<{ success: boolean; message: string }>('/auth/change-password', { method: 'POST', body: JSON.stringify(data) }),
   changePin: (data: { current_pin: string; new_pin: string }) =>

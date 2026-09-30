@@ -49,5 +49,7 @@ class BusinessSettings(Base):
     barcode_label_show_price = Column(Boolean, nullable=False, default=True)
     barcode_label_show_sku = Column(Boolean, nullable=False, default=True)
     barcode_label_custom_text = Column(Text, nullable=False, default="")
+    lock_dashboard_finances = Column(Boolean, nullable=False, default=False)
+    dashboard_financials_pin_hash = Column(String(255), nullable=True)
     config_pin_hash = Column(String(255), nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

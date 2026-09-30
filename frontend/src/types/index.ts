@@ -42,6 +42,9 @@ export interface BusinessSettings {
   barcode_label_show_price?: boolean;
   barcode_label_show_sku?: boolean;
   barcode_label_custom_text?: string;
+  lock_dashboard_finances?: boolean;
+  has_dashboard_financials_pin?: boolean;
+  dashboard_financials_pin?: string;
 }
 
 export interface PrinterInfo {
