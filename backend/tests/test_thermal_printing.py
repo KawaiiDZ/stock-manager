@@ -283,3 +283,92 @@ def test_windows_printer_enumeration_offline_detection():
             assert off_pos['is_thermal'] is True
 
 
+def test_resolve_target_printer():
+    from backend.app.services.escpos_service import resolve_target_printer
+
+    available = [
+        {"name": "HP LaserJet Pro", "is_thermal": False, "is_default": False, "is_online": True},
+        {"name": "POS-80 Thermal Printer", "is_thermal": True, "is_default": False, "is_online": True},
+        {"name": "Epson TM-T20II (Copy 1)", "is_thermal": True, "is_default": True, "is_online": True},
+    ]
+
+    # Exact match
+    target, info = resolve_target_printer("HP LaserJet Pro", available)
+    assert target == "HP LaserJet Pro"
+    assert info is not None
+
+    # Case-insensitive
+    target, info = resolve_target_printer("pos-80 thermal printer", available)
+    assert target == "POS-80 Thermal Printer"
+
+    # Alphanumeric slug match
+    target, info = resolve_target_printer("POS80ThermalPrinter", available)
+    assert target == "POS-80 Thermal Printer"
+
+    # Substring match (e.g. user selected "Epson TM-T20II" but Windows renamed to "(Copy 1)")
+    target, info = resolve_target_printer("Epson TM-T20II", available)
+    assert target == "Epson TM-T20II (Copy 1)"
+
+    # Fallback to detected thermal printer when None requested
+    target, info = resolve_target_printer(None, available)
+    assert target in ["POS-80 Thermal Printer", "Epson TM-T20II (Copy 1)"]
+    assert info["is_thermal"] is True
+
+    # Fallback to default when no thermal available
+    non_thermal = [
+        {"name": "Canon Inactive", "is_thermal": False, "is_default": False, "is_online": True},
+        {"name": "Default Office DeskJet", "is_thermal": False, "is_default": True, "is_online": True},
+    ]
+    target, info = resolve_target_printer(None, non_thermal)
+    assert target == "Default Office DeskJet"
+
+
+def test_safe_escpos_text():
+    from backend.app.services.escpos_service import safe_escpos_text
+
+    # Currency replacements
+    assert safe_escpos_text("Total: ₨ 1,500.00") == b"Total: Rs. 1,500.00"
+    assert safe_escpos_text("Price: ₹ 250") == b"Price: Rs. 250"
+    assert safe_escpos_text("Amount: € 45.00") == b"Amount: EUR 45.00"
+    assert safe_escpos_text("Fee: £ 10.00") == b"Fee: GBP 10.00"
+
+    # Smart quotes and dashes (em-dash translates to --)
+    assert safe_escpos_text("“Best Store” — ‘Discount’") == b'"Best Store" -- \'Discount\''
+
+    # Arbitrary unicode characters should safely encode without throwing
+    res = safe_escpos_text("Special item ★ ♠ ☕")
+    assert isinstance(res, bytes)
+
+
+def test_cash_drawer_kick_in_escpos_payload():
+    from backend.app.services.escpos_service import CMD_CASH_DRAWER_KICK, CMD_CASH_DRAWER_KICK_PIN2, CMD_CASH_DRAWER_KICK_PIN5
+
+    assert CMD_CASH_DRAWER_KICK_PIN2 in CMD_CASH_DRAWER_KICK
+    assert CMD_CASH_DRAWER_KICK_PIN5 in CMD_CASH_DRAWER_KICK
+
+    settings = SimpleNamespace(
+        business_name="Test Store",
+        phone="123",
+        address="Test Addr",
+        currency="Rs.",
+        receipt_header="",
+        receipt_footer="",
+    )
+    sale_data = {
+        "receipt_number": "RCP-KD",
+        "created_at": "2026-09-28 14:00:00",
+        "items": [],
+        "total_amount": 100,
+        "paid_amount": 100,
+    }
+
+    # Without drawer kick
+    buf_no_kick = generate_escpos_receipt(sale_data, settings=settings, kick_drawer=False)
+    assert CMD_CASH_DRAWER_KICK not in buf_no_kick
+
+    # With drawer kick
+    buf_kick = generate_escpos_receipt(sale_data, settings=settings, kick_drawer=True)
+    assert CMD_CASH_DRAWER_KICK in buf_kick
+
+
+

@@ -158,32 +158,42 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
           </button>
         </div>
 
-        {/* Thermal Roll Width Selector */}
+        {/* Thermal Roll Width Selector & Destination Badge */}
         {receiptType === 'thermal' && (
-          <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1 rounded-xl border border-slate-200">
-            <span className="text-[11px] font-bold uppercase text-slate-400">Roll:</span>
-            <button
-              type="button"
-              onClick={() => setPaperWidth('80mm')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
-                paperWidth === '80mm'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-              }`}
-            >
-              80mm (Standard)
-            </button>
-            <button
-              type="button"
-              onClick={() => setPaperWidth('58mm')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
-                paperWidth === '58mm'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-              }`}
-            >
-              58mm (Compact)
-            </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1 rounded-xl border border-slate-200">
+              <span className="text-[11px] font-bold uppercase text-slate-400">Roll:</span>
+              <button
+                type="button"
+                onClick={() => setPaperWidth('80mm')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                  paperWidth === '80mm'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                80mm (Standard)
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaperWidth('58mm')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                  paperWidth === '58mm'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                58mm (Compact)
+              </button>
+            </div>
+
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-50 border border-slate-200 text-[11px] font-semibold text-slate-600">
+              <span className={`w-2 h-2 rounded-full ${settings?.thermal_print_mode === 'direct_escpos' ? 'bg-emerald-500' : 'bg-blue-500'}`} />
+              <span>
+                {settings?.thermal_print_mode === 'direct_escpos' ? 'Direct ESC/POS' : 'Browser Dialog'}
+                {settings?.selected_thermal_printer ? `: ${settings.selected_thermal_printer}` : ''}
+              </span>
+            </div>
           </div>
         )}
       </div>

@@ -48,6 +48,41 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
   // Print & Details Modal
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
+
+  const handleQuickPrint = async (sale: Sale) => {
+    if (settings?.skip_receipt_preview && settings?.thermal_print_mode === 'direct_escpos') {
+      try {
+        const res = await api.printThermalDirect({
+          sale_id: sale.id,
+          printer_name: settings?.selected_thermal_printer || undefined,
+          paper_width: settings?.receipt_printer_type === '58mm' ? '58mm' : '80mm',
+          header_style: settings?.thermal_header_style || 'logo_text',
+          show_barcode: settings?.show_barcode ?? true,
+          darkness: settings?.thermal_darkness || 'normal',
+        });
+        setToastMessage({
+          type: 'success',
+          text: `Receipt #${sale.receipt_number} sent to ${res.printer || 'thermal printer'}`,
+        });
+        return;
+      } catch (err: any) {
+        setToastMessage({
+          type: 'error',
+          text: err.detail || 'Direct print failed. Opening preview modal...',
+        });
+      }
+    }
+    setSelectedSale(sale);
+    setShowReceiptModal(true);
+  };
 
   // Receive Due Modal
   const [paymentSale, setPaymentSale] = useState<Sale | null>(null);
@@ -474,12 +509,9 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
                             <Eye className="h-4 w-4" />
                           </button>
                           <button
-                            onClick={() => {
-                              setSelectedSale(sale);
-                              setShowReceiptModal(true);
-                            }}
+                            onClick={() => handleQuickPrint(sale)}
                             className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                            title="Print Thermal / A4 Receipt"
+                            title={settings?.skip_receipt_preview ? "1-Click Direct Print Receipt" : "Print Thermal / A4 Receipt"}
                           >
                             <Printer className="h-4 w-4" />
                           </button>
@@ -569,6 +601,32 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
           </div>
         </form>
       </Modal>
+
+      {/* Floating Action Toast */}
+      {toastMessage && (
+        <div className="fixed top-5 right-5 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div
+            className={`flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl text-sm font-semibold border ${
+              toastMessage.type === 'success'
+                ? 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-600/20'
+                : 'bg-rose-600 text-white border-rose-500 shadow-rose-600/20'
+            }`}
+          >
+            {toastMessage.type === 'success' ? (
+              <CheckCircle2 className="h-5 w-5 shrink-0" />
+            ) : (
+              <AlertCircle className="h-5 w-5 shrink-0" />
+            )}
+            <span>{toastMessage.text}</span>
+            <button
+              onClick={() => setToastMessage(null)}
+              className="ml-2 p-1 hover:bg-white/20 rounded-lg transition"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

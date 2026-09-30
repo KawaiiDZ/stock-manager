@@ -1452,17 +1452,17 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         </div>
       </Modal>
 
-      {/* Off-screen Container for Instant Auto-Printing (0x0, fixed, zero layout impact) */}
+      {/* Off-screen Container for Instant Auto-Printing (rendered offscreen for exact layout geometry) */}
       <div
         aria-hidden="true"
         style={{
           position: 'fixed',
-          left: '-99999px',
-          top: '-99999px',
-          width: '0px',
-          height: '0px',
-          overflow: 'hidden',
-          visibility: 'hidden',
+          left: '-9999px',
+          top: '0',
+          width: '384px',
+          opacity: 0,
+          pointerEvents: 'none',
+          zIndex: -9999,
         }}
       >
         {completedSale && (

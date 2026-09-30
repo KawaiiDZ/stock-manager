@@ -179,6 +179,11 @@ export const printElement = (
         page-break-inside: avoid !important;
         break-inside: avoid !important;
       }
+      #print-root > div:last-child {
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+        margin-bottom: 0 !important;
+      }
       .no-print, button, .btn-no-print {
         display: none !important;
       }
@@ -387,7 +392,7 @@ export const printElement = (
     const printRoot = iframeDoc.getElementById('print-root');
     if (printRoot) {
       const clone = targetElement.cloneNode(true) as HTMLElement;
-      // Remove screen-only container constraints
+      // Remove screen-only container constraints & enforce print visibility
       clone.classList.remove(
         'shadow-2xl',
         'shadow-xl',
@@ -400,12 +405,15 @@ export const printElement = (
         'rounded-lg',
         'rounded-sm'
       );
+      clone.style.display = 'block';
+      clone.style.visibility = 'visible';
+      clone.style.width = '100%';
       clone.style.maxHeight = 'none';
       clone.style.overflow = 'visible';
       printRoot.appendChild(clone);
     }
 
-    // 8. Wait for images to load before printing
+    // 8. Wait for images and web fonts to load before printing
     const images = Array.from(iframeDoc.images);
     const imagePromises = images.map((img) => {
       if (img.complete) return Promise.resolve();
@@ -415,8 +423,12 @@ export const printElement = (
       });
     });
 
-    // Safety timeout so printing never hangs if an external image stalls
-    const timeoutPromise = new Promise<void>((res) => setTimeout(res, 500));
+    const fontPromise = (iframeDoc as any).fonts?.ready
+      ? (iframeDoc as any).fonts.ready
+      : Promise.resolve();
+
+    // Safety timeout so printing never hangs if an external image or font stalls
+    const timeoutPromise = new Promise<void>((res) => setTimeout(res, 600));
 
     // 9. Execute print
     let cleanedUp = false;
@@ -460,6 +472,6 @@ export const printElement = (
       }, 100);
     };
 
-    Promise.race([Promise.all([...linkPromises, ...imagePromises]), timeoutPromise]).then(doPrint);
+    Promise.race([Promise.all([...linkPromises, ...imagePromises, fontPromise]), timeoutPromise]).then(doPrint);
   });
 };

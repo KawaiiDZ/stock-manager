@@ -34,7 +34,10 @@ CMD_NORMAL_SIZE = GS + b"!\x00"
 
 CMD_CUT_FULL = GS + b"V\x41\x00"  # GS V 65 0 (feed and full cut)
 CMD_CUT_PARTIAL = GS + b"V\x42\x00"  # GS V 66 0 (feed and partial cut)
-CMD_CASH_DRAWER_KICK = ESC + b"p\x00\x19\xfa"
+# Dual-pin cash drawer kick (Pin 2 and Pin 5 standard RJ11 pulses)
+CMD_CASH_DRAWER_KICK_PIN2 = ESC + b"p\x00\x19\xfa"
+CMD_CASH_DRAWER_KICK_PIN5 = ESC + b"p\x01\x19\xfa"
+CMD_CASH_DRAWER_KICK = CMD_CASH_DRAWER_KICK_PIN2 + CMD_CASH_DRAWER_KICK_PIN5
 
 
 def list_system_printers() -> List[Dict[str, Any]]:
@@ -149,6 +152,97 @@ def format_row(left: str, right: str, width: int = 48) -> str:
     return f"{left}{' ' * spaces}{right}\n"
 
 
+def safe_escpos_text(text: Any) -> bytes:
+    """
+    Safely sanitizes and converts Unicode text to thermal printer-friendly byte stream.
+    Normalizes currency signs, smart quotes, em-dashes, and special symbols to prevent
+    UnicodeEncodeError or garbled characters on CP1252 / standard ESC/POS chipsets.
+    """
+    if text is None:
+        return b""
+    s = str(text)
+    # Currency replacements
+    s = s.replace("₨", "Rs.").replace("₹", "Rs.").replace("€", "EUR").replace("£", "GBP")
+    s = s.replace("¥", "JPY").replace("₩", "KRW")
+    # Smart quotes and typography
+    s = s.replace("\u2018", "'").replace("\u2019", "'").replace("\u201c", '"').replace("\u201d", '"')
+    s = s.replace("\u2013", "-").replace("\u2014", "--").replace("\u2026", "...")
+    s = s.replace("\u2022", "*").replace("\u00b7", "*")
+
+    try:
+        return s.encode("cp1252", errors="replace")
+    except Exception:
+        return s.encode("ascii", errors="replace")
+
+
+def resolve_target_printer(
+    requested_name: Optional[str],
+    available: List[Dict[str, Any]]
+) -> tuple[Optional[str], Optional[Dict[str, Any]]]:
+    """
+    Intelligently resolves the target printer using a 5-tier fuzzy matching algorithm:
+    1. Exact case-sensitive match
+    2. Case-insensitive exact match
+    3. Alphanumeric slug match (ignores spaces, hyphens, underscores)
+    4. Substring containment match (e.g. 'POS-80' matches 'POS-80 (Copy 1)')
+    5. Fallback to first available online thermal printer, then system default
+    """
+    if not available:
+        return requested_name, None
+
+    if requested_name:
+        clean = requested_name.strip()
+        clean_lower = clean.lower()
+        clean_slug = re.sub(r"[^a-z0-9]", "", clean_lower)
+
+        # Tier 1: Exact match
+        for p in available:
+            if p.get("name") == clean:
+                return p["name"], p
+
+        # Tier 2: Case-insensitive match
+        for p in available:
+            if p.get("name", "").lower() == clean_lower:
+                logger.info(f"Resolved printer '{clean}' via case-insensitive match -> '{p['name']}'")
+                return p["name"], p
+
+        # Tier 3: Alphanumeric slug match
+        for p in available:
+            p_slug = re.sub(r"[^a-z0-9]", "", p.get("name", "").lower())
+            if p_slug and p_slug == clean_slug:
+                logger.info(f"Resolved printer '{clean}' via slug match -> '{p['name']}'")
+                return p["name"], p
+
+        # Tier 4: Substring containment (e.g. "POS-80" in "POS-80 (Copy 1)")
+        for p in available:
+            p_name = p.get("name", "")
+            p_lower = p_name.lower()
+            if clean_lower in p_lower or (len(p_lower) >= 3 and p_lower in clean_lower):
+                logger.info(f"Resolved printer '{clean}' via substring match -> '{p_name}'")
+                return p_name, p
+
+    # Tier 5: Fallback to detected thermal printer
+    for p in available:
+        if p.get("is_thermal") and p.get("is_online", True):
+            logger.info(f"Fell back to online thermal printer -> '{p['name']}'")
+            return p["name"], p
+
+    for p in available:
+        if p.get("is_thermal"):
+            return p["name"], p
+
+    # Fallback to system default
+    for p in available:
+        if p.get("is_default"):
+            return p["name"], p
+
+    # Last resort: first printer in list
+    if available:
+        return available[0]["name"], available[0]
+
+    return requested_name, None
+
+
 def generate_escpos_receipt(
     sale_data: Dict[str, Any],
     settings: Optional[Any] = None,
@@ -202,20 +296,20 @@ def generate_escpos_receipt(
     # Store Name in Large Bold
     buf.extend(CMD_BOLD_ON)
     buf.extend(CMD_DOUBLE_SIZE)
-    buf.extend(f"{shop_name}\n".encode("latin-1", errors="replace"))
+    buf.extend(safe_escpos_text(f"{shop_name}\n"))
     buf.extend(CMD_NORMAL_SIZE)
     buf.extend(CMD_BOLD_OFF)
 
     if shop_address:
         for line in shop_address.splitlines():
-            buf.extend(f"{line.strip()}\n".encode("latin-1", errors="replace"))
+            buf.extend(safe_escpos_text(f"{line.strip()}\n"))
     if shop_phone:
-        buf.extend(f"Phone: {shop_phone}\n".encode("latin-1", errors="replace"))
+        buf.extend(safe_escpos_text(f"Phone: {shop_phone}\n"))
     if custom_header and custom_header.strip().lower() != shop_name.strip().lower():
-        buf.extend(f"{custom_header.strip()}\n".encode("latin-1", errors="replace"))
+        buf.extend(safe_escpos_text(f"{custom_header.strip()}\n"))
 
     buf.extend(CMD_ALIGN_LEFT)
-    buf.extend(div_line.encode("ascii"))
+    buf.extend(safe_escpos_text(div_line))
 
     # 3. Receipt Info
     receipt_no = sale_data.get("receipt_number", "RECEIPT")
@@ -239,18 +333,18 @@ def generate_escpos_receipt(
         if isinstance(p0, dict):
             payment_method = p0.get("payment_method", payment_method)
 
-    buf.extend(format_row("Receipt #:", receipt_no, col_width).encode("latin-1", errors="replace"))
-    buf.extend(format_row("Date:", dt_str, col_width).encode("latin-1", errors="replace"))
-    buf.extend(format_row("Customer:", cust_name, col_width).encode("latin-1", errors="replace"))
-    buf.extend(format_row("Payment:", str(payment_method).upper(), col_width).encode("latin-1", errors="replace"))
+    buf.extend(safe_escpos_text(format_row("Receipt #:", receipt_no, col_width)))
+    buf.extend(safe_escpos_text(format_row("Date:", dt_str, col_width)))
+    buf.extend(safe_escpos_text(format_row("Customer:", cust_name, col_width)))
+    buf.extend(safe_escpos_text(format_row("Payment:", str(payment_method).upper(), col_width)))
 
-    buf.extend(div_line.encode("ascii"))
+    buf.extend(safe_escpos_text(div_line))
 
     # 4. Items Table Header
     buf.extend(CMD_BOLD_ON)
-    buf.extend(format_row("Description", "Amount", col_width).encode("ascii"))
+    buf.extend(safe_escpos_text(format_row("Description", "Amount", col_width)))
     buf.extend(CMD_BOLD_OFF)
-    buf.extend(div_line.encode("ascii"))
+    buf.extend(safe_escpos_text(div_line))
 
     items = sale_data.get("items", [])
     total_qty = 0
@@ -272,7 +366,7 @@ def generate_escpos_receipt(
         # Line 1: Item Name
         tag = " (RETURNED)" if is_fully_returned else (f" ({int(ret_qty) if ret_qty.is_integer() else ret_qty} RET)" if is_partially_returned else "")
         buf.extend(CMD_BOLD_ON)
-        buf.extend(f"{p_name}{tag}\n".encode("latin-1", errors="replace"))
+        buf.extend(safe_escpos_text(f"{p_name}{tag}\n"))
         buf.extend(CMD_BOLD_OFF)
 
         # Line 2: Qty x Unit Price ... Line Total
@@ -283,15 +377,15 @@ def generate_escpos_receipt(
             left_str = f"{qty_disp} x {currency} {u_price:,.2f}"
         right_str = f"{currency} {line_total:,.2f}"
 
-        buf.extend(format_row(left_str, right_str, col_width).encode("latin-1", errors="replace"))
+        buf.extend(safe_escpos_text(format_row(left_str, right_str, col_width)))
 
         # Line 3: Discount if any
         if disc_amt > 0 and not is_fully_returned:
-            buf.extend(f"  -> Disc: -{currency} {disc_amt:,.2f}\n".encode("latin-1", errors="replace"))
+            buf.extend(safe_escpos_text(f"  -> Disc: -{currency} {disc_amt:,.2f}\n"))
 
-    buf.extend(div_line.encode("ascii"))
-    buf.extend(format_row("Lines / Units:", f"{len(items)} lines / {int(total_qty) if total_qty.is_integer() else total_qty:.1f} pcs", col_width).encode("ascii"))
-    buf.extend(div_line.encode("ascii"))
+    buf.extend(safe_escpos_text(div_line))
+    buf.extend(safe_escpos_text(format_row("Lines / Units:", f"{len(items)} lines / {int(total_qty) if total_qty.is_integer() else total_qty:.1f} pcs", col_width)))
+    buf.extend(safe_escpos_text(div_line))
 
     # 5. Totals
     subtotal = float(sale_data.get("subtotal", 0))
@@ -304,32 +398,32 @@ def generate_escpos_receipt(
     due_amt = float(sale_data.get("due_amount", 0))
     payment_status = str(sale_data.get("payment_status", "PAID")).upper()
 
-    buf.extend(format_row("Subtotal:", f"{currency} {subtotal:,.2f}", col_width).encode("latin-1", errors="replace"))
+    buf.extend(safe_escpos_text(format_row("Subtotal:", f"{currency} {subtotal:,.2f}", col_width)))
     if discount > 0:
-        buf.extend(format_row("Order Discount:", f"-{currency} {discount:,.2f}", col_width).encode("latin-1", errors="replace"))
+        buf.extend(safe_escpos_text(format_row("Order Discount:", f"-{currency} {discount:,.2f}", col_width)))
     if tax_amt > 0:
-        buf.extend(format_row(f"Tax ({tax_rate}%):", f"+{currency} {tax_amt:,.2f}", col_width).encode("latin-1", errors="replace"))
+        buf.extend(safe_escpos_text(format_row(f"Tax ({tax_rate}%):", f"+{currency} {tax_amt:,.2f}", col_width)))
 
     # TOTAL IN BOLD
-    buf.extend(double_div.encode("ascii"))
+    buf.extend(safe_escpos_text(double_div))
     buf.extend(CMD_BOLD_ON)
-    buf.extend(format_row("TOTAL:", f"{currency} {total_amt:,.2f}", col_width).encode("latin-1", errors="replace"))
+    buf.extend(safe_escpos_text(format_row("TOTAL:", f"{currency} {total_amt:,.2f}", col_width)))
     buf.extend(CMD_BOLD_OFF)
-    buf.extend(double_div.encode("ascii"))
+    buf.extend(safe_escpos_text(double_div))
 
     if total_ret_amt > 0:
         net_payable = max(0.0, total_amt - total_ret_amt)
-        buf.extend(format_row("Less Returns:", f"-{currency} {total_ret_amt:,.2f}", col_width).encode("latin-1", errors="replace"))
+        buf.extend(safe_escpos_text(format_row("Less Returns:", f"-{currency} {total_ret_amt:,.2f}", col_width)))
         buf.extend(CMD_BOLD_ON)
-        buf.extend(format_row("NET PAYABLE:", f"{currency} {net_payable:,.2f}", col_width).encode("latin-1", errors="replace"))
+        buf.extend(safe_escpos_text(format_row("NET PAYABLE:", f"{currency} {net_payable:,.2f}", col_width)))
         buf.extend(CMD_BOLD_OFF)
-        buf.extend(div_line.encode("ascii"))
+        buf.extend(safe_escpos_text(div_line))
 
     # 6. Payment & Due Balance
-    buf.extend(format_row("Paid Amount:", f"{currency} {paid_amt:,.2f}", col_width).encode("latin-1", errors="replace"))
+    buf.extend(safe_escpos_text(format_row("Paid Amount:", f"{currency} {paid_amt:,.2f}", col_width)))
     if due_amt > 0:
         buf.extend(CMD_BOLD_ON)
-        buf.extend(format_row("REMAINING DUE:", f"{currency} {due_amt:,.2f}", col_width).encode("latin-1", errors="replace"))
+        buf.extend(safe_escpos_text(format_row("REMAINING DUE:", f"{currency} {due_amt:,.2f}", col_width)))
         buf.extend(CMD_BOLD_OFF)
     else:
         status_text = "PAID IN FULL"
@@ -337,35 +431,35 @@ def generate_escpos_receipt(
             status_text = "FULLY RETURNED"
         elif payment_status == "PARTIALLY_RETURNED":
             status_text = "SETTLED (PARTIAL RET)"
-        buf.extend(format_row("Status:", status_text, col_width).encode("ascii"))
+        buf.extend(safe_escpos_text(format_row("Status:", status_text, col_width)))
 
     if paid_amt > total_amt:
         change_amt = paid_amt - total_amt
-        buf.extend(format_row("Change:", f"{currency} {change_amt:,.2f}", col_width).encode("latin-1", errors="replace"))
+        buf.extend(safe_escpos_text(format_row("Change:", f"{currency} {change_amt:,.2f}", col_width)))
 
-    buf.extend(div_line.encode("ascii"))
+    buf.extend(safe_escpos_text(div_line))
 
-    # 7. Code 128 Barcode
+    # 7. Code 128 Barcode with Code Set B prefix
     if show_barcode and receipt_no:
         buf.extend(CMD_ALIGN_CENTER)
         try:
-            # Code 128 in ESC/POS: GS k 73 len data
+            # Code 128 in ESC/POS: GS k 73 (0x49) <len> {B <data>
             clean_bc = re.sub(r"[^A-Za-z0-9_-]", "", receipt_no)
             if clean_bc:
-                bc_bytes = clean_bc.encode("ascii")
+                bc_payload = b"\x7b\x42" + clean_bc.encode("ascii")
                 buf.extend(GS + b"h\x48")  # Height = 72 dots
-                buf.extend(GS + b"w\x03" if paper_width != "58mm" else GS + b"w\x02")  # Width multiplier = 3 (80mm) or 2 (58mm) for dark thick bars
+                buf.extend(GS + b"w\x03" if paper_width != "58mm" else GS + b"w\x02")  # Width multiplier
                 buf.extend(GS + b"H\x02")  # HRI text below
-                buf.extend(GS + b"k\x49" + bytes([len(bc_bytes)]) + bc_bytes)
+                buf.extend(GS + b"k\x49" + bytes([len(bc_payload)]) + bc_payload)
                 buf.extend(b"\n")
         except Exception as e:
             logger.warning(f"Barcode ESC/POS generation failed: {e}")
-            buf.extend(f"* {receipt_no} *\n".encode("ascii"))
+            buf.extend(safe_escpos_text(f"* {receipt_no} *\n"))
 
     # 8. Footer Message
     buf.extend(CMD_ALIGN_CENTER)
     buf.extend(b"\n")
-    buf.extend(f"{footer_text}\n".encode("latin-1", errors="replace"))
+    buf.extend(safe_escpos_text(f"{footer_text}\n"))
     buf.extend(b"\n\n\n\n")
 
     # 9. Partial or Full Cut
@@ -383,40 +477,8 @@ def send_to_thermal_printer(escpos_bytes: bytes, printer_name: Optional[str] = N
     sys_name = platform.system()
     available = list_system_printers()
 
-    # Determine target printer
-    target = None
-    target_info = None
-    if printer_name and printer_name.strip():
-        clean_name = printer_name.strip()
-        # Match specified printer name against available printers (case-insensitive)
-        for p in available:
-            if p["name"].lower() == clean_name.lower():
-                target = p["name"]
-                target_info = p
-                break
-        # If not matched in available (e.g. transient cups query or direct queue), trust user's explicit printer
-        if not target:
-            target = clean_name
-
-    if not target:
-        # Auto-detect thermal printer
-        for p in available:
-            if p.get("is_thermal"):
-                target = p["name"]
-                target_info = p
-                break
-
-    if not target and available:
-        # Fallback to default printer
-        for p in available:
-            if p.get("is_default"):
-                target = p["name"]
-                target_info = p
-                break
-        if not target:
-            target = available[0]["name"]
-            target_info = available[0]
-
+    # Determine target printer using resilient multi-tier resolver
+    target, target_info = resolve_target_printer(printer_name, available)
     if not target:
         raise RuntimeError("No connected printers found on your system. Please connect your thermal printer via USB.")
 
@@ -609,21 +671,18 @@ def _send_windows_raw(target: str, escpos_bytes: bytes, doc_name: str = "StockFl
             f.write(escpos_bytes)
             temp_path = f.name
 
-        safe_target = target.replace("'", "''")
-        safe_temp = temp_path.replace("'", "''")
-        safe_doc = doc_name.replace("'", "''")
-        ps_code = f"""
+        ps_code = """
 $code = @'
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
-public class RawPrinterHelper {{
+public class RawPrinterHelper {
     [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
-    public class DOCINFOA {{
+    public class DOCINFOA {
         [MarshalAs(UnmanagedType.LPWStr)] public string pDocName;
         [MarshalAs(UnmanagedType.LPWStr)] public string pOutputFile;
         [MarshalAs(UnmanagedType.LPWStr)] public string pDataType;
-    }}
+    }
     [DllImport("winspool.Drv", EntryPoint="OpenPrinterW", SetLastError=true, CharSet=CharSet.Unicode, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
     public static extern bool OpenPrinter(string pPrinterName, out IntPtr phPrinter, IntPtr pDefault);
     [DllImport("winspool.Drv", EntryPoint="ClosePrinter", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
@@ -639,7 +698,7 @@ public class RawPrinterHelper {{
     [DllImport("winspool.Drv", EntryPoint="WritePrinter", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
     public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, int dwCount, out int dwWritten);
 
-    public static bool SendFile(string szPrinterName, string szFileName, string docName) {{
+    public static bool SendFile(string szPrinterName, string szFileName, string docName) {
         byte[] bytes = File.ReadAllBytes(szFileName);
         IntPtr pUnmanagedBytes = Marshal.AllocCoTaskMem(bytes.Length);
         Marshal.Copy(bytes, 0, pUnmanagedBytes, bytes.Length);
@@ -648,28 +707,28 @@ public class RawPrinterHelper {{
         di.pDocName = docName;
         di.pDataType = "RAW";
         bool success = false;
-        if (OpenPrinter(szPrinterName, out hPrinter, IntPtr.Zero)) {{
-            if (StartDocPrinter(hPrinter, 1, di) > 0) {{
-                if (StartPagePrinter(hPrinter)) {{
+        if (OpenPrinter(szPrinterName, out hPrinter, IntPtr.Zero)) {
+            if (StartDocPrinter(hPrinter, 1, di) > 0) {
+                if (StartPagePrinter(hPrinter)) {
                     int dwWritten = 0;
                     success = WritePrinter(hPrinter, pUnmanagedBytes, bytes.Length, out dwWritten);
                     EndPagePrinter(hPrinter);
-                }}
+                }
                 EndDocPrinter(hPrinter);
-            }}
+            }
             ClosePrinter(hPrinter);
-        }}
+        }
         Marshal.FreeCoTaskMem(pUnmanagedBytes);
         return success;
-    }}
-}}
+    }
+}
 '@
 Add-Type -TypeDefinition $code -Language CSharp
-$res = [RawPrinterHelper]::SendFile('{safe_target}', '{safe_temp}', '{safe_doc}')
-if (-not $res) {{ exit 1 }}
+$res = [RawPrinterHelper]::SendFile($args[0], $args[1], $args[2])
+if (-not $res) { exit 1 }
 """
         res = subprocess.run(
-            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_code],
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_code, target, temp_path, doc_name],
             capture_output=True,
             text=True,
             timeout=10,
