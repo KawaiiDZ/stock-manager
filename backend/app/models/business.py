@@ -26,7 +26,7 @@ class BusinessSettings(Base):
     receipt_type = Column(String(20), nullable=False, default="thermal")  # thermal, pdf
     thermal_print_mode = Column(String(30), nullable=False, default="browser")  # browser, direct_escpos
     thermal_header_style = Column(String(30), nullable=False, default="logo_text")  # logo_text, text_only
-    thermal_layout = Column(String(30), nullable=False, default="classic")  # classic, modern
+    thermal_layout = Column(String(30), nullable=False, default="classic")  # classic, modern, tabular, compact, elegant
     selected_thermal_printer = Column(String(100), nullable=False, default="")
     selected_a4_printer = Column(String(100), nullable=False, default="")
     skip_receipt_preview = Column(Boolean, nullable=False, default=False)

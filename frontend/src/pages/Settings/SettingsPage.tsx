@@ -38,6 +38,9 @@ import {
   Moon,
   Monitor,
   Check,
+  Table,
+  Sparkles,
+  Leaf,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -53,6 +56,81 @@ import { printElement } from '../../utils/print';
 import { STANDARD_LABEL_SIZES, generateBarcodeSvg, parseLabelDimensions } from '../../utils/barcode';
 import { STANDARD_DATE_FORMATS, setGlobalFormattingPreferences, formatDate, formatCurrency } from '../../utils/format';
 import { GoogleBackupCard } from '../../components/settings/GoogleBackupCard';
+
+export interface ThermalLayoutOption {
+  id: 'classic' | 'modern' | 'tabular' | 'compact' | 'elegant';
+  title: string;
+  subtitle: string;
+  badge?: string;
+  badgeColor?: string;
+  desc: string;
+  iconName: 'receipt' | 'file-text' | 'table' | 'leaf' | 'sparkles';
+}
+
+export const THERMAL_LAYOUT_OPTIONS: ThermalLayoutOption[] = [
+  {
+    id: 'classic',
+    title: 'Classic Retail POS',
+    subtitle: 'Monospace & Dashed Rules',
+    badge: 'Traditional (Default)',
+    badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300',
+    desc: 'Traditional retail terminal with monospace font, dashed ASCII dividers, 2-line items, and double-bordered === TOTAL === banner. Standard supermarket receipt.',
+    iconName: 'receipt',
+  },
+  {
+    id: 'modern',
+    title: 'Modern Clean',
+    subtitle: 'Solid Rules & Framed Box',
+    badge: 'Popular',
+    badgeColor: 'bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-300',
+    desc: 'Contemporary layout with solid divider rules, uppercase headers, indented promo discounts, and a bold framed total box (+----+). Great for fashion and electronics.',
+    iconName: 'file-text',
+  },
+  {
+    id: 'tabular',
+    title: 'Detailed Tabular',
+    subtitle: 'Multi-Column Grid Table',
+    badge: 'Wholesale / Grocery',
+    badgeColor: 'bg-purple-100 text-purple-800 dark:bg-purple-900/60 dark:text-purple-300',
+    desc: 'Structured 4-column table (ITEM | QTY | PRICE | TOTAL) with vertical alignment and word wrapping. Perfect for supermarkets, pharmacies, hardware, and wholesale.',
+    iconName: 'table',
+  },
+  {
+    id: 'compact',
+    title: 'Compact Express',
+    subtitle: 'Eco Paper-Saver',
+    badge: 'Save 40% Paper',
+    badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300',
+    desc: 'Space-saving express layout with single-line items, condensed 2-line totals, and minimal feed margins. Cuts thermal paper roll usage by 35%-45%. Ideal for busy cafes and kiosks.',
+    iconName: 'leaf',
+  },
+  {
+    id: 'elegant',
+    title: 'Elegant Boutique',
+    subtitle: 'Dot Leaders & Flourishes',
+    badge: 'Café & Salon',
+    badgeColor: 'bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-300',
+    desc: 'Centered aesthetic with delicate star flourishes (* * * *), dot-leader price lines (. . . .), and courteous boutique closing notes. Tailored for fine dining, cafes, and salons.',
+    iconName: 'sparkles',
+  },
+];
+
+const renderLayoutIcon = (iconName: string) => {
+  const iconClass = "h-4 w-4";
+  switch (iconName) {
+    case 'file-text':
+      return <FileText className={iconClass} />;
+    case 'table':
+      return <Table className={iconClass} />;
+    case 'leaf':
+      return <Leaf className={iconClass} />;
+    case 'sparkles':
+      return <Sparkles className={iconClass} />;
+    case 'receipt':
+    default:
+      return <Receipt className={iconClass} />;
+  }
+};
 
 interface SettingsPageProps {
   settings: BusinessSettings | null;
@@ -116,9 +194,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [thermalDarkness, setThermalDarkness] = useState<'maximum' | 'high' | 'normal'>(
     settings?.thermal_darkness || 'normal'
   );
-  const [thermalLayout, setThermalLayout] = useState<'classic' | 'modern'>(
-    settings?.thermal_layout || 'classic'
-  );
+  const [thermalLayout, setThermalLayout] = useState<
+    'classic' | 'modern' | 'tabular' | 'compact' | 'elegant'
+  >(settings?.thermal_layout || 'classic');
   const [thermalPrinterProfile, setThermalPrinterProfile] = useState<
     'standard_escpos' | 'xprinter_enhanced' | 'star_line' | 'generic_plain'
   >(settings?.thermal_printer_profile || 'standard_escpos');
@@ -799,18 +877,23 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     }
   };
 
-  const handleChangeThermalLayout = async (layout: 'classic' | 'modern') => {
+  const handleChangeThermalLayout = async (
+    layout: 'classic' | 'modern' | 'tabular' | 'compact' | 'elegant'
+  ) => {
     setThermalLayout(layout);
     try {
       await api.updateSettings({
         thermal_layout: layout,
       });
       onSettingsUpdated();
-      setSuccessMsg(
-        layout === 'classic'
-          ? 'Thermal receipt layout set to Classic POS Terminal (Default)!'
-          : 'Thermal receipt layout set to Modern Clean!'
-      );
+      const layoutNames: Record<string, string> = {
+        classic: 'Classic Retail POS (Default)',
+        modern: 'Modern Clean',
+        tabular: 'Detailed Multi-Column Tabular',
+        compact: 'Compact Express (Paper Saver)',
+        elegant: 'Elegant Boutique (Café & Salon)',
+      };
+      setSuccessMsg(`Thermal receipt layout set to ${layoutNames[layout] || layout}!`);
     } catch (err: any) {
       setErrorMsg(err.detail || 'Failed to update layout setting.');
     }
@@ -1557,6 +1640,69 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             </div>
           </div>
 
+          {/* Thermal Receipt Layout & Styling (Near Themes) */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base flex items-center gap-2">
+                  <Receipt className="h-5 w-5 text-brand-600" />
+                  Thermal Receipt Layout & Styling
+                </h3>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                  Select a popular visual layout for your printed thermal receipts and checkout preview.
+                </p>
+              </div>
+              <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 self-start sm:self-auto">
+                Auto-saves instantly
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              {THERMAL_LAYOUT_OPTIONS.map((lo) => {
+                const isSelected = thermalLayout === lo.id;
+                return (
+                  <button
+                    key={lo.id}
+                    type="button"
+                    onClick={() => handleChangeThermalLayout(lo.id)}
+                    className={`flex flex-col text-left p-4 rounded-2xl border-2 transition-all relative ${
+                      isSelected
+                        ? 'border-brand-600 bg-brand-50/50 dark:bg-brand-950/30 ring-2 ring-brand-500/20 shadow-sm'
+                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/40 dark:bg-slate-800/40'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full mb-2">
+                      <div
+                        className={`p-2 rounded-xl border shadow-2xs ${
+                          isSelected
+                            ? 'bg-brand-600 text-white border-brand-500'
+                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                        }`}
+                      >
+                        {renderLayoutIcon(lo.iconName)}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {lo.badge && (
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${lo.badgeColor}`}>
+                            {lo.badge}
+                          </span>
+                        )}
+                        {isSelected && (
+                          <div className="h-5 w-5 rounded-full bg-brand-600 text-white flex items-center justify-center">
+                            <Check className="h-3 w-3 stroke-[3]" />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <span className="font-bold text-sm text-slate-800 dark:text-slate-100">{lo.title}</span>
+                    <span className="text-[11px] font-semibold text-brand-600 dark:text-brand-400 mt-0.5">{lo.subtitle}</span>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 leading-snug">{lo.desc}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Receipt Print Protection Banner */}
           <div className="p-4 rounded-2xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800 flex items-start gap-3">
             <Info className="h-5 w-5 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
@@ -2111,51 +2257,49 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                           Unified ESC/POS & Browser Output
                         </span>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <button
-                          type="button"
-                          onClick={() => handleChangeThermalLayout('classic')}
-                          className={`p-3.5 rounded-2xl border-2 text-left transition flex items-start gap-3 ${
-                            thermalLayout === 'classic'
-                              ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
-                              : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
-                          }`}
-                        >
-                          <div className={`p-2 rounded-xl mt-0.5 ${thermalLayout === 'classic' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                            <Receipt className="h-4 w-4" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-xs">Classic POS Terminal</span>
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                                Default
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                              Classic cash register style with dashed dividers, centered <code className="text-[10px] font-mono font-bold bg-slate-100 px-1 py-0.5 rounded">=== TOTAL ===</code> banner, and lines/units summary. Includes store logo.
-                            </p>
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleChangeThermalLayout('modern')}
-                          className={`p-3.5 rounded-2xl border-2 text-left transition flex items-start gap-3 ${
-                            thermalLayout === 'modern'
-                              ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
-                              : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
-                          }`}
-                        >
-                          <div className={`p-2 rounded-xl mt-0.5 ${thermalLayout === 'modern' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                            <FileText className="h-4 w-4" />
-                          </div>
-                          <div>
-                            <div className="font-bold text-xs">Modern Clean</div>
-                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                              Contemporary layout with solid border lines, uppercase headers (<code className="text-[10px] font-mono font-bold bg-slate-100 px-1 py-0.5 rounded">DESCRIPTION AMOUNT</code>), and compact summary. Includes store logo.
-                            </p>
-                          </div>
-                        </button>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {THERMAL_LAYOUT_OPTIONS.map((lo) => {
+                          const isSelected = thermalLayout === lo.id;
+                          return (
+                            <button
+                              key={lo.id}
+                              type="button"
+                              onClick={() => handleChangeThermalLayout(lo.id)}
+                              className={`p-3.5 rounded-2xl border-2 text-left transition flex flex-col justify-between relative ${
+                                isSelected
+                                  ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm ring-2 ring-emerald-500/20'
+                                  : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between w-full mb-2">
+                                <div
+                                  className={`p-2 rounded-xl mt-0.5 ${
+                                    isSelected ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'
+                                  }`}
+                                >
+                                  {renderLayoutIcon(lo.iconName)}
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  {lo.badge && (
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${lo.badgeColor}`}>
+                                      {lo.badge}
+                                    </span>
+                                  )}
+                                  {isSelected && (
+                                    <div className="h-4 w-4 rounded-full bg-emerald-600 text-white flex items-center justify-center">
+                                      <Check className="h-2.5 w-2.5 stroke-[3]" />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div>
+                                <span className="font-bold text-xs block">{lo.title}</span>
+                                <span className="text-[10px] font-semibold text-emerald-700 block mt-0.5">{lo.subtitle}</span>
+                                <p className="text-[11px] text-slate-500 mt-1 leading-snug">{lo.desc}</p>
+                              </div>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 

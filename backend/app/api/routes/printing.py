@@ -39,7 +39,7 @@ class ThermalPrintRequest(BaseModel):
     printer_name: Optional[str] = None
     paper_width: Optional[str] = None  # "58mm" | "58mm_narrow" | "80mm" | "80mm_compact"
     header_style: Optional[str] = None  # "logo_text" | "text_only"
-    layout: Optional[str] = None  # "classic" | "modern"
+    layout: Optional[str] = None  # "classic" | "modern" | "tabular" | "compact" | "elegant"
     show_barcode: Optional[bool] = None
     kick_drawer: Optional[bool] = False
     is_sample: Optional[bool] = False

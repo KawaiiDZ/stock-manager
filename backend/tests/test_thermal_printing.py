@@ -431,6 +431,24 @@ def test_generate_escpos_receipt_classic_vs_modern_layouts():
     assert b"DESCRIPTION" in modern_bytes
     assert b"Items / Units:" in modern_bytes
     assert b"Paid:" in modern_bytes
+    assert b"TOTAL DUE:" in modern_bytes
+
+    # Tabular layout
+    tabular_bytes = generate_escpos_receipt(sale_data, settings=settings, receipt_layout="tabular")
+    assert b"ITEM" in tabular_bytes
+    assert b"QTY" in tabular_bytes
+    assert b"PRICE" in tabular_bytes
+    assert b"TOTAL AMOUNT:" in tabular_bytes
+
+    # Compact layout
+    compact_bytes = generate_escpos_receipt(sale_data, settings=settings, receipt_layout="compact")
+    assert b">>> TOTAL:" in compact_bytes
+    assert b"SUB:" in compact_bytes
+
+    # Elegant layout
+    elegant_bytes = generate_escpos_receipt(sale_data, settings=settings, receipt_layout="elegant")
+    assert b"Boutique Guest Receipt" in elegant_bytes
+    assert b"NET AMOUNT PAYABLE" in elegant_bytes
 
 
 def test_generate_escpos_receipt_logo_inclusion_and_omission():

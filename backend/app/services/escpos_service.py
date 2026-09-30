@@ -435,6 +435,77 @@ def image_to_escpos_raster(
         return None
 
 
+def format_tabular_cols(
+    item_name: str,
+    qty: float,
+    price: float,
+    total: float,
+    currency: str,
+    col_width: int,
+) -> str:
+    """
+    Formats an item row into an aligned multi-column table:
+    80mm: ITEM (22) QTY (4) PRICE (9) TOTAL (10) -> 48 chars
+    58mm: ITEM (11) QTY (3) PRICE (7) TOTAL (8)  -> 32 chars
+    Gracefully wraps long item names to next line without skewing columns.
+    """
+    qty_str = f"{int(qty) if qty.is_integer() else qty}"
+    price_str = f"{price:,.2f}"
+    tot_str = f"{total:,.2f}"
+
+    if col_width >= 40:
+        w_qty = 4
+        w_price = 9
+        w_tot = 10
+        w_item = col_width - (w_qty + w_price + w_tot + 3)
+    else:
+        w_qty = 3
+        w_price = 7
+        w_tot = 8
+        w_item = col_width - (w_qty + w_price + w_tot + 3)
+
+    w_item = max(6, w_item)
+
+    words = item_name.split()
+    item_lines = []
+    curr = ""
+    for w in words:
+        if not curr:
+            curr = w[:w_item]
+        elif len(curr) + 1 + len(w) <= w_item:
+            curr += " " + w
+        else:
+            item_lines.append(curr)
+            curr = w[:w_item]
+    if curr:
+        item_lines.append(curr)
+    if not item_lines:
+        item_lines = [item_name[:w_item]]
+
+    first_item = item_lines[0].ljust(w_item)
+    q_col = qty_str.rjust(w_qty)
+    p_col = price_str.rjust(w_price)
+    t_col = tot_str.rjust(w_tot)
+
+    res = f"{first_item} {q_col} {p_col} {t_col}\n"
+    for extra in item_lines[1:]:
+        res += f"{extra.ljust(w_item)}\n"
+    return res
+
+
+def format_dot_leader(left_str: str, right_str: str, col_width: int) -> str:
+    """
+    Fills space between left and right text with rhythmic dot leaders (. . .).
+    Produces authentic fine-dining / boutique receipt aesthetics.
+    """
+    avail = col_width - len(left_str) - len(right_str)
+    if avail <= 2:
+        return format_row(left_str, right_str, col_width)
+    dots = " " + ". " * (avail // 2)
+    dots = dots[:avail]
+    return f"{left_str}{dots}{right_str}\n"
+
+
 def generate_escpos_receipt(
     sale_data: Dict[str, Any],
     settings: Optional[Any] = None,
@@ -509,38 +580,69 @@ def generate_escpos_receipt(
             buf.extend(raster_logo)
             buf.extend(b"\n")
 
-    # Store Name in Large Bold
-    buf.extend(cmd_bold_on)
-    buf.extend(cmd_double_size)
-    display_shop_name = shop_name.upper() if layout_mode == "modern" else shop_name
-    buf.extend(safe_escpos_text(f"{display_shop_name}\n"))
-    buf.extend(cmd_normal_size)
-    buf.extend(cmd_bold_off)
+    # 2. Store Header
+    buf.extend(cmd_align_center)
+    if layout_mode == "elegant":
+        flourish = ("* " * (col_width // 2))[:col_width] + "\n"
+        buf.extend(safe_escpos_text(flourish))
+        buf.extend(cmd_bold_on)
+        buf.extend(cmd_double_size)
+        buf.extend(safe_escpos_text(f"{shop_name}\n"))
+        buf.extend(cmd_normal_size)
+        buf.extend(cmd_bold_off)
+        buf.extend(safe_escpos_text("~ Boutique Guest Receipt ~\n"))
+    elif layout_mode == "modern":
+        buf.extend(cmd_bold_on)
+        buf.extend(cmd_double_size)
+        buf.extend(safe_escpos_text(f"{shop_name.upper()}\n"))
+        buf.extend(cmd_normal_size)
+        buf.extend(cmd_bold_off)
+        buf.extend(safe_escpos_text("[ OFFICIAL RETAIL RECEIPT ]\n"))
+    elif layout_mode == "compact":
+        buf.extend(cmd_bold_on)
+        buf.extend(safe_escpos_text(f"{shop_name}\n"))
+        buf.extend(cmd_bold_off)
+    elif layout_mode == "tabular":
+        buf.extend(cmd_bold_on)
+        buf.extend(cmd_double_size)
+        buf.extend(safe_escpos_text(f"{shop_name}\n"))
+        buf.extend(cmd_normal_size)
+        buf.extend(cmd_bold_off)
+        buf.extend(safe_escpos_text("Tax / Retail Sale Voucher\n"))
+    else:  # classic
+        buf.extend(cmd_bold_on)
+        buf.extend(cmd_double_size)
+        buf.extend(safe_escpos_text(f"{shop_name}\n"))
+        buf.extend(cmd_normal_size)
+        buf.extend(cmd_bold_off)
 
-    if shop_address:
+    if shop_address and layout_mode != "compact":
         for line in shop_address.splitlines():
             buf.extend(safe_escpos_text(f"{line.strip()}\n"))
-    if shop_phone:
+    if shop_phone and layout_mode != "compact":
         buf.extend(safe_escpos_text(f"Phone: {shop_phone}\n"))
-    if custom_header and custom_header.strip().lower() != shop_name.strip().lower():
+    if custom_header and custom_header.strip().lower() != shop_name.strip().lower() and layout_mode != "compact":
         buf.extend(safe_escpos_text(f"{custom_header.strip()}\n"))
 
     buf.extend(cmd_align_left)
-    buf.extend(safe_escpos_text(div_line))
 
-    # 3. Receipt Info
+    # 3. Receipt Metadata & Info
     receipt_no = sale_data.get("receipt_number", "RECEIPT")
     created_at = sale_data.get("created_at")
     if isinstance(created_at, datetime):
         dt_str = created_at.strftime("%Y-%m-%d %I:%M %p")
+        dt_short = created_at.strftime("%m/%d %I:%M%p")
     elif isinstance(created_at, str):
         try:
             dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
             dt_str = dt.strftime("%Y-%m-%d %I:%M %p")
+            dt_short = dt.strftime("%m/%d %I:%M%p")
         except Exception:
             dt_str = str(created_at)[:19]
+            dt_short = dt_str[:10]
     else:
         dt_str = datetime.now().strftime("%Y-%m-%d %I:%M %p")
+        dt_short = datetime.now().strftime("%m/%d %I:%M%p")
 
     cust_name = sale_data.get("customer_name") or "Counter Walk-in"
     payment_method = sale_data.get("payment_method", "CASH")
@@ -550,65 +652,218 @@ def generate_escpos_receipt(
         if isinstance(p0, dict):
             payment_method = p0.get("payment_method", payment_method)
 
-    buf.extend(safe_escpos_text(format_row("Receipt #:", receipt_no, col_width)))
-    buf.extend(safe_escpos_text(format_row("Date:", dt_str, col_width)))
-    buf.extend(safe_escpos_text(format_row("Customer:", cust_name, col_width)))
-    buf.extend(safe_escpos_text(format_row("Payment:", str(payment_method).upper(), col_width)))
+    if layout_mode == "compact":
+        buf.extend(safe_escpos_text("-" * col_width + "\n"))
+        buf.extend(safe_escpos_text(f"#{receipt_no} | {dt_short} | {cust_name[:12]}\n"))
+        buf.extend(safe_escpos_text("-" * col_width + "\n"))
+    elif layout_mode == "modern":
+        buf.extend(safe_escpos_text("=" * col_width + "\n"))
+        buf.extend(safe_escpos_text(format_row(f"#{receipt_no}", dt_str, col_width)))
+        buf.extend(safe_escpos_text(format_row(f"Customer: {cust_name}", f"Tender: [{str(payment_method).upper()}]", col_width)))
+        buf.extend(safe_escpos_text("=" * col_width + "\n"))
+    elif layout_mode == "elegant":
+        flourish_sub = ("~ " * (col_width // 2))[:col_width] + "\n"
+        buf.extend(safe_escpos_text(flourish_sub))
+        buf.extend(cmd_align_center)
+        buf.extend(safe_escpos_text(f"Order Ref: {receipt_no}\n"))
+        buf.extend(safe_escpos_text(f"{dt_str}\n"))
+        buf.extend(safe_escpos_text(f"Honored Guest: {cust_name}\n"))
+        buf.extend(cmd_align_left)
+        buf.extend(safe_escpos_text(flourish_sub))
+    elif layout_mode == "tabular":
+        buf.extend(safe_escpos_text("-" * col_width + "\n"))
+        buf.extend(safe_escpos_text(format_row(f"Voucher: {receipt_no}", f"Date: {dt_str[:10]}", col_width)))
+        buf.extend(safe_escpos_text(format_row(f"Customer: {cust_name}", f"Pay: {str(payment_method).upper()}", col_width)))
+        buf.extend(safe_escpos_text("-" * col_width + "\n"))
+    else:  # classic
+        buf.extend(safe_escpos_text(div_line))
+        buf.extend(safe_escpos_text(format_row("Receipt #:", receipt_no, col_width)))
+        buf.extend(safe_escpos_text(format_row("Date:", dt_str, col_width)))
+        buf.extend(safe_escpos_text(format_row("Customer:", cust_name, col_width)))
+        buf.extend(safe_escpos_text(format_row("Payment:", str(payment_method).upper(), col_width)))
+        buf.extend(safe_escpos_text(div_line))
 
-    buf.extend(safe_escpos_text(div_line))
-
-    # 4. Items Table Header
-    buf.extend(cmd_bold_on)
-    col_desc = "DESCRIPTION" if layout_mode == "modern" else "Description"
-    col_amt = "AMOUNT" if layout_mode == "modern" else "Amount"
-    buf.extend(safe_escpos_text(format_row(col_desc, col_amt, col_width)))
-    buf.extend(cmd_bold_off)
-    buf.extend(safe_escpos_text(div_line))
-
+    # 4. Items Table
     items = sale_data.get("items", [])
     total_qty = 0
-    for it in items:
-        p_name = it.get("product_name", "Item")
-        orig_qty = float(it.get("quantity", 0))
-        ret_qty = float(it.get("returned_quantity", 0))
-        u_price = float(it.get("unit_price", 0))
-        disc_amt = float(it.get("discount_amount", 0))
-        tot_price = float(it.get("total_price", 0))
 
-        is_fully_returned = (ret_qty >= orig_qty and orig_qty > 0)
-        is_partially_returned = (ret_qty > 0 and ret_qty < orig_qty)
-        rem_qty = 0 if is_fully_returned else max(0.0, orig_qty - ret_qty)
-        line_total = 0.0 if is_fully_returned else (rem_qty * u_price - disc_amt if is_partially_returned else tot_price)
-
-        total_qty += rem_qty
-
-        # Line 1: Item Name
-        tag = " (RETURNED)" if is_fully_returned else (f" ({int(ret_qty) if ret_qty.is_integer() else ret_qty} RET)" if is_partially_returned else "")
+    if layout_mode == "tabular":
         buf.extend(cmd_bold_on)
-        buf.extend(safe_escpos_text(f"{p_name}{tag}\n"))
-        buf.extend(cmd_bold_off)
-
-        # Line 2: Qty x Unit Price ... Line Total
-        qty_disp = int(orig_qty) if orig_qty.is_integer() else orig_qty
-        if is_partially_returned:
-            left_str = f"{int(rem_qty) if rem_qty.is_integer() else rem_qty} kept ({qty_disp} orig) x {currency} {u_price:,.2f}"
+        if col_width >= 40:
+            # 48 col header
+            w_qty = 4
+            w_price = 9
+            w_tot = 10
+            w_item = col_width - (w_qty + w_price + w_tot + 3)
+            tbl_hdr = f"{'ITEM'.ljust(w_item)} {'QTY'.rjust(w_qty)} {'PRICE'.rjust(w_price)} {'TOTAL'.rjust(w_tot)}\n"
         else:
-            left_str = f"{qty_disp} x {currency} {u_price:,.2f}"
-        right_str = f"{currency} {line_total:,.2f}"
+            w_qty = 3
+            w_price = 7
+            w_tot = 8
+            w_item = col_width - (w_qty + w_price + w_tot + 3)
+            tbl_hdr = f"{'ITEM'.ljust(w_item)} {'QTY'.rjust(w_qty)} {'PRICE'.rjust(w_price)} {'TOTAL'.rjust(w_tot)}\n"
+        buf.extend(safe_escpos_text(tbl_hdr))
+        buf.extend(cmd_bold_off)
+        buf.extend(safe_escpos_text("-" * col_width + "\n"))
 
-        buf.extend(safe_escpos_text(format_row(left_str, right_str, col_width)))
+        for it in items:
+            p_name = it.get("product_name", "Item")
+            orig_qty = float(it.get("quantity", 0))
+            ret_qty = float(it.get("returned_quantity", 0))
+            u_price = float(it.get("unit_price", 0))
+            disc_amt = float(it.get("discount_amount", 0))
+            tot_price = float(it.get("total_price", 0))
 
-        # Line 3: Discount if any
-        if disc_amt > 0 and not is_fully_returned:
-            disc_tag = "  ↳ Item Disc:" if layout_mode == "modern" else "  -> Disc:"
-            buf.extend(safe_escpos_text(f"{disc_tag} -{currency} {disc_amt:,.2f}\n"))
+            is_fully_returned = (ret_qty >= orig_qty and orig_qty > 0)
+            is_partially_returned = (ret_qty > 0 and ret_qty < orig_qty)
+            rem_qty = 0 if is_fully_returned else max(0.0, orig_qty - ret_qty)
+            line_total = 0.0 if is_fully_returned else (rem_qty * u_price - disc_amt if is_partially_returned else tot_price)
+            total_qty += rem_qty
 
-    buf.extend(safe_escpos_text(div_line))
-    units_label = "Items / Units:" if layout_mode == "modern" else "Lines / Units:"
-    buf.extend(safe_escpos_text(format_row(units_label, f"{len(items)} lines / {int(total_qty) if total_qty.is_integer() else total_qty:.1f} pcs", col_width)))
-    buf.extend(safe_escpos_text(div_line))
+            tag = " [RET]" if is_fully_returned else (f" [{int(ret_qty)}R]" if is_partially_returned else "")
+            display_name = f"{p_name}{tag}"
+            row_text = format_tabular_cols(display_name, rem_qty if is_partially_returned else orig_qty, u_price, line_total, currency, col_width)
+            buf.extend(safe_escpos_text(row_text))
 
-    # 5. Totals
+            if disc_amt > 0 and not is_fully_returned:
+                buf.extend(safe_escpos_text(f"  (Disc: -{currency} {disc_amt:,.2f})\n"))
+
+        buf.extend(safe_escpos_text("-" * col_width + "\n"))
+
+    elif layout_mode == "compact":
+        for it in items:
+            p_name = it.get("product_name", "Item")
+            orig_qty = float(it.get("quantity", 0))
+            ret_qty = float(it.get("returned_quantity", 0))
+            u_price = float(it.get("unit_price", 0))
+            disc_amt = float(it.get("discount_amount", 0))
+            tot_price = float(it.get("total_price", 0))
+
+            is_fully_returned = (ret_qty >= orig_qty and orig_qty > 0)
+            is_partially_returned = (ret_qty > 0 and ret_qty < orig_qty)
+            rem_qty = 0 if is_fully_returned else max(0.0, orig_qty - ret_qty)
+            line_total = 0.0 if is_fully_returned else (rem_qty * u_price - disc_amt if is_partially_returned else tot_price)
+            total_qty += rem_qty
+
+            qty_disp = int(orig_qty) if orig_qty.is_integer() else orig_qty
+            right_str = f"{line_total:,.2f}"
+            avail = col_width - len(right_str) - 1
+            short_name = f"{p_name} ({qty_disp}x)"[:avail]
+            buf.extend(safe_escpos_text(format_row(short_name, right_str, col_width)))
+            if disc_amt > 0 and not is_fully_returned:
+                buf.extend(safe_escpos_text(f" -Disc: {disc_amt:,.2f}\n"))
+
+        buf.extend(safe_escpos_text("-" * col_width + "\n"))
+
+    elif layout_mode == "modern":
+        buf.extend(cmd_bold_on)
+        buf.extend(safe_escpos_text(format_row("ITEM / DESCRIPTION", "TOTAL", col_width)))
+        buf.extend(cmd_bold_off)
+        buf.extend(safe_escpos_text("=" * col_width + "\n"))
+
+        for it in items:
+            p_name = it.get("product_name", "Item")
+            orig_qty = float(it.get("quantity", 0))
+            ret_qty = float(it.get("returned_quantity", 0))
+            u_price = float(it.get("unit_price", 0))
+            disc_amt = float(it.get("discount_amount", 0))
+            tot_price = float(it.get("total_price", 0))
+
+            is_fully_returned = (ret_qty >= orig_qty and orig_qty > 0)
+            is_partially_returned = (ret_qty > 0 and ret_qty < orig_qty)
+            rem_qty = 0 if is_fully_returned else max(0.0, orig_qty - ret_qty)
+            line_total = 0.0 if is_fully_returned else (rem_qty * u_price - disc_amt if is_partially_returned else tot_price)
+            total_qty += rem_qty
+
+            tag = " (RETURNED)" if is_fully_returned else (f" ({int(ret_qty)} RET)" if is_partially_returned else "")
+            buf.extend(cmd_bold_on)
+            buf.extend(safe_escpos_text(f"{p_name.upper()}{tag}\n"))
+            buf.extend(cmd_bold_off)
+
+            qty_disp = int(orig_qty) if orig_qty.is_integer() else orig_qty
+            left_str = f"{qty_disp} pcs @ {currency} {u_price:,.2f}"
+            right_str = f"{currency} {line_total:,.2f}"
+            buf.extend(safe_escpos_text(format_row(left_str, right_str, col_width)))
+
+            if disc_amt > 0 and not is_fully_returned:
+                buf.extend(safe_escpos_text(f"  ↳ Promo Disc: -{currency} {disc_amt:,.2f}\n"))
+
+        buf.extend(safe_escpos_text("=" * col_width + "\n"))
+        buf.extend(safe_escpos_text(format_row("Items / Units:", f"{len(items)} lines / {int(total_qty) if total_qty.is_integer() else total_qty:.1f} pcs", col_width)))
+        buf.extend(safe_escpos_text("=" * col_width + "\n"))
+
+    elif layout_mode == "elegant":
+        flourish_sec = ("~ " * (col_width // 2))[:col_width] + "\n"
+        for it in items:
+            p_name = it.get("product_name", "Item")
+            orig_qty = float(it.get("quantity", 0))
+            ret_qty = float(it.get("returned_quantity", 0))
+            u_price = float(it.get("unit_price", 0))
+            disc_amt = float(it.get("discount_amount", 0))
+            tot_price = float(it.get("total_price", 0))
+
+            is_fully_returned = (ret_qty >= orig_qty and orig_qty > 0)
+            is_partially_returned = (ret_qty > 0 and ret_qty < orig_qty)
+            rem_qty = 0 if is_fully_returned else max(0.0, orig_qty - ret_qty)
+            line_total = 0.0 if is_fully_returned else (rem_qty * u_price - disc_amt if is_partially_returned else tot_price)
+            total_qty += rem_qty
+
+            tag = " (Returned)" if is_fully_returned else (f" ({int(ret_qty)} Returned)" if is_partially_returned else "")
+            buf.extend(cmd_bold_on)
+            buf.extend(safe_escpos_text(f"  {p_name}{tag}\n"))
+            buf.extend(cmd_bold_off)
+
+            qty_disp = int(orig_qty) if orig_qty.is_integer() else orig_qty
+            left_str = f"    {qty_disp} × {currency} {u_price:,.2f}"
+            right_str = f"{currency} {line_total:,.2f}"
+            buf.extend(safe_escpos_text(format_dot_leader(left_str, right_str, col_width)))
+
+            if disc_amt > 0 and not is_fully_returned:
+                buf.extend(safe_escpos_text(f"    * Courtesy Savings: -{currency} {disc_amt:,.2f}\n"))
+
+        buf.extend(safe_escpos_text(flourish_sec))
+
+    else:  # classic
+        buf.extend(cmd_bold_on)
+        buf.extend(safe_escpos_text(format_row("Description", "Amount", col_width)))
+        buf.extend(cmd_bold_off)
+        buf.extend(safe_escpos_text(div_line))
+
+        for it in items:
+            p_name = it.get("product_name", "Item")
+            orig_qty = float(it.get("quantity", 0))
+            ret_qty = float(it.get("returned_quantity", 0))
+            u_price = float(it.get("unit_price", 0))
+            disc_amt = float(it.get("discount_amount", 0))
+            tot_price = float(it.get("total_price", 0))
+
+            is_fully_returned = (ret_qty >= orig_qty and orig_qty > 0)
+            is_partially_returned = (ret_qty > 0 and ret_qty < orig_qty)
+            rem_qty = 0 if is_fully_returned else max(0.0, orig_qty - ret_qty)
+            line_total = 0.0 if is_fully_returned else (rem_qty * u_price - disc_amt if is_partially_returned else tot_price)
+            total_qty += rem_qty
+
+            tag = " (RETURNED)" if is_fully_returned else (f" ({int(ret_qty) if ret_qty.is_integer() else ret_qty} RET)" if is_partially_returned else "")
+            buf.extend(cmd_bold_on)
+            buf.extend(safe_escpos_text(f"{p_name}{tag}\n"))
+            buf.extend(cmd_bold_off)
+
+            qty_disp = int(orig_qty) if orig_qty.is_integer() else orig_qty
+            if is_partially_returned:
+                left_str = f"{int(rem_qty) if rem_qty.is_integer() else rem_qty} kept ({qty_disp} orig) x {currency} {u_price:,.2f}"
+            else:
+                left_str = f"{qty_disp} x {currency} {u_price:,.2f}"
+            right_str = f"{currency} {line_total:,.2f}"
+            buf.extend(safe_escpos_text(format_row(left_str, right_str, col_width)))
+
+            if disc_amt > 0 and not is_fully_returned:
+                buf.extend(safe_escpos_text(f"  -> Disc: -{currency} {disc_amt:,.2f}\n"))
+
+        buf.extend(safe_escpos_text(div_line))
+        buf.extend(safe_escpos_text(format_row("Lines / Units:", f"{len(items)} lines / {int(total_qty) if total_qty.is_integer() else total_qty:.1f} pcs", col_width)))
+        buf.extend(safe_escpos_text(div_line))
+
+    # 5. Financial Totals & Grand Summary
     subtotal = float(sale_data.get("subtotal", 0))
     discount = float(sale_data.get("discount_amount", 0))
     tax_amt = float(sale_data.get("tax_amount", 0))
@@ -619,47 +874,145 @@ def generate_escpos_receipt(
     due_amt = float(sale_data.get("due_amount", 0))
     payment_status = str(sale_data.get("payment_status", "PAID")).upper()
 
-    buf.extend(safe_escpos_text(format_row("Subtotal:", f"{currency} {subtotal:,.2f}", col_width)))
-    if discount > 0:
-        buf.extend(safe_escpos_text(format_row("Order Discount:", f"-{currency} {discount:,.2f}", col_width)))
-    if tax_amt > 0:
-        buf.extend(safe_escpos_text(format_row(f"Tax ({tax_rate}%):", f"+{currency} {tax_amt:,.2f}", col_width)))
-
-    # TOTAL IN BOLD
-    buf.extend(safe_escpos_text(double_div))
-    buf.extend(cmd_bold_on)
-    buf.extend(safe_escpos_text(format_row("TOTAL:", f"{currency} {total_amt:,.2f}", col_width)))
-    buf.extend(cmd_bold_off)
-    buf.extend(safe_escpos_text(double_div))
-
-    if total_ret_amt > 0:
-        net_payable = max(0.0, total_amt - total_ret_amt)
-        buf.extend(safe_escpos_text(format_row("Less Returns:", f"-{currency} {total_ret_amt:,.2f}", col_width)))
+    if layout_mode == "compact":
+        # 2-line condensed financial totals
+        disc_part = f" | DISC: {discount:,.2f}" if discount > 0 else ""
+        tax_part = f" | TAX: {tax_amt:,.2f}" if tax_amt > 0 else ""
+        buf.extend(safe_escpos_text(f"SUB: {subtotal:,.2f}{disc_part}{tax_part}\n"))
         buf.extend(cmd_bold_on)
-        buf.extend(safe_escpos_text(format_row("NET PAYABLE:", f"{currency} {net_payable:,.2f}", col_width)))
+        buf.extend(cmd_align_center)
+        buf.extend(safe_escpos_text(f">>> TOTAL: {currency} {total_amt:,.2f} <<<\n"))
+        buf.extend(cmd_align_left)
         buf.extend(cmd_bold_off)
+        paid_line = f"PAID: {paid_amt:,.2f} ({str(payment_method).upper()})"
+        if paid_amt > total_amt:
+            paid_line += f" | CHANGE: {paid_amt - total_amt:,.2f}"
+        buf.extend(safe_escpos_text(f"{paid_line}\n"))
+        buf.extend(safe_escpos_text("-" * col_width + "\n"))
+
+    elif layout_mode == "modern":
+        buf.extend(safe_escpos_text(format_row("Subtotal:", f"{currency} {subtotal:,.2f}", col_width)))
+        if discount > 0:
+            buf.extend(safe_escpos_text(format_row("Discount:", f"-{currency} {discount:,.2f}", col_width)))
+        if tax_amt > 0:
+            buf.extend(safe_escpos_text(format_row(f"Tax ({tax_rate}%):", f"+{currency} {tax_amt:,.2f}", col_width)))
+
+        # Framed Total Card
+        box_border = "+" + "-" * (col_width - 2) + "+\n"
+        inside_text = format_row(" TOTAL DUE:", f"{currency} {total_amt:,.2f} ", col_width - 2).rstrip("\n")
+        buf.extend(safe_escpos_text(box_border))
+        buf.extend(cmd_bold_on)
+        buf.extend(safe_escpos_text(f"|{inside_text}|\n"))
+        buf.extend(cmd_bold_off)
+        buf.extend(safe_escpos_text(box_border))
+
+        if total_ret_amt > 0:
+            net_payable = max(0.0, total_amt - total_ret_amt)
+            buf.extend(safe_escpos_text(format_row("Less Returns:", f"-{currency} {total_ret_amt:,.2f}", col_width)))
+            buf.extend(cmd_bold_on)
+            buf.extend(safe_escpos_text(format_row("NET PAYABLE:", f"{currency} {net_payable:,.2f}", col_width)))
+            buf.extend(cmd_bold_off)
+
+        # Payment & Change
+        change_amt = max(0.0, paid_amt - total_amt) if paid_amt > total_amt else 0.0
+        buf.extend(safe_escpos_text(format_row("Paid:", f"{currency} {paid_amt:,.2f} ({str(payment_method).upper()})", col_width)))
+        if due_amt > 0:
+            buf.extend(cmd_bold_on)
+            buf.extend(safe_escpos_text(format_row("REMAINING DUE:", f"{currency} {due_amt:,.2f}", col_width)))
+            buf.extend(cmd_bold_off)
+        elif change_amt > 0:
+            buf.extend(safe_escpos_text(format_row("Change:", f"{currency} {change_amt:,.2f}", col_width)))
+        buf.extend(safe_escpos_text("=" * col_width + "\n"))
+
+    elif layout_mode == "elegant":
+        buf.extend(safe_escpos_text(format_row("  Subtotal:", f"{currency} {subtotal:,.2f}", col_width)))
+        if discount > 0:
+            buf.extend(safe_escpos_text(format_row("  Courtesy Discount:", f"-{currency} {discount:,.2f}", col_width)))
+        if tax_amt > 0:
+            buf.extend(safe_escpos_text(format_row(f"  Sales Tax ({tax_rate}%):", f"+{currency} {tax_amt:,.2f}", col_width)))
+
+        flourish_tot = ("~ " * (col_width // 2))[:col_width] + "\n"
+        buf.extend(safe_escpos_text(flourish_tot))
+        buf.extend(cmd_align_center)
+        buf.extend(safe_escpos_text("NET AMOUNT PAYABLE\n"))
+        buf.extend(cmd_bold_on)
+        buf.extend(cmd_double_size)
+        buf.extend(safe_escpos_text(f"{currency} {total_amt:,.2f}\n"))
+        buf.extend(cmd_normal_size)
+        buf.extend(cmd_bold_off)
+        buf.extend(safe_escpos_text(flourish_tot))
+        buf.extend(cmd_align_left)
+
+        buf.extend(safe_escpos_text(format_row(f"  Tendered via {payment_method}:", f"{currency} {paid_amt:,.2f}", col_width)))
+        if due_amt > 0:
+            buf.extend(cmd_bold_on)
+            buf.extend(safe_escpos_text(format_row("  Balance Due:", f"{currency} {due_amt:,.2f}", col_width)))
+            buf.extend(cmd_bold_off)
+        elif paid_amt > total_amt:
+            buf.extend(safe_escpos_text(format_row("  Change Returned:", f"{currency} {paid_amt - total_amt:,.2f}", col_width)))
+        buf.extend(safe_escpos_text(flourish_tot))
+
+    elif layout_mode == "tabular":
+        buf.extend(safe_escpos_text(format_row("Subtotal:", f"{currency} {subtotal:,.2f}", col_width)))
+        if discount > 0:
+            buf.extend(safe_escpos_text(format_row("Discount:", f"-{currency} {discount:,.2f}", col_width)))
+        if tax_amt > 0:
+            buf.extend(safe_escpos_text(format_row(f"Tax ({tax_rate}%):", f"+{currency} {tax_amt:,.2f}", col_width)))
+
+        buf.extend(safe_escpos_text("=" * col_width + "\n"))
+        buf.extend(cmd_bold_on)
+        buf.extend(safe_escpos_text(format_row("TOTAL AMOUNT:", f"{currency} {total_amt:,.2f}", col_width)))
+        buf.extend(cmd_bold_off)
+        buf.extend(safe_escpos_text("=" * col_width + "\n"))
+
+        buf.extend(safe_escpos_text(format_row(f"Paid ({str(payment_method).upper()}):", f"{currency} {paid_amt:,.2f}", col_width)))
+        if due_amt > 0:
+            buf.extend(cmd_bold_on)
+            buf.extend(safe_escpos_text(format_row("DUE BALANCE:", f"{currency} {due_amt:,.2f}", col_width)))
+            buf.extend(cmd_bold_off)
+        elif paid_amt > total_amt:
+            buf.extend(safe_escpos_text(format_row("Change:", f"{currency} {paid_amt - total_amt:,.2f}", col_width)))
+        buf.extend(safe_escpos_text("-" * col_width + "\n"))
+
+    else:  # classic
+        buf.extend(safe_escpos_text(format_row("Subtotal:", f"{currency} {subtotal:,.2f}", col_width)))
+        if discount > 0:
+            buf.extend(safe_escpos_text(format_row("Order Discount:", f"-{currency} {discount:,.2f}", col_width)))
+        if tax_amt > 0:
+            buf.extend(safe_escpos_text(format_row(f"Tax ({tax_rate}%):", f"+{currency} {tax_amt:,.2f}", col_width)))
+
+        buf.extend(safe_escpos_text(double_div))
+        buf.extend(cmd_bold_on)
+        buf.extend(safe_escpos_text(format_row("TOTAL:", f"{currency} {total_amt:,.2f}", col_width)))
+        buf.extend(cmd_bold_off)
+        buf.extend(safe_escpos_text(double_div))
+
+        if total_ret_amt > 0:
+            net_payable = max(0.0, total_amt - total_ret_amt)
+            buf.extend(safe_escpos_text(format_row("Less Returns:", f"-{currency} {total_ret_amt:,.2f}", col_width)))
+            buf.extend(cmd_bold_on)
+            buf.extend(safe_escpos_text(format_row("NET PAYABLE:", f"{currency} {net_payable:,.2f}", col_width)))
+            buf.extend(cmd_bold_off)
+            buf.extend(safe_escpos_text(div_line))
+
+        buf.extend(safe_escpos_text(format_row("Paid Amount:", f"{currency} {paid_amt:,.2f}", col_width)))
+        if due_amt > 0:
+            buf.extend(cmd_bold_on)
+            buf.extend(safe_escpos_text(format_row("REMAINING DUE:", f"{currency} {due_amt:,.2f}", col_width)))
+            buf.extend(cmd_bold_off)
+        else:
+            status_text = "PAID IN FULL"
+            if payment_status == "RETURNED":
+                status_text = "FULLY RETURNED"
+            elif payment_status == "PARTIALLY_RETURNED":
+                status_text = "SETTLED (PARTIAL RET)"
+            buf.extend(safe_escpos_text(format_row("Status:", status_text, col_width)))
+
+        if paid_amt > total_amt:
+            change_amt = paid_amt - total_amt
+            buf.extend(safe_escpos_text(format_row("Change:", f"{currency} {change_amt:,.2f}", col_width)))
+
         buf.extend(safe_escpos_text(div_line))
-
-    # 6. Payment & Due Balance
-    paid_label = "Paid:" if layout_mode == "modern" else "Paid Amount:"
-    buf.extend(safe_escpos_text(format_row(paid_label, f"{currency} {paid_amt:,.2f}", col_width)))
-    if due_amt > 0:
-        buf.extend(cmd_bold_on)
-        buf.extend(safe_escpos_text(format_row("REMAINING DUE:", f"{currency} {due_amt:,.2f}", col_width)))
-        buf.extend(cmd_bold_off)
-    else:
-        status_text = "PAID IN FULL"
-        if payment_status == "RETURNED":
-            status_text = "FULLY RETURNED"
-        elif payment_status == "PARTIALLY_RETURNED":
-            status_text = "SETTLED (PARTIAL RET)"
-        buf.extend(safe_escpos_text(format_row("Status:", status_text, col_width)))
-
-    if paid_amt > total_amt:
-        change_amt = paid_amt - total_amt
-        buf.extend(safe_escpos_text(format_row("Change:", f"{currency} {change_amt:,.2f}", col_width)))
-
-    buf.extend(safe_escpos_text(div_line))
 
     # 7. Code 128 Barcode with Code Set B prefix
     if show_barcode and receipt_no:

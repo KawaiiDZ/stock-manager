@@ -24,22 +24,22 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   onNewSale,
 }) => {
   const [receiptType, setReceiptType] = useState<'thermal' | 'pdf'>('thermal');
-  const [paperWidth, setPaperWidth] = useState<'80mm' | '58mm'>('80mm');
-  const [receiptLayout, setReceiptLayout] = useState<'classic' | 'modern'>(settings?.thermal_layout || 'classic');
   const [directPrinting, setDirectPrinting] = useState<boolean>(false);
   const [printSuccessMsg, setPrintSuccessMsg] = useState<string | null>(null);
   const [printErrorMsg, setPrintErrorMsg] = useState<string | null>(null);
   const isPrintingRef = useRef<boolean>(false);
 
+  // Directly derive roll geometry and layout from user settings
+  const paperWidth: '80mm' | '58mm' = settings?.receipt_printer_type === '58mm' ? '58mm' : '80mm';
+  const receiptLayout = settings?.thermal_layout || 'classic';
+
   useEffect(() => {
     if (isOpen) {
       setReceiptType(settings?.receipt_type === 'pdf' ? 'pdf' : 'thermal');
-      setPaperWidth(settings?.receipt_printer_type === '58mm' ? '58mm' : '80mm');
-      setReceiptLayout(settings?.thermal_layout || 'classic');
       setPrintSuccessMsg(null);
       setPrintErrorMsg(null);
     }
-  }, [isOpen, settings?.receipt_type, settings?.receipt_printer_type, settings?.thermal_layout]);
+  }, [isOpen, settings?.receipt_type]);
 
   const handleBrowserPrint = () => {
     if (!sale || isPrintingRef.current) return;
@@ -149,12 +149,12 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
       maxWidth={receiptType === 'pdf' ? '5xl' : 'xl'}
       bodyClassName="p-0 flex flex-col flex-1 min-h-0 overflow-hidden h-[70vh] sm:h-[74vh] max-h-[600px]"
     >
-      {/* 1. Format Switcher Bar (Fixed Top) */}
+      {/* 1. Format Switcher Bar (Only Thermal and A4 options) */}
       <div className="px-6 py-2.5 bg-white shrink-0 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 w-full sm:w-auto">
           <button
             type="button"
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 py-1.5 px-3.5 rounded-lg text-xs font-bold transition ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition ${
               receiptType === 'thermal'
                 ? 'bg-white text-slate-900 shadow-sm'
                 : 'text-slate-500 hover:text-slate-800'
@@ -162,11 +162,11 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             onClick={() => setReceiptType('thermal')}
           >
             <Receipt className="h-4 w-4 text-emerald-600" />
-            Thermal Roll
+            Thermal Receipt
           </button>
           <button
             type="button"
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 py-1.5 px-3.5 rounded-lg text-xs font-bold transition ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 py-1.5 px-4 rounded-lg text-xs font-bold transition ${
               receiptType === 'pdf'
                 ? 'bg-white text-slate-900 shadow-sm'
                 : 'text-slate-500 hover:text-slate-800'
@@ -174,75 +174,34 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             onClick={() => setReceiptType('pdf')}
           >
             <FileText className="h-4 w-4 text-blue-600" />
-            Standard PDF / A4
+            Standard A4 Invoice
           </button>
         </div>
 
-        {/* Thermal Roll Width Selector & Destination Badge */}
-        {receiptType === 'thermal' && (
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1 rounded-xl border border-slate-200">
-              <span className="text-[11px] font-bold uppercase text-slate-400">Roll:</span>
-              <button
-                type="button"
-                onClick={() => setPaperWidth('80mm')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
-                  paperWidth === '80mm'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                80mm (Standard)
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaperWidth('58mm')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
-                  paperWidth === '58mm'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                58mm (Compact)
-              </button>
-            </div>
-
-            {/* Layout Mode Selector (Classic POS vs Modern Clean) */}
-            <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1 rounded-xl border border-slate-200">
-              <span className="text-[11px] font-bold uppercase text-slate-400">Layout:</span>
-              <button
-                type="button"
-                onClick={() => setReceiptLayout('classic')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
-                  receiptLayout === 'classic'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                Classic POS
-              </button>
-              <button
-                type="button"
-                onClick={() => setReceiptLayout('modern')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
-                  receiptLayout === 'modern'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                Modern Clean
-              </button>
-            </div>
-
-            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-50 border border-slate-200 text-[11px] font-semibold text-slate-600">
-              <span className={`w-2 h-2 rounded-full ${settings?.thermal_print_mode === 'direct_escpos' ? 'bg-emerald-500' : 'bg-blue-500'}`} />
-              <span>
-                {settings?.thermal_print_mode === 'direct_escpos' ? 'Direct ESC/POS' : 'Browser Dialog'}
-                {settings?.selected_thermal_printer ? `: ${settings.selected_thermal_printer}` : ''}
+        {/* Hardware Destination Badge */}
+        <div className="flex items-center gap-2">
+          {receiptType === 'thermal' ? (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700">
+              <span className={`w-2.5 h-2.5 rounded-full ${settings?.thermal_print_mode === 'direct_escpos' ? 'bg-emerald-500' : 'bg-blue-500'}`} />
+              <span className="font-bold text-slate-900">
+                {settings?.selected_thermal_printer || 'Auto-detect Thermal Printer'}
+              </span>
+              <span className="text-[11px] text-slate-400 font-normal">
+                ({paperWidth} • {receiptLayout.toUpperCase()})
               </span>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+              <span className="font-bold text-slate-900">
+                {settings?.selected_a4_printer || 'System Default A4 Printer'}
+              </span>
+              <span className="text-[11px] text-slate-400 font-normal">
+                (A4 Document)
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 2. Scrollable Inspection Canvas (Full Viewport Height) */}
@@ -306,12 +265,18 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
           <Button
             variant="primary"
             size="lg"
-            className="flex-1 font-bold text-sm sm:text-base whitespace-nowrap bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5"
+            className={`flex-1 font-bold text-sm sm:text-base whitespace-nowrap shadow-md flex items-center justify-center gap-1.5 ${
+              receiptType === 'thermal'
+                ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
+                : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/20'
+            }`}
             icon={<Printer className="h-5 w-5" />}
             loading={directPrinting}
             onClick={handlePrint}
           >
-            {receiptType === 'thermal' ? `Print Thermal Receipt (${paperWidth})` : 'Print / Save as PDF'}
+            {receiptType === 'thermal'
+              ? `Print Thermal Receipt (${settings?.selected_thermal_printer || 'Thermal Printer'})`
+              : `Print A4 Invoice (${settings?.selected_a4_printer || 'A4 Printer'})`}
           </Button>
 
           {onNewSale ? (
