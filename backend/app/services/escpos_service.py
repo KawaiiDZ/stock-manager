@@ -93,8 +93,8 @@ def list_system_printers() -> List[Dict[str, Any]]:
 
     elif sys_name == "Windows":
         try:
-            # Query Windows printers via PowerShell
-            cmd = ["powershell", "-NoProfile", "-Command", "Get-Printer | Select-Object Name, PortName, Type, IsDefault | ConvertTo-Json -Compress"]
+            # Query Windows printers via PowerShell including offline & status attributes
+            cmd = ["powershell", "-NoProfile", "-Command", "Get-Printer | Select-Object Name, PortName, Type, IsDefault, PrinterStatus, WorkOffline | ConvertTo-Json -Compress"]
             p = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
             if p.returncode == 0 and p.stdout.strip():
                 import json
@@ -103,19 +103,30 @@ def list_system_printers() -> List[Dict[str, Any]]:
                     data = [data]
                 for item in data:
                     pname = item.get("Name", "")
+                    if not pname:
+                        continue
                     is_default = bool(item.get("IsDefault", False))
-                    search_str = f"{pname} {item.get('PortName', '')}".lower()
+                    port = str(item.get("PortName", ""))
+                    search_str = f"{pname} {port}".lower()
                     is_thermal = any(
                         k in search_str
                         for k in ["pos", "escpo", "thermal", "receipt", "xprinter", "zijiang", "epson", "80", "58"]
                     )
+                    work_offline = bool(item.get("WorkOffline", False))
+                    raw_status = str(item.get("PrinterStatus", "")).lower()
+                    is_offline = (
+                        work_offline
+                        or raw_status in ("2", "8", "13", "24")
+                        or any(s in raw_status for s in ["offline", "error", "paused", "notavailable", "userintervention"])
+                    )
+                    status_text = "Offline" if is_offline else "Ready"
                     printers.append({
                         "name": pname,
                         "is_default": is_default,
                         "is_thermal": is_thermal,
-                        "device_uri": item.get("PortName", ""),
-                        "status": "Ready",
-                        "is_online": True,
+                        "device_uri": port,
+                        "status": status_text,
+                        "is_online": not is_offline,
                     })
         except Exception as e:
             logger.warning(f"Could not list Windows printers: {e}")
@@ -462,52 +473,221 @@ def send_to_thermal_printer(escpos_bytes: bytes, printer_name: Optional[str] = N
         }
 
     elif sys_name == "Windows":
-        try:
-            import win32print
-            hPrinter = win32print.OpenPrinter(target)
-            try:
-                hJob = win32print.StartDocPrinter(hPrinter, 1, ("StockFlow Thermal Receipt", None, "RAW"))
-                try:
-                    win32print.StartPagePrinter(hPrinter)
-                    win32print.WritePrinter(hPrinter, escpos_bytes)
-                    win32print.EndPagePrinter(hPrinter)
-                finally:
-                    win32print.EndDocPrinter(hPrinter)
-            finally:
-                win32print.ClosePrinter(hPrinter)
+        bytes_sent = _send_windows_raw(target, escpos_bytes)
+        warning = None
+        if not is_online:
+            warning = f"Receipt queued for '{target}', but the printer is currently OFFLINE / Powered Off. Please check the power switch and USB cable."
 
-            return {
-                "success": True,
-                "printer": target,
-                "bytes_sent": len(escpos_bytes),
-                "is_online": True,
-                "warning": None,
-                "message": f"Successfully sent receipt to '{target}' via Windows Raw Spooler.",
-            }
-        except ImportError:
-            # Fallback: write to temp file and send via PowerShell raw or copy
-            import tempfile, os
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".bin") as f:
-                f.write(escpos_bytes)
-                temp_path = f.name
-            try:
-                cmd = ["powershell", "-NoProfile", "-Command", f"Copy-Item -Path '{temp_path}' -Destination '\\\\localhost\\{target}'"]
-                res = subprocess.run(cmd, capture_output=True, text=True)
-                if res.returncode != 0:
-                    raise RuntimeError(f"Windows raw copy failed: {res.stderr}")
-                return {
-                    "success": True,
-                    "printer": target,
-                    "bytes_sent": len(escpos_bytes),
-                    "is_online": True,
-                    "warning": None,
-                    "message": f"Successfully sent receipt to '{target}'.",
-                }
-            finally:
-                if os.path.exists(temp_path):
-                    os.unlink(temp_path)
+        return {
+            "success": True,
+            "printer": target,
+            "bytes_sent": bytes_sent,
+            "is_online": is_online,
+            "warning": warning,
+            "message": f"Successfully sent receipt to '{target}' via Windows Spooler (RAW)." + (f" ({warning})" if warning else ""),
+        }
 
     raise RuntimeError(f"Unsupported operating system for direct printing: {sys_name}")
+
+
+def _send_windows_raw(target: str, escpos_bytes: bytes, doc_name: str = "StockFlow Thermal Receipt") -> int:
+    """
+    Sends raw ESC/POS binary data to a Windows printer using a resilient 3-tier strategy:
+    1. win32print (if pywin32 is installed)
+    2. ctypes.windll.winspool (built-in standard library Win32 Spooler API, 0 extra dependencies)
+    3. PowerShell with .NET RawPrinterHelper (P/Invoke to winspool.drv)
+    """
+    errors = []
+
+    # 1. Try win32print if available
+    try:
+        import win32print
+        hPrinter = win32print.OpenPrinter(target)
+        try:
+            hJob = win32print.StartDocPrinter(hPrinter, 1, (doc_name, None, "RAW"))
+            try:
+                win32print.StartPagePrinter(hPrinter)
+                bytes_written = win32print.WritePrinter(hPrinter, escpos_bytes)
+                win32print.EndPagePrinter(hPrinter)
+                return bytes_written or len(escpos_bytes)
+            finally:
+                win32print.EndDocPrinter(hPrinter)
+        finally:
+            win32print.ClosePrinter(hPrinter)
+    except ImportError:
+        pass
+    except Exception as ex:
+        errors.append(f"win32print failed: {ex}")
+
+    # 2. Try native ctypes calling winspool.drv directly (standard library on Windows)
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class DOC_INFO_1W(ctypes.Structure):
+            _fields_ = [
+                ("pDocName", wintypes.LPWSTR),
+                ("pOutputFile", wintypes.LPWSTR),
+                ("pDatatype", wintypes.LPWSTR),
+            ]
+
+        win_dll_cls = getattr(ctypes, "WinDLL", getattr(ctypes, "CDLL", None))
+        if win_dll_cls is None:
+            raise RuntimeError("ctypes WinDLL not available")
+        winspool = win_dll_cls("winspool.drv", use_last_error=True)
+
+        OpenPrinterW = winspool.OpenPrinterW
+        OpenPrinterW.argtypes = [wintypes.LPWSTR, ctypes.POINTER(wintypes.HANDLE), ctypes.c_void_p]
+        OpenPrinterW.restype = wintypes.BOOL
+
+        StartDocPrinterW = winspool.StartDocPrinterW
+        StartDocPrinterW.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(DOC_INFO_1W)]
+        StartDocPrinterW.restype = wintypes.DWORD
+
+        StartPagePrinter = winspool.StartPagePrinter
+        StartPagePrinter.argtypes = [wintypes.HANDLE]
+        StartPagePrinter.restype = wintypes.BOOL
+
+        WritePrinter = winspool.WritePrinter
+        WritePrinter.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
+        WritePrinter.restype = wintypes.BOOL
+
+        EndPagePrinter = winspool.EndPagePrinter
+        EndPagePrinter.argtypes = [wintypes.HANDLE]
+        EndPagePrinter.restype = wintypes.BOOL
+
+        EndDocPrinter = winspool.EndDocPrinter
+        EndDocPrinter.argtypes = [wintypes.HANDLE]
+        EndDocPrinter.restype = wintypes.BOOL
+
+        ClosePrinter = winspool.ClosePrinter
+        ClosePrinter.argtypes = [wintypes.HANDLE]
+        ClosePrinter.restype = wintypes.BOOL
+
+        h_printer = wintypes.HANDLE()
+        if not OpenPrinterW(target, ctypes.byref(h_printer), None):
+            err = ctypes.get_last_error()
+            raise RuntimeError(f"OpenPrinter failed for '{target}': {ctypes.FormatError(err)} (code {err})")
+
+        try:
+            doc_info = DOC_INFO_1W()
+            doc_info.pDocName = doc_name
+            doc_info.pOutputFile = None
+            doc_info.pDatatype = "RAW"
+
+            job_id = StartDocPrinterW(h_printer, 1, ctypes.byref(doc_info))
+            if job_id == 0:
+                err = ctypes.get_last_error()
+                raise RuntimeError(f"StartDocPrinter failed for '{target}': {ctypes.FormatError(err)} (code {err})")
+
+            try:
+                if not StartPagePrinter(h_printer):
+                    err = ctypes.get_last_error()
+                    raise RuntimeError(f"StartPagePrinter failed: {ctypes.FormatError(err)} (code {err})")
+
+                try:
+                    buf = ctypes.create_string_buffer(escpos_bytes, len(escpos_bytes))
+                    bytes_written = wintypes.DWORD(0)
+                    if not WritePrinter(h_printer, buf, len(escpos_bytes), ctypes.byref(bytes_written)):
+                        err = ctypes.get_last_error()
+                        raise RuntimeError(f"WritePrinter failed: {ctypes.FormatError(err)} (code {err})")
+                    return bytes_written.value or len(escpos_bytes)
+                finally:
+                    EndPagePrinter(h_printer)
+            finally:
+                EndDocPrinter(h_printer)
+        finally:
+            ClosePrinter(h_printer)
+    except Exception as ex:
+        errors.append(f"ctypes winspool failed: {ex}")
+
+    # 3. Emergency Fallback: PowerShell via temp file with .NET RawPrinterHelper
+    import tempfile, os
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".bin") as f:
+            f.write(escpos_bytes)
+            temp_path = f.name
+
+        safe_target = target.replace("'", "''")
+        safe_temp = temp_path.replace("'", "''")
+        safe_doc = doc_name.replace("'", "''")
+        ps_code = f"""
+$code = @'
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+public class RawPrinterHelper {{
+    [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
+    public class DOCINFOA {{
+        [MarshalAs(UnmanagedType.LPWStr)] public string pDocName;
+        [MarshalAs(UnmanagedType.LPWStr)] public string pOutputFile;
+        [MarshalAs(UnmanagedType.LPWStr)] public string pDataType;
+    }}
+    [DllImport("winspool.Drv", EntryPoint="OpenPrinterW", SetLastError=true, CharSet=CharSet.Unicode, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
+    public static extern bool OpenPrinter(string pPrinterName, out IntPtr phPrinter, IntPtr pDefault);
+    [DllImport("winspool.Drv", EntryPoint="ClosePrinter", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
+    public static extern bool ClosePrinter(IntPtr hPrinter);
+    [DllImport("winspool.Drv", EntryPoint="StartDocPrinterW", SetLastError=true, CharSet=CharSet.Unicode, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
+    public static extern bool StartDocPrinter(IntPtr hPrinter, int level, [In] DOCINFOA di);
+    [DllImport("winspool.Drv", EntryPoint="EndDocPrinter", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
+    public static extern bool EndDocPrinter(IntPtr hPrinter);
+    [DllImport("winspool.Drv", EntryPoint="StartPagePrinter", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
+    public static extern bool StartPagePrinter(IntPtr hPrinter);
+    [DllImport("winspool.Drv", EntryPoint="EndPagePrinter", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
+    public static extern bool EndPagePrinter(IntPtr hPrinter);
+    [DllImport("winspool.Drv", EntryPoint="WritePrinter", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
+    public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, int dwCount, out int dwWritten);
+
+    public static bool SendFile(string szPrinterName, string szFileName, string docName) {{
+        byte[] bytes = File.ReadAllBytes(szFileName);
+        IntPtr pUnmanagedBytes = Marshal.AllocCoTaskMem(bytes.Length);
+        Marshal.Copy(bytes, 0, pUnmanagedBytes, bytes.Length);
+        IntPtr hPrinter;
+        DOCINFOA di = new DOCINFOA();
+        di.pDocName = docName;
+        di.pDataType = "RAW";
+        bool success = false;
+        if (OpenPrinter(szPrinterName, out hPrinter, IntPtr.Zero)) {{
+            if (StartDocPrinter(hPrinter, 1, di) > 0) {{
+                if (StartPagePrinter(hPrinter)) {{
+                    int dwWritten = 0;
+                    success = WritePrinter(hPrinter, pUnmanagedBytes, bytes.Length, out dwWritten);
+                    EndPagePrinter(hPrinter);
+                }}
+                EndDocPrinter(hPrinter);
+            }}
+            ClosePrinter(hPrinter);
+        }}
+        Marshal.FreeCoTaskMem(pUnmanagedBytes);
+        return success;
+    }}
+}}
+'@
+Add-Type -TypeDefinition $code -Language CSharp
+$res = [RawPrinterHelper]::SendFile('{safe_target}', '{safe_temp}', '{safe_doc}')
+if (-not $res) {{ exit 1 }}
+"""
+        res = subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_code],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if res.returncode == 0:
+            return len(escpos_bytes)
+        errors.append(f"PowerShell raw spooler failed: {res.stderr.strip() or 'Exit code 1'}")
+    except Exception as ex:
+        errors.append(f"PowerShell fallback failed: {ex}")
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+
+    joined_errors = "; ".join(errors)
+    raise RuntimeError(f"Failed to spool raw ESC/POS to Windows printer '{target}': {joined_errors}")
 
 
 def clear_printer_queue(printer_name: Optional[str] = None) -> Dict[str, Any]:
@@ -527,8 +707,17 @@ def clear_printer_queue(printer_name: Optional[str] = None) -> Dict[str, Any]:
             "message": f"Print queue for '{printer_name or 'all printers'}' successfully cleared and reset.",
         }
     elif sys_name == "Windows":
-        return {
-            "success": True,
-            "message": "Windows print queue reset command dispatched.",
-        }
+        try:
+            if printer_name:
+                safe_name = printer_name.replace("'", "''")
+                cmd = ["powershell", "-NoProfile", "-Command", f"Get-PrintJob -PrinterName '{safe_name}' | Remove-PrintJob -Confirm:$false"]
+            else:
+                cmd = ["powershell", "-NoProfile", "-Command", "Get-Printer | ForEach-Object { Get-PrintJob -PrinterName $_.Name | Remove-PrintJob -Confirm:$false }"]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            return {
+                "success": res.returncode == 0,
+                "message": f"Print queue for '{printer_name or 'all printers'}' cleared successfully.",
+            }
+        except Exception as e:
+            return {"success": False, "message": f"Failed to clear Windows print queue: {e}"}
     return {"success": False, "message": f"Unsupported OS: {sys_name}"}

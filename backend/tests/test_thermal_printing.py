@@ -208,3 +208,78 @@ def test_direct_thermal_print_offline_warning(mock_send, client):
     assert data['is_online'] is False
     assert data['warning'] is not None
 
+def test_windows_send_raw_via_win32print():
+    from backend.app.services.escpos_service import _send_windows_raw
+    mock_win32 = MagicMock()
+    mock_win32.OpenPrinter.return_value = 1234
+    mock_win32.StartDocPrinter.return_value = 5678
+    mock_win32.WritePrinter.return_value = 42
+
+    with patch.dict('sys.modules', {'win32print': mock_win32}):
+        bytes_sent = _send_windows_raw("POS-80", b"\x1b@Hello World", "Test Receipt")
+        assert bytes_sent == 42
+        mock_win32.OpenPrinter.assert_called_with("POS-80")
+        mock_win32.StartDocPrinter.assert_called_with(1234, 1, ("Test Receipt", None, "RAW"))
+        mock_win32.WritePrinter.assert_called_with(1234, b"\x1b@Hello World")
+        mock_win32.ClosePrinter.assert_called_with(1234)
+
+def test_windows_send_raw_via_ctypes():
+    from backend.app.services.escpos_service import _send_windows_raw
+    mock_dll = MagicMock()
+    mock_dll.OpenPrinterW.return_value = 1
+    mock_dll.StartDocPrinterW.return_value = 1
+    mock_dll.StartPagePrinter.return_value = 1
+    mock_dll.WritePrinter.return_value = 1
+    mock_dll.EndPagePrinter.return_value = 1
+    mock_dll.EndDocPrinter.return_value = 1
+    mock_dll.ClosePrinter.return_value = 1
+
+    with patch.dict('sys.modules', {'win32print': None}):
+        with patch('ctypes.WinDLL', create=True, return_value=mock_dll):
+            bytes_sent = _send_windows_raw("POS-80", b"\x1b@Hello World", "Test Receipt")
+            assert bytes_sent == len(b"\x1b@Hello World")
+            assert mock_dll.OpenPrinterW.called
+            assert mock_dll.StartDocPrinterW.called
+            assert mock_dll.WritePrinter.called
+            assert mock_dll.ClosePrinter.called
+
+def test_windows_printer_enumeration_offline_detection():
+    from backend.app.services.escpos_service import list_system_printers
+    import json
+    fake_printers = [
+        {
+            "Name": "POS-80",
+            "PortName": "USB001",
+            "Type": "Local",
+            "IsDefault": True,
+            "PrinterStatus": "Normal",
+            "WorkOffline": False
+        },
+        {
+            "Name": "Office_Receipt_58",
+            "PortName": "USB002",
+            "Type": "Local",
+            "IsDefault": False,
+            "PrinterStatus": "Offline",
+            "WorkOffline": True
+        }
+    ]
+    fake_res = MagicMock()
+    fake_res.returncode = 0
+    fake_res.stdout = json.dumps(fake_printers)
+
+    with patch('platform.system', return_value='Windows'):
+        with patch('subprocess.run', return_value=fake_res):
+            printers = list_system_printers()
+            assert len(printers) == 2
+            pos80 = next(p for p in printers if p['name'] == 'POS-80')
+            assert pos80['is_online'] is True
+            assert pos80['status'] == 'Ready'
+            assert pos80['is_thermal'] is True
+
+            off_pos = next(p for p in printers if p['name'] == 'Office_Receipt_58')
+            assert off_pos['is_online'] is False
+            assert off_pos['status'] == 'Offline'
+            assert off_pos['is_thermal'] is True
+
+
