@@ -155,9 +155,8 @@ export const printElement = (
       #print-root h1, #print-root h2, #print-root h3, #print-root strong, #print-root b, #print-root .font-bold, #print-root .font-black {
         font-weight: 700 !important;
       }
-      #print-root .border-dashed, #print-root .border-dotted {
+      #print-root .border-dashed, #print-root .border-dotted, #print-root [class*="border"] {
         border-style: solid !important;
-        border-bottom-width: 1px !important;
         border-color: #000000 !important;
       }
       #print-root > div {

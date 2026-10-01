@@ -52,13 +52,9 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
 
   const is58mm = (paperWidth || printerType) === '58mm';
   const divBorder =
-    activeLayout === 'modern'
-      ? 'border-b-2 border-black'
-      : activeLayout === 'elegant'
-      ? 'border-b border-dotted border-black'
-      : activeLayout === 'compact'
-      ? 'border-b border-black'
-      : 'border-b border-dashed border-black';
+    activeLayout === 'compact'
+      ? 'border-b border-black border-solid'
+      : 'border-b-2 border-black border-solid';
 
   return (
     <div
@@ -91,9 +87,7 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
         )}
 
         {activeLayout === 'elegant' && (
-          <div className="text-center text-[10px] font-mono tracking-widest text-slate-500 pb-0.5">
-            * * * * * * * * * * * *
-          </div>
+          <div className="w-16 mx-auto border-b border-black border-solid pb-0.5 mb-1" />
         )}
 
         <h2
@@ -313,7 +307,7 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
                     <span className="shrink-0 text-slate-700">
                       {isPartiallyReturned ? remQty : origQty} × {formatCurrency(item.unit_price, currency)}
                     </span>
-                    <span className="flex-1 mx-1.5 border-b border-dotted border-black/40 h-1"></span>
+                    <span className="flex-1 mx-1.5 border-b border-solid border-black/40 h-1"></span>
                     <span className="shrink-0 font-black font-mono">{formatCurrency(lineTotal, currency)}</span>
                   </div>
                   {Number(item.discount_amount || 0) > 0 && !isFullyReturned && (
@@ -328,7 +322,7 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
         ) : (
           /* classic and modern */
           <div>
-            <div className={`flex justify-between font-black ${activeLayout === 'modern' ? 'border-b-2 border-black uppercase' : 'border-b border-dashed border-black'} pb-1 mb-1.5 text-[10.5px] tracking-wide`}>
+            <div className={`flex justify-between font-black border-b-2 border-black border-solid ${activeLayout === 'modern' ? 'uppercase' : ''} pb-1 mb-1.5 text-[10.5px] tracking-wide`}>
               <span>{activeLayout === 'modern' ? 'ITEM / DESCRIPTION' : 'Description'}</span>
               <span className="text-right">{activeLayout === 'modern' ? 'TOTAL' : 'Amount'}</span>
             </div>
@@ -385,10 +379,10 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
           <div
             className={`flex justify-between text-[10.5px] text-black font-bold pt-1.5 mt-2 ${
               activeLayout === 'modern'
-                ? 'border-t-2 border-black'
+                ? 'border-t-2 border-black border-solid'
                 : activeLayout === 'elegant'
-                ? 'border-t border-dotted border-black/50'
-                : 'border-t border-b border-dashed border-black py-1'
+                ? 'border-t border-black border-solid'
+                : 'border-t-2 border-b-2 border-black border-solid py-1'
             }`}
           >
             <span>{activeLayout === 'modern' ? 'Items / Units:' : activeLayout === 'elegant' ? 'Total Selections:' : 'Lines / Units:'}</span>
@@ -420,27 +414,27 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
 
         {/* High-Impact Framed Total for Modern Layout */}
         {activeLayout === 'modern' ? (
-          <div className="border-2 border-black p-2 rounded-xs my-2 text-center bg-white shadow-2xs">
+          <div className="border-2 border-black border-solid p-2 rounded-xs my-2 text-center bg-white shadow-2xs">
             <div className="text-[10px] font-black uppercase tracking-widest text-slate-600">Total Due</div>
             <div className="text-base font-black font-mono tracking-tight text-black">{formatCurrency(sale.total_amount, currency)}</div>
           </div>
         ) : activeLayout === 'compact' ? (
-          <div className="text-center font-black text-sm my-1 py-1 border-y border-black font-mono">
+          <div className="text-center font-black text-sm my-1 py-1 border-y-2 border-black border-solid font-mono">
             &gt;&gt;&gt; TOTAL: {formatCurrency(sale.total_amount, currency)} &lt;&lt;&lt;
           </div>
         ) : activeLayout === 'elegant' ? (
-          <div className="border-y border-dotted border-black py-2 my-1 text-center">
+          <div className="border-y-2 border-black border-solid py-2 my-1 text-center">
             <div className="text-[9.5px] font-bold uppercase tracking-widest text-slate-500">Net Amount Payable</div>
             <div className="text-base font-black font-mono text-black">{formatCurrency(sale.total_amount, currency)}</div>
           </div>
         ) : activeLayout === 'tabular' ? (
-          <div className="flex justify-between font-black text-sm border-t-2 border-b-2 border-black py-1.5 my-1">
+          <div className="flex justify-between font-black text-sm border-t-2 border-b-2 border-black border-solid py-1.5 my-1">
             <span>TOTAL AMOUNT:</span>
             <span className="font-mono">{formatCurrency(sale.total_amount, currency)}</span>
           </div>
         ) : (
           /* classic */
-          <div className="flex justify-between font-black text-sm border-y-2 border-double border-black py-1.5 my-1 tracking-tight">
+          <div className="flex justify-between font-black text-sm border-t-2 border-b-2 border-black border-solid py-1.5 my-1 tracking-tight">
             <span>TOTAL:</span>
             <span className="font-mono">{formatCurrency(sale.total_amount, currency)}</span>
           </div>

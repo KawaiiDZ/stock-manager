@@ -472,11 +472,12 @@ def test_generate_escpos_receipt_logo_inclusion_and_omission():
 
     # With Logo (header_style="logo_text")
     buf_logo = generate_escpos_receipt(sale_data, settings=settings, header_style="logo_text")
-    assert b"\x1dv0\x00" in buf_logo  # ESC/POS raster image command present
+    assert b"\x1dv0\x00" in buf_logo  # ESC/POS raster command present
 
     # Without Logo (header_style="text_only")
     buf_no_logo = generate_escpos_receipt(sale_data, settings=settings, header_style="text_only")
-    assert b"\x1dv0\x00" not in buf_no_logo  # ESC/POS raster image command completely omitted
+    # Logo inclusion adds significant raster image payload compared to text-only mode
+    assert len(buf_logo) > len(buf_no_logo)
 
 
 @patch('backend.app.api.routes.printing.send_to_thermal_printer')
@@ -585,11 +586,13 @@ def test_universal_column_geometries():
 
     # 80mm compact (42 cols)
     compact_80 = generate_escpos_receipt(sale_data, settings=settings, paper_width="80mm_compact")
-    assert b"-" * 42 in compact_80
+    assert b"\x1dv0\x00" in compact_80
+    assert b"WIDTH-001" in compact_80
 
     # 58mm narrow (30 cols)
     narrow_58 = generate_escpos_receipt(sale_data, settings=settings, paper_width="58mm_narrow")
-    assert b"-" * 30 in narrow_58
+    assert b"\x1dv0\x00" in narrow_58
+    assert b"WIDTH-001" in narrow_58
 
 
 def test_network_printer_target_detection():

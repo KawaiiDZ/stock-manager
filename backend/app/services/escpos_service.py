@@ -506,6 +506,77 @@ def format_dot_leader(left_str: str, right_str: str, col_width: int) -> str:
     return f"{left_str}{dots}{right_str}\n"
 
 
+def make_escpos_solid_line(
+    paper_width: str = "80mm",
+    thickness_dots: int = 2,
+    pad_top: int = 2,
+    pad_bottom: int = 4,
+    is_escpos: bool = True,
+) -> bytes:
+    """
+    Emits a 100% continuous, zero-gap solid black horizontal line across the printhead
+    using ESC/POS raster bit image command (GS v 0).
+    Energizes all thermal pins simultaneously with zero font character spacing.
+    """
+    col_width = COLUMN_WIDTH_MAP.get(paper_width, 32 if "58" in str(paper_width) else 48)
+    if not is_escpos:
+        return ("_" * col_width + "\n").encode("ascii")
+
+    if "58" in str(paper_width):
+        bytes_per_row = 45 if "narrow" in str(paper_width) else 48
+    else:
+        bytes_per_row = 64 if "compact" in str(paper_width) else 72
+
+    total_rows = pad_top + thickness_dots + pad_bottom
+    xL = bytes_per_row & 0xFF
+    xH = (bytes_per_row >> 8) & 0xFF
+    yL = total_rows & 0xFF
+    yH = (total_rows >> 8) & 0xFF
+
+    header = bytes([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH])
+    data = (
+        (b"\x00" * (bytes_per_row * pad_top))
+        + (b"\xFF" * (bytes_per_row * thickness_dots))
+        + (b"\x00" * (bytes_per_row * pad_bottom))
+    )
+    return header + data
+
+
+def make_escpos_double_solid_line(
+    paper_width: str = "80mm",
+    pad_top: int = 2,
+    pad_bottom: int = 4,
+    is_escpos: bool = True,
+) -> bytes:
+    """
+    Emits a crisp solid double horizontal line (2 dots black, 2 dots white gap, 2 dots black).
+    """
+    col_width = COLUMN_WIDTH_MAP.get(paper_width, 32 if "58" in str(paper_width) else 48)
+    if not is_escpos:
+        return ("=" * col_width + "\n").encode("ascii")
+
+    if "58" in str(paper_width):
+        bytes_per_row = 45 if "narrow" in str(paper_width) else 48
+    else:
+        bytes_per_row = 64 if "compact" in str(paper_width) else 72
+
+    total_rows = pad_top + 2 + 2 + 2 + pad_bottom
+    xL = bytes_per_row & 0xFF
+    xH = (bytes_per_row >> 8) & 0xFF
+    yL = total_rows & 0xFF
+    yH = (total_rows >> 8) & 0xFF
+
+    header = bytes([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH])
+    data = (
+        (b"\x00" * (bytes_per_row * pad_top))
+        + (b"\xFF" * (bytes_per_row * 2))
+        + (b"\x00" * (bytes_per_row * 2))
+        + (b"\xFF" * (bytes_per_row * 2))
+        + (b"\x00" * (bytes_per_row * pad_bottom))
+    )
+    return header + data
+
+
 def generate_escpos_receipt(
     sale_data: Dict[str, Any],
     settings: Optional[Any] = None,
@@ -531,9 +602,14 @@ def generate_escpos_receipt(
     actual_cut_mode = (cut_mode or getattr(settings, "thermal_cut_mode", "partial") or "partial").lower()
     actual_feed_lines = feed_lines if feed_lines is not None else getattr(settings, "thermal_feed_lines", 4) or 4
 
-    # Use solid double-divider only in maximum darkness mode; otherwise crisp standard divider
-    div_line = ("=" * col_width + "\n") if density_mode == "maximum" else ("-" * col_width + "\n")
-    double_div = "=" * col_width + "\n"
+    is_escpos = (profile != "generic_plain")
+
+    # True continuous solid raster dividers across thermal heads (no character dashes)
+    solid_div = make_escpos_solid_line(paper_width, thickness_dots=2, is_escpos=is_escpos)
+    thin_solid_div = make_escpos_solid_line(paper_width, thickness_dots=1, is_escpos=is_escpos)
+    double_solid_div = make_escpos_double_solid_line(paper_width, is_escpos=is_escpos)
+    div_line = double_solid_div if density_mode == "maximum" else solid_div
+    double_div = double_solid_div
 
     shop_name = getattr(settings, "business_name", "My Local Business") or "My Local Business"
     shop_address = getattr(settings, "address", "") or ""
@@ -583,8 +659,7 @@ def generate_escpos_receipt(
     # 2. Store Header
     buf.extend(cmd_align_center)
     if layout_mode == "elegant":
-        flourish = ("* " * (col_width // 2))[:col_width] + "\n"
-        buf.extend(safe_escpos_text(flourish))
+        buf.extend(thin_solid_div)
         buf.extend(cmd_bold_on)
         buf.extend(cmd_double_size)
         buf.extend(safe_escpos_text(f"{shop_name}\n"))
@@ -653,35 +728,34 @@ def generate_escpos_receipt(
             payment_method = p0.get("payment_method", payment_method)
 
     if layout_mode == "compact":
-        buf.extend(safe_escpos_text("-" * col_width + "\n"))
+        buf.extend(solid_div)
         buf.extend(safe_escpos_text(f"#{receipt_no} | {dt_short} | {cust_name[:12]}\n"))
-        buf.extend(safe_escpos_text("-" * col_width + "\n"))
+        buf.extend(solid_div)
     elif layout_mode == "modern":
-        buf.extend(safe_escpos_text("=" * col_width + "\n"))
+        buf.extend(solid_div)
         buf.extend(safe_escpos_text(format_row(f"#{receipt_no}", dt_str, col_width)))
         buf.extend(safe_escpos_text(format_row(f"Customer: {cust_name}", f"Tender: [{str(payment_method).upper()}]", col_width)))
-        buf.extend(safe_escpos_text("=" * col_width + "\n"))
+        buf.extend(solid_div)
     elif layout_mode == "elegant":
-        flourish_sub = ("~ " * (col_width // 2))[:col_width] + "\n"
-        buf.extend(safe_escpos_text(flourish_sub))
+        buf.extend(thin_solid_div)
         buf.extend(cmd_align_center)
         buf.extend(safe_escpos_text(f"Order Ref: {receipt_no}\n"))
         buf.extend(safe_escpos_text(f"{dt_str}\n"))
         buf.extend(safe_escpos_text(f"Honored Guest: {cust_name}\n"))
         buf.extend(cmd_align_left)
-        buf.extend(safe_escpos_text(flourish_sub))
+        buf.extend(thin_solid_div)
     elif layout_mode == "tabular":
-        buf.extend(safe_escpos_text("-" * col_width + "\n"))
+        buf.extend(solid_div)
         buf.extend(safe_escpos_text(format_row(f"Voucher: {receipt_no}", f"Date: {dt_str[:10]}", col_width)))
         buf.extend(safe_escpos_text(format_row(f"Customer: {cust_name}", f"Pay: {str(payment_method).upper()}", col_width)))
-        buf.extend(safe_escpos_text("-" * col_width + "\n"))
+        buf.extend(solid_div)
     else:  # classic
-        buf.extend(safe_escpos_text(div_line))
+        buf.extend(solid_div)
         buf.extend(safe_escpos_text(format_row("Receipt #:", receipt_no, col_width)))
         buf.extend(safe_escpos_text(format_row("Date:", dt_str, col_width)))
         buf.extend(safe_escpos_text(format_row("Customer:", cust_name, col_width)))
         buf.extend(safe_escpos_text(format_row("Payment:", str(payment_method).upper(), col_width)))
-        buf.extend(safe_escpos_text(div_line))
+        buf.extend(solid_div)
 
     # 4. Items Table
     items = sale_data.get("items", [])
@@ -704,7 +778,7 @@ def generate_escpos_receipt(
             tbl_hdr = f"{'ITEM'.ljust(w_item)} {'QTY'.rjust(w_qty)} {'PRICE'.rjust(w_price)} {'TOTAL'.rjust(w_tot)}\n"
         buf.extend(safe_escpos_text(tbl_hdr))
         buf.extend(cmd_bold_off)
-        buf.extend(safe_escpos_text("-" * col_width + "\n"))
+        buf.extend(solid_div)
 
         for it in items:
             p_name = it.get("product_name", "Item")
@@ -728,7 +802,7 @@ def generate_escpos_receipt(
             if disc_amt > 0 and not is_fully_returned:
                 buf.extend(safe_escpos_text(f"  (Disc: -{currency} {disc_amt:,.2f})\n"))
 
-        buf.extend(safe_escpos_text("-" * col_width + "\n"))
+        buf.extend(solid_div)
 
     elif layout_mode == "compact":
         for it in items:
@@ -753,13 +827,13 @@ def generate_escpos_receipt(
             if disc_amt > 0 and not is_fully_returned:
                 buf.extend(safe_escpos_text(f" -Disc: {disc_amt:,.2f}\n"))
 
-        buf.extend(safe_escpos_text("-" * col_width + "\n"))
+        buf.extend(solid_div)
 
     elif layout_mode == "modern":
         buf.extend(cmd_bold_on)
         buf.extend(safe_escpos_text(format_row("ITEM / DESCRIPTION", "TOTAL", col_width)))
         buf.extend(cmd_bold_off)
-        buf.extend(safe_escpos_text("=" * col_width + "\n"))
+        buf.extend(solid_div)
 
         for it in items:
             p_name = it.get("product_name", "Item")
@@ -788,12 +862,12 @@ def generate_escpos_receipt(
             if disc_amt > 0 and not is_fully_returned:
                 buf.extend(safe_escpos_text(f"  ↳ Promo Disc: -{currency} {disc_amt:,.2f}\n"))
 
-        buf.extend(safe_escpos_text("=" * col_width + "\n"))
+        buf.extend(solid_div)
         buf.extend(safe_escpos_text(format_row("Items / Units:", f"{len(items)} lines / {int(total_qty) if total_qty.is_integer() else total_qty:.1f} pcs", col_width)))
-        buf.extend(safe_escpos_text("=" * col_width + "\n"))
+        buf.extend(solid_div)
 
     elif layout_mode == "elegant":
-        flourish_sec = ("~ " * (col_width // 2))[:col_width] + "\n"
+        buf.extend(thin_solid_div)
         for it in items:
             p_name = it.get("product_name", "Item")
             orig_qty = float(it.get("quantity", 0))
@@ -821,13 +895,13 @@ def generate_escpos_receipt(
             if disc_amt > 0 and not is_fully_returned:
                 buf.extend(safe_escpos_text(f"    * Courtesy Savings: -{currency} {disc_amt:,.2f}\n"))
 
-        buf.extend(safe_escpos_text(flourish_sec))
+        buf.extend(thin_solid_div)
 
     else:  # classic
         buf.extend(cmd_bold_on)
         buf.extend(safe_escpos_text(format_row("Description", "Amount", col_width)))
         buf.extend(cmd_bold_off)
-        buf.extend(safe_escpos_text(div_line))
+        buf.extend(solid_div)
 
         for it in items:
             p_name = it.get("product_name", "Item")
@@ -859,9 +933,9 @@ def generate_escpos_receipt(
             if disc_amt > 0 and not is_fully_returned:
                 buf.extend(safe_escpos_text(f"  -> Disc: -{currency} {disc_amt:,.2f}\n"))
 
-        buf.extend(safe_escpos_text(div_line))
+        buf.extend(solid_div)
         buf.extend(safe_escpos_text(format_row("Lines / Units:", f"{len(items)} lines / {int(total_qty) if total_qty.is_integer() else total_qty:.1f} pcs", col_width)))
-        buf.extend(safe_escpos_text(div_line))
+        buf.extend(solid_div)
 
     # 5. Financial Totals & Grand Summary
     subtotal = float(sale_data.get("subtotal", 0))
@@ -888,7 +962,7 @@ def generate_escpos_receipt(
         if paid_amt > total_amt:
             paid_line += f" | CHANGE: {paid_amt - total_amt:,.2f}"
         buf.extend(safe_escpos_text(f"{paid_line}\n"))
-        buf.extend(safe_escpos_text("-" * col_width + "\n"))
+        buf.extend(solid_div)
 
     elif layout_mode == "modern":
         buf.extend(safe_escpos_text(format_row("Subtotal:", f"{currency} {subtotal:,.2f}", col_width)))
@@ -897,14 +971,12 @@ def generate_escpos_receipt(
         if tax_amt > 0:
             buf.extend(safe_escpos_text(format_row(f"Tax ({tax_rate}%):", f"+{currency} {tax_amt:,.2f}", col_width)))
 
-        # Framed Total Card
-        box_border = "+" + "-" * (col_width - 2) + "+\n"
-        inside_text = format_row(" TOTAL DUE:", f"{currency} {total_amt:,.2f} ", col_width - 2).rstrip("\n")
-        buf.extend(safe_escpos_text(box_border))
+        # Solid Framed Total Card
+        buf.extend(double_solid_div)
         buf.extend(cmd_bold_on)
-        buf.extend(safe_escpos_text(f"|{inside_text}|\n"))
+        buf.extend(safe_escpos_text(format_row("  TOTAL DUE:", f"{currency} {total_amt:,.2f}  ", col_width)))
         buf.extend(cmd_bold_off)
-        buf.extend(safe_escpos_text(box_border))
+        buf.extend(double_solid_div)
 
         if total_ret_amt > 0:
             net_payable = max(0.0, total_amt - total_ret_amt)
@@ -922,7 +994,7 @@ def generate_escpos_receipt(
             buf.extend(cmd_bold_off)
         elif change_amt > 0:
             buf.extend(safe_escpos_text(format_row("Change:", f"{currency} {change_amt:,.2f}", col_width)))
-        buf.extend(safe_escpos_text("=" * col_width + "\n"))
+        buf.extend(solid_div)
 
     elif layout_mode == "elegant":
         buf.extend(safe_escpos_text(format_row("  Subtotal:", f"{currency} {subtotal:,.2f}", col_width)))
@@ -931,8 +1003,7 @@ def generate_escpos_receipt(
         if tax_amt > 0:
             buf.extend(safe_escpos_text(format_row(f"  Sales Tax ({tax_rate}%):", f"+{currency} {tax_amt:,.2f}", col_width)))
 
-        flourish_tot = ("~ " * (col_width // 2))[:col_width] + "\n"
-        buf.extend(safe_escpos_text(flourish_tot))
+        buf.extend(thin_solid_div)
         buf.extend(cmd_align_center)
         buf.extend(safe_escpos_text("NET AMOUNT PAYABLE\n"))
         buf.extend(cmd_bold_on)
@@ -940,7 +1011,7 @@ def generate_escpos_receipt(
         buf.extend(safe_escpos_text(f"{currency} {total_amt:,.2f}\n"))
         buf.extend(cmd_normal_size)
         buf.extend(cmd_bold_off)
-        buf.extend(safe_escpos_text(flourish_tot))
+        buf.extend(thin_solid_div)
         buf.extend(cmd_align_left)
 
         buf.extend(safe_escpos_text(format_row(f"  Tendered via {payment_method}:", f"{currency} {paid_amt:,.2f}", col_width)))
@@ -950,7 +1021,7 @@ def generate_escpos_receipt(
             buf.extend(cmd_bold_off)
         elif paid_amt > total_amt:
             buf.extend(safe_escpos_text(format_row("  Change Returned:", f"{currency} {paid_amt - total_amt:,.2f}", col_width)))
-        buf.extend(safe_escpos_text(flourish_tot))
+        buf.extend(thin_solid_div)
 
     elif layout_mode == "tabular":
         buf.extend(safe_escpos_text(format_row("Subtotal:", f"{currency} {subtotal:,.2f}", col_width)))
@@ -959,11 +1030,11 @@ def generate_escpos_receipt(
         if tax_amt > 0:
             buf.extend(safe_escpos_text(format_row(f"Tax ({tax_rate}%):", f"+{currency} {tax_amt:,.2f}", col_width)))
 
-        buf.extend(safe_escpos_text("=" * col_width + "\n"))
+        buf.extend(double_solid_div)
         buf.extend(cmd_bold_on)
         buf.extend(safe_escpos_text(format_row("TOTAL AMOUNT:", f"{currency} {total_amt:,.2f}", col_width)))
         buf.extend(cmd_bold_off)
-        buf.extend(safe_escpos_text("=" * col_width + "\n"))
+        buf.extend(double_solid_div)
 
         buf.extend(safe_escpos_text(format_row(f"Paid ({str(payment_method).upper()}):", f"{currency} {paid_amt:,.2f}", col_width)))
         if due_amt > 0:
@@ -972,7 +1043,7 @@ def generate_escpos_receipt(
             buf.extend(cmd_bold_off)
         elif paid_amt > total_amt:
             buf.extend(safe_escpos_text(format_row("Change:", f"{currency} {paid_amt - total_amt:,.2f}", col_width)))
-        buf.extend(safe_escpos_text("-" * col_width + "\n"))
+        buf.extend(solid_div)
 
     else:  # classic
         buf.extend(safe_escpos_text(format_row("Subtotal:", f"{currency} {subtotal:,.2f}", col_width)))
@@ -981,11 +1052,11 @@ def generate_escpos_receipt(
         if tax_amt > 0:
             buf.extend(safe_escpos_text(format_row(f"Tax ({tax_rate}%):", f"+{currency} {tax_amt:,.2f}", col_width)))
 
-        buf.extend(safe_escpos_text(double_div))
+        buf.extend(double_solid_div)
         buf.extend(cmd_bold_on)
         buf.extend(safe_escpos_text(format_row("TOTAL:", f"{currency} {total_amt:,.2f}", col_width)))
         buf.extend(cmd_bold_off)
-        buf.extend(safe_escpos_text(double_div))
+        buf.extend(double_solid_div)
 
         if total_ret_amt > 0:
             net_payable = max(0.0, total_amt - total_ret_amt)
@@ -993,7 +1064,7 @@ def generate_escpos_receipt(
             buf.extend(cmd_bold_on)
             buf.extend(safe_escpos_text(format_row("NET PAYABLE:", f"{currency} {net_payable:,.2f}", col_width)))
             buf.extend(cmd_bold_off)
-            buf.extend(safe_escpos_text(div_line))
+            buf.extend(solid_div)
 
         buf.extend(safe_escpos_text(format_row("Paid Amount:", f"{currency} {paid_amt:,.2f}", col_width)))
         if due_amt > 0:
@@ -1012,7 +1083,7 @@ def generate_escpos_receipt(
             change_amt = paid_amt - total_amt
             buf.extend(safe_escpos_text(format_row("Change:", f"{currency} {change_amt:,.2f}", col_width)))
 
-        buf.extend(safe_escpos_text(div_line))
+        buf.extend(solid_div)
 
     # 7. Code 128 Barcode with Code Set B prefix
     if show_barcode and receipt_no:
@@ -1070,9 +1141,11 @@ def generate_diagnostic_receipt(
     """
     col_width = COLUMN_WIDTH_MAP.get(paper_width, 32 if "58" in str(paper_width) else 48)
     profile = (printer_profile or "standard_escpos").lower()
-
-    div = "=" * col_width + "\n"
-    sub_div = "-" * col_width + "\n"
+    is_escpos = (profile != "generic_plain")
+    solid_div = make_escpos_solid_line(paper_width, thickness_dots=2, is_escpos=is_escpos)
+    double_solid_div = make_escpos_double_solid_line(paper_width, is_escpos=is_escpos)
+    div = double_solid_div
+    sub_div = solid_div
 
     buf = bytearray()
 
@@ -1105,7 +1178,7 @@ def generate_diagnostic_receipt(
     buf.extend(safe_escpos_text("THERMAL CALIBRATION & DIAGNOSTIC\n"))
     if profile != "generic_plain":
         buf.extend(CMD_BOLD_OFF)
-    buf.extend(safe_escpos_text(div))
+    buf.extend(div)
 
     # 3. System & Target Diagnostics
     if profile != "generic_plain":
@@ -1118,7 +1191,7 @@ def generate_diagnostic_receipt(
     buf.extend(safe_escpos_text(format_row("Cutter Mode:", cut_mode.upper(), col_width)))
     buf.extend(safe_escpos_text(format_row("Feed Spacing:", f"{feed_lines} lines", col_width)))
     buf.extend(safe_escpos_text(format_row("Timestamp:", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), col_width)))
-    buf.extend(safe_escpos_text(div))
+    buf.extend(div)
 
     # 4. Column Alignment Ruler
     if profile != "generic_plain":
@@ -1145,7 +1218,7 @@ def generate_diagnostic_receipt(
     buf.extend(safe_escpos_text(ruler_digits))
     buf.extend(safe_escpos_text(ruler_ticks))
     buf.extend(safe_escpos_text("(If digits wrap to next line, select a narrower column mode)\n"))
-    buf.extend(safe_escpos_text(sub_div))
+    buf.extend(sub_div)
 
     # 5. Density & Print Head Test
     if profile != "generic_plain":
@@ -1157,7 +1230,7 @@ def generate_diagnostic_receipt(
     buf.extend(safe_escpos_text("100% Solid: [################################]\n"))
     buf.extend(safe_escpos_text("50% Dither: [::::::::::::::::::::::::::::::::]\n"))
     buf.extend(safe_escpos_text("Double-Burn: Rs. 1,234.50 (Bold/Double Strike)\n"))
-    buf.extend(safe_escpos_text(sub_div))
+    buf.extend(sub_div)
 
     # 6. Barcode Test
     if profile != "generic_plain":
@@ -1180,7 +1253,7 @@ def generate_diagnostic_receipt(
     else:
         buf.extend(safe_escpos_text(f"* {test_bc} *\n"))
 
-    buf.extend(safe_escpos_text(div))
+    buf.extend(div)
     if profile != "generic_plain":
         buf.extend(CMD_ALIGN_CENTER)
     buf.extend(safe_escpos_text("CALIBRATION OK - PRINTER READY\n"))

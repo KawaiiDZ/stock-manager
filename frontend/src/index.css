@@ -130,6 +130,11 @@
     margin-right: auto !important;
   }
 
+  #printable-thermal-receipt,
+  #printable-thermal-receipt * {
+    border-style: solid !important;
+  }
+
   #printable-pdf-invoice,
   #printable-pdf-quotation,
   #printable-pdf-report,
