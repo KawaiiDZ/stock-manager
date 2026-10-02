@@ -16,6 +16,7 @@ from backend.app.services.escpos_service import (
     list_system_printers,
     generate_escpos_receipt,
     generate_diagnostic_receipt,
+    raster_image_to_escpos,
     send_to_thermal_printer,
     clear_printer_queue,
 )
@@ -47,6 +48,19 @@ class ThermalPrintRequest(BaseModel):
     printer_profile: Optional[str] = None  # "standard_escpos" | "xprinter_enhanced" | "star_line" | "generic_plain"
     cut_mode: Optional[str] = None  # "partial" | "full" | "tear_only"
     feed_lines: Optional[int] = None  # 2 to 8 lines
+    raster_image: Optional[str] = None  # Base64 PNG data URL for 100% exact preview parity
+
+
+class ThermalRasterRequest(BaseModel):
+    image_data: str  # Base64 data URL / PNG string
+    printer_name: Optional[str] = None
+    paper_width: Optional[str] = None
+    darkness: Optional[str] = None
+    printer_profile: Optional[str] = None
+    cut_mode: Optional[str] = None
+    feed_lines: Optional[int] = None
+    kick_drawer: Optional[bool] = False
+    sale_id: Optional[int] = None
 
 
 class DiagnosticPrintRequest(BaseModel):
@@ -98,12 +112,30 @@ def print_thermal_receipt(data: ThermalPrintRequest, db: Session = Depends(get_d
     printer_name = data.printer_name or (settings.selected_thermal_printer if settings else None)
 
     # Deduplicate rapid concurrent submissions (e.g. double-click, double Enter key within 3.0 seconds)
-    dedup_key = f"{data.sale_id}_{printer_name}_{data.is_sample}_{data.layout}"
+    dedup_key = f"{data.sale_id}_{printer_name}_{data.is_sample}_{data.layout}_{bool(data.raster_image)}"
     now = time.time()
     cached = _recent_print_cache.get(dedup_key)
     if cached and (now - cached["timestamp"] < 3.0):
         logger.info(f"Deduplicated rapid print request for '{dedup_key}' (elapsed: {now - cached['timestamp']:.2f}s)")
         return ThermalPrintResponse(**cached["response"])
+
+    # 1. High-Fidelity Client-Side Raster Pipeline (GS v 0) - 100% exact parity with browser preview
+    if data.raster_image:
+        try:
+            escpos_bytes = raster_image_to_escpos(
+                image_source=data.raster_image,
+                paper_width=paper_width,
+                darkness=data.darkness or (settings.thermal_darkness if settings else "normal"),
+                printer_profile=data.printer_profile or getattr(settings, "thermal_printer_profile", "standard_escpos") or "standard_escpos",
+                cut_mode=data.cut_mode or getattr(settings, "thermal_cut_mode", "partial") or "partial",
+                feed_lines=data.feed_lines if data.feed_lines is not None else getattr(settings, "thermal_feed_lines", 4),
+                kick_drawer=bool(data.kick_drawer),
+            )
+            res = send_to_thermal_printer(escpos_bytes, printer_name=printer_name)
+            _recent_print_cache[dedup_key] = {"timestamp": now, "response": res}
+            return ThermalPrintResponse(**res)
+        except Exception as e:
+            logger.warning(f"Raster receipt generation failed, falling back to ESC/POS text engine: {e}")
 
     sale_dict: Dict[str, Any] = {}
 
@@ -194,6 +226,33 @@ def print_thermal_receipt(data: ThermalPrintRequest, db: Session = Depends(get_d
         return ThermalPrintResponse(**res)
     except Exception as e:
         logger.error(f"Thermal print failure: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/raster", response_model=ThermalPrintResponse)
+def print_thermal_raster(data: ThermalRasterRequest, db: Session = Depends(get_db)):
+    """
+    Directly converts and prints an off-screen/client-rendered receipt canvas/image
+    via ESC/POS GS v 0 raster mode, guaranteeing 100% visual parity with the preview modal.
+    """
+    settings = db.query(BusinessSettings).filter(BusinessSettings.id == 1).first()
+    paper_width = data.paper_width or (settings.receipt_printer_type if settings else "80mm") or "80mm"
+    printer_name = data.printer_name or (settings.selected_thermal_printer if settings else None)
+
+    try:
+        escpos_bytes = raster_image_to_escpos(
+            image_source=data.image_data,
+            paper_width=paper_width,
+            darkness=data.darkness or (settings.thermal_darkness if settings else "normal"),
+            printer_profile=data.printer_profile or getattr(settings, "thermal_printer_profile", "standard_escpos") or "standard_escpos",
+            cut_mode=data.cut_mode or getattr(settings, "thermal_cut_mode", "partial") or "partial",
+            feed_lines=data.feed_lines if data.feed_lines is not None else getattr(settings, "thermal_feed_lines", 4),
+            kick_drawer=bool(data.kick_drawer),
+        )
+        res = send_to_thermal_printer(escpos_bytes, printer_name=printer_name)
+        return ThermalPrintResponse(**res)
+    except Exception as e:
+        logger.error(f"Direct raster printing failure: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -56,6 +56,7 @@ import { printElement } from '../../utils/print';
 import { STANDARD_LABEL_SIZES, generateBarcodeSvg, parseLabelDimensions } from '../../utils/barcode';
 import { STANDARD_DATE_FORMATS, setGlobalFormattingPreferences, formatDate, formatCurrency } from '../../utils/format';
 import { GoogleBackupCard } from '../../components/settings/GoogleBackupCard';
+import { rasterizeReceiptElement } from '../../utils/receiptRasterizer';
 
 export interface ThermalLayoutOption {
   id: 'classic' | 'modern' | 'tabular' | 'compact' | 'elegant';
@@ -986,6 +987,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     setDirectPrintingTest(true);
     setTestPrintFeedback(null);
     try {
+      // Snapshot the live preview receipt in settings for 100% exact visual parity
+      const rasterImage = await rasterizeReceiptElement('settings-preview-thermal-receipt');
+
       const res = await api.printThermalDirect({
         is_sample: true,
         printer_name: selectedThermalPrinter || undefined,
@@ -997,6 +1001,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         printer_profile: thermalPrinterProfile,
         cut_mode: thermalCutMode,
         feed_lines: thermalFeedLines,
+        raster_image: rasterImage || undefined,
       });
       if (res.is_online === false || res.warning) {
         setTestPrintFeedback({

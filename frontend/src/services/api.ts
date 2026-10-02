@@ -406,8 +406,24 @@ export const api = {
     printer_profile?: string;
     cut_mode?: string;
     feed_lines?: number;
+    raster_image?: string;
   }) =>
     request<{ success: boolean; printer: string; bytes_sent: number; message: string; is_online?: boolean; warning?: string }>('/printing/receipt', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  printThermalRaster: (data: {
+    image_data: string;
+    printer_name?: string;
+    paper_width?: string;
+    darkness?: string;
+    printer_profile?: string;
+    cut_mode?: string;
+    feed_lines?: number;
+    kick_drawer?: boolean;
+    sale_id?: number;
+  }) =>
+    request<{ success: boolean; printer: string; bytes_sent: number; message: string; is_online?: boolean; warning?: string }>('/printing/raster', {
       method: 'POST',
       body: JSON.stringify(data),
     }),

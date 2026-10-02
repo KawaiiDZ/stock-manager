@@ -690,3 +690,71 @@ def test_generate_code128_raster_escpos():
     # Empty text returns empty bytes
     assert generate_code128_raster_escpos("") == b""
 
+
+def test_raster_image_to_escpos_and_raster_endpoint(client, db_session):
+    import base64
+    import io
+    from PIL import Image, ImageDraw
+    from backend.app.services.escpos_service import raster_image_to_escpos
+
+    # Create dummy receipt image
+    img = Image.new('RGB', (576, 200), (255, 255, 255))
+    d = ImageDraw.Draw(img)
+    d.text((10, 10), "Receipt Test", fill=(0, 0, 0))
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    b64_png = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode('ascii')
+
+    # Test 80mm raster conversion
+    escpos_80 = raster_image_to_escpos(b64_png, paper_width="80mm", darkness="high")
+    assert isinstance(escpos_80, bytes)
+    assert b"\x1d\x76\x30\x00" in escpos_80  # GS v 0 raster header
+    assert b"\x1b@" in escpos_80  # ESC @ init
+    assert b"\x1dV\x42\x00" in escpos_80  # Cut partial
+
+    # Test 58mm raster conversion
+    escpos_58 = raster_image_to_escpos(b64_png, paper_width="58mm", darkness="normal")
+    assert isinstance(escpos_58, bytes)
+    assert b"\x1d\x76\x30\x00" in escpos_58
+
+    # Test /api/printing/raster endpoint with mocked printer
+    with patch('backend.app.api.routes.printing.send_to_thermal_printer') as mock_send:
+        mock_send.return_value = {
+            'success': True,
+            'printer': 'Test_Raster_Printer',
+            'bytes_sent': len(escpos_80),
+            'is_online': True,
+            'warning': None,
+            'message': 'Raster receipt spooled successfully',
+        }
+        res = client.post('/api/printing/raster', json={
+            'image_data': b64_png,
+            'printer_name': 'Test_Raster_Printer',
+            'paper_width': '80mm',
+        })
+        assert res.status_code == 200, res.text
+        data = res.json()
+        assert data['success'] is True
+        assert data['printer'] == 'Test_Raster_Printer'
+        assert mock_send.called
+
+    # Test /api/printing/receipt with raster_image payload
+    with patch('backend.app.api.routes.printing.send_to_thermal_printer') as mock_send_receipt:
+        mock_send_receipt.return_value = {
+            'success': True,
+            'printer': 'Test_Raster_Printer',
+            'bytes_sent': len(escpos_80),
+            'is_online': True,
+            'warning': None,
+            'message': 'Receipt spooled via raster mode',
+        }
+        res_receipt = client.post('/api/printing/receipt', json={
+            'raster_image': b64_png,
+            'printer_name': 'Test_Raster_Printer',
+            'paper_width': '80mm',
+        })
+        assert res_receipt.status_code == 200, res_receipt.text
+        assert res_receipt.json()['success'] is True
+        assert mock_send_receipt.called
+
+

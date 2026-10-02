@@ -29,6 +29,7 @@ import { QuickAddProductModal } from '../../components/products/QuickAddProductM
 import { CartQuantityInput } from '../../components/pos/CartQuantityInput';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { formatCurrency, formatMoney, formatQty } from '../../utils/format';
+import { rasterizeReceiptOffscreen } from '../../utils/receiptRasterizer';
 
 interface CartItem {
   product: Product;
@@ -647,18 +648,24 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         const pWidth = settings?.receipt_printer_type === '58mm' ? '58mm' : '80mm';
 
         if (isThermal) {
-          // Direct ESC/POS is the only engine capable of true 1-click silent thermal printing without browser dialogs
-          api.printThermalDirect({
-            sale_id: res.id,
-            printer_name: settings?.selected_thermal_printer || undefined,
-            paper_width: pWidth,
-            header_style: settings?.thermal_header_style || 'logo_text',
-            layout: settings?.thermal_layout || 'classic',
-            show_barcode: settings?.show_barcode ?? true,
-            darkness: settings?.thermal_darkness || 'normal',
-            printer_profile: settings?.thermal_printer_profile || 'standard_escpos',
-            cut_mode: settings?.thermal_cut_mode || 'partial',
-            feed_lines: settings?.thermal_feed_lines ?? 4,
+          // Offscreen client-side raster snapshot ensures 100% exact visual parity with preview modal
+          rasterizeReceiptOffscreen(res, settings, {
+            paperWidth: pWidth,
+            layout: settings?.thermal_layout as any,
+          }).then((rasterImage) => {
+            return api.printThermalDirect({
+              sale_id: res.id,
+              printer_name: settings?.selected_thermal_printer || undefined,
+              paper_width: pWidth,
+              header_style: settings?.thermal_header_style || 'logo_text',
+              layout: settings?.thermal_layout || 'classic',
+              show_barcode: settings?.show_barcode ?? true,
+              darkness: settings?.thermal_darkness || 'normal',
+              printer_profile: settings?.thermal_printer_profile || 'standard_escpos',
+              cut_mode: settings?.thermal_cut_mode || 'partial',
+              feed_lines: settings?.thermal_feed_lines ?? 4,
+              raster_image: rasterImage || undefined,
+            });
           }).then((printRes) => {
             if (printRes.is_online === false || printRes.warning) {
               setWarningToast(

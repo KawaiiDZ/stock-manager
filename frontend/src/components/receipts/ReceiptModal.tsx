@@ -7,6 +7,7 @@ import { Sale, BusinessSettings } from '../../types';
 import { Printer, Plus, Receipt, FileText, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { api } from '../../services/api';
 import { printElement } from '../../utils/print';
+import { rasterizeReceiptElement } from '../../utils/receiptRasterizer';
 
 interface ReceiptModalProps {
   isOpen: boolean;
@@ -70,6 +71,10 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
       setDirectPrinting(true);
       setPrintErrorMsg(null);
       setPrintSuccessMsg(null);
+
+      // Capture exact visible DOM element snapshot for 100% visual parity with preview modal
+      const rasterImage = await rasterizeReceiptElement('printable-thermal-receipt');
+
       const res = await api.printThermalDirect({
         sale_id: sale.id,
         printer_name: settings?.selected_thermal_printer || undefined,
@@ -81,6 +86,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         printer_profile: settings?.thermal_printer_profile || 'standard_escpos',
         cut_mode: settings?.thermal_cut_mode || 'partial',
         feed_lines: settings?.thermal_feed_lines ?? 4,
+        raster_image: rasterImage || undefined,
       });
       setPrintSuccessMsg(`Receipt sent directly to ${res.printer}`);
       setTimeout(() => setPrintSuccessMsg(null), 4000);
