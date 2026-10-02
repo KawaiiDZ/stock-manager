@@ -2578,19 +2578,47 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label="Receipt Header Subtitle"
-                    placeholder="e.g. Welcome to our store / Tax Invoice"
-                    value={receiptHeader}
-                    onChange={(e) => setReceiptHeader(e.target.value)}
-                  />
+                  <div>
+                    <Input
+                      label="Receipt Header Subtitle"
+                      placeholder="e.g. Welcome to our store / ~ Boutique Guest Receipt ~"
+                      value={receiptHeader}
+                      onChange={(e) => setReceiptHeader(e.target.value)}
+                    />
+                    <div className="flex items-center justify-between mt-1 text-[11px] text-slate-500">
+                      <span>Controls subtitle below shop name. Clear to remove completely.</span>
+                      {receiptHeader && (
+                        <button
+                          type="button"
+                          onClick={() => setReceiptHeader('')}
+                          className="text-rose-600 hover:text-rose-700 font-semibold cursor-pointer underline text-[10.5px]"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
 
-                  <Input
-                    label="Receipt Footer Note"
-                    placeholder="e.g. Thank you for your business!"
-                    value={receiptFooter}
-                    onChange={(e) => setReceiptFooter(e.target.value)}
-                  />
+                  <div>
+                    <Input
+                      label="Receipt Footer Note"
+                      placeholder="e.g. Thank you for your business!"
+                      value={receiptFooter}
+                      onChange={(e) => setReceiptFooter(e.target.value)}
+                    />
+                    <div className="flex items-center justify-between mt-1 text-[11px] text-slate-500">
+                      <span>Printed at receipt bottom. Clear to remove completely.</span>
+                      {receiptFooter && (
+                        <button
+                          type="button"
+                          onClick={() => setReceiptFooter('')}
+                          className="text-rose-600 hover:text-rose-700 font-semibold cursor-pointer underline text-[10.5px]"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="pt-2">

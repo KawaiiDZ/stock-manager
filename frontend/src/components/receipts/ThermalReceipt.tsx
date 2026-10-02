@@ -59,7 +59,7 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
   return (
     <div
       id={id}
-      className={`bg-white text-black font-mono transition-all mx-auto print:m-0 print:p-0 print:w-full print:max-w-none ${
+      className={`bg-white text-black font-sans antialiased transition-all mx-auto print:m-0 print:p-0 print:w-full print:max-w-none ${
         is58mm ? 'w-[58mm] max-w-[58mm] text-[10.5px] p-2.5 shadow-sm' : 'w-[80mm] max-w-[80mm] text-xs p-3.5 sm:p-4 shadow-sm'
       }`}
       style={{
@@ -68,6 +68,7 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
         backgroundColor: '#ffffff',
         color: '#000000',
         fontWeight: 500,
+        fontVariantNumeric: 'tabular-nums',
         overflow: 'visible',
       }}
     >
@@ -104,17 +105,40 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
           {activeLayout === 'modern' ? shopName.toUpperCase() : shopName}
         </h2>
 
-        {activeLayout === 'elegant' && (
-          <p className="text-[10px] italic text-slate-600 font-serif">~ Boutique Guest Receipt ~</p>
-        )}
-        {activeLayout === 'modern' && (
-          <span className="inline-block text-[9.5px] font-bold uppercase tracking-widest px-2 py-0.5 bg-black text-white rounded-xs">
-            Official Retail Receipt
-          </span>
-        )}
-        {activeLayout === 'tabular' && (
-          <p className="text-[10px] font-bold text-slate-600">Tax / Retail Sale Voucher</p>
-        )}
+        {/* Layout Subtitle (Customizable or Removable via Settings) */}
+        {(() => {
+          const rawSub = customHeader !== undefined ? customHeader : (settings?.receipt_header ?? '');
+          const cleanSub = (rawSub || '').trim();
+          const hasCustomSub = cleanSub && cleanSub.toLowerCase() !== shopName.trim().toLowerCase();
+
+          if (activeLayout === 'elegant') {
+            if (hasCustomSub) {
+              const formattedSub = cleanSub.startsWith('~') ? cleanSub : `~ ${cleanSub} ~`;
+              return <p className="text-[10px] italic text-slate-600 font-serif">{formattedSub}</p>;
+            }
+            return null;
+          }
+          if (activeLayout === 'modern') {
+            if (hasCustomSub) {
+              return (
+                <span className="inline-block text-[9.5px] font-bold uppercase tracking-widest px-2 py-0.5 bg-black text-white rounded-xs">
+                  {cleanSub}
+                </span>
+              );
+            }
+            return null;
+          }
+          if (activeLayout === 'tabular') {
+            if (hasCustomSub) {
+              return <p className="text-[10px] font-bold text-slate-600">{cleanSub}</p>;
+            }
+            return null;
+          }
+          if (hasCustomSub && activeLayout !== 'compact') {
+            return <p className="leading-tight text-black font-bold mt-1 italic break-words">{cleanSub}</p>;
+          }
+          return null;
+        })()}
 
         {shopAddress && activeLayout !== 'compact' && (
           <p className="leading-tight text-black font-bold break-words">{shopAddress}</p>
@@ -122,11 +146,6 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
         {shopPhone && activeLayout !== 'compact' && (
           <p className="leading-tight text-black font-bold">Phone: {shopPhone}</p>
         )}
-        {customHeader &&
-          customHeader.trim().toLowerCase() !== shopName.trim().toLowerCase() &&
-          activeLayout !== 'compact' && (
-            <p className="leading-tight text-black font-bold mt-1 italic break-words">{customHeader}</p>
-          )}
       </div>
 
       {/* Sale Info */}
@@ -235,19 +254,19 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
                           {isFullyReturned && ' [RET]'}
                           {isPartiallyReturned && ` [${retQty}R]`}
                         </td>
-                        <td className="py-1 text-right font-mono font-bold whitespace-nowrap">
+                        <td className="py-1 text-right tabular-nums font-bold whitespace-nowrap">
                           {isPartiallyReturned ? remQty : origQty}
                         </td>
-                        <td className="py-1 text-right font-mono whitespace-nowrap">
+                        <td className="py-1 text-right tabular-nums font-medium whitespace-nowrap">
                           {formatCurrency(item.unit_price, currency)}
                         </td>
-                        <td className="py-1 text-right font-mono font-black whitespace-nowrap">
+                        <td className="py-1 text-right tabular-nums font-black whitespace-nowrap">
                           {formatCurrency(lineTotal, currency)}
                         </td>
                       </tr>
                       {Number(item.discount_amount || 0) > 0 && !isFullyReturned && (
                         <tr>
-                          <td colSpan={4} className="pb-1 text-[9px] text-slate-500 font-mono italic">
+                          <td colSpan={4} className="pb-1 text-[9px] text-slate-500 tabular-nums italic">
                             (Disc: -{formatCurrency(item.discount_amount, currency)})
                           </td>
                         </tr>
@@ -276,9 +295,9 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
               return (
                 <div key={idx} className="flex justify-between items-baseline text-[10.5px]">
                   <span className="font-bold truncate max-w-[68%]">
-                    {item.product_name} <span className="font-mono text-[9.5px]">({isPartiallyReturned ? remQty : origQty}x)</span>
+                    {item.product_name} <span className="tabular-nums text-[9.5px]">({isPartiallyReturned ? remQty : origQty}x)</span>
                   </span>
-                  <span className="font-black font-mono">
+                  <span className="font-black tabular-nums">
                     {formatCurrency(lineTotal, currency)}
                   </span>
                 </div>
@@ -308,7 +327,7 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
                       {isPartiallyReturned ? remQty : origQty} × {formatCurrency(item.unit_price, currency)}
                     </span>
                     <span className="flex-1 mx-1.5 border-b border-solid border-black/40 h-1"></span>
-                    <span className="shrink-0 font-black font-mono">{formatCurrency(lineTotal, currency)}</span>
+                    <span className="shrink-0 font-black tabular-nums">{formatCurrency(lineTotal, currency)}</span>
                   </div>
                   {Number(item.discount_amount || 0) > 0 && !isFullyReturned && (
                     <div className="text-[9.5px] italic text-slate-500 pl-2">
@@ -357,13 +376,13 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
                           ? `${origQty} pcs @ ${formatCurrency(item.unit_price, currency)}`
                           : `${origQty} × ${formatCurrency(item.unit_price, currency)}`}
                       </span>
-                      <span className="font-black font-mono text-black text-right ml-2 shrink-0">
+                      <span className="font-black tabular-nums text-black text-right ml-2 shrink-0">
                         {formatCurrency(lineTotal, currency)}
                       </span>
                     </div>
 
                     {Number(item.discount_amount || 0) > 0 && !isFullyReturned && (
-                      <div className="text-[10px] text-black font-bold pl-2 font-mono">
+                      <div className="text-[10px] text-black font-bold pl-2 tabular-nums">
                         {activeLayout === 'modern' ? '↳ Promo Disc:' : '  -> Disc:'} -{formatCurrency(item.discount_amount, currency)}
                       </div>
                     )}
@@ -386,7 +405,7 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
             }`}
           >
             <span>{activeLayout === 'modern' ? 'Items / Units:' : activeLayout === 'elegant' ? 'Total Selections:' : 'Lines / Units:'}</span>
-            <span className="font-mono">
+            <span className="tabular-nums">
               {sale.items?.length || 0} lines / {(sale.items || []).reduce((acc, it) => acc + Number(it.quantity || 0), 0)} pcs
             </span>
           </div>
@@ -397,18 +416,18 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
       <div className={`py-2 ${divBorder} space-y-1 receipt-totals receipt-section`}>
         <div className="flex justify-between font-bold">
           <span>Subtotal:</span>
-          <span className="font-mono">{formatCurrency(sale.subtotal, currency)}</span>
+          <span className="tabular-nums font-semibold">{formatCurrency(sale.subtotal, currency)}</span>
         </div>
         {Number(sale.discount_amount || 0) > 0 && (
           <div className="flex justify-between font-bold">
             <span>{activeLayout === 'elegant' ? 'Courtesy Discount:' : 'Order Discount:'}</span>
-            <span className="font-mono">-{formatCurrency(sale.discount_amount, currency)}</span>
+            <span className="tabular-nums font-semibold">-{formatCurrency(sale.discount_amount, currency)}</span>
           </div>
         )}
         {Number(sale.tax_amount || 0) > 0 && (
           <div className="flex justify-between font-bold">
             <span>Tax ({sale.tax_rate}%):</span>
-            <span className="font-mono">+{formatCurrency(sale.tax_amount, currency)}</span>
+            <span className="tabular-nums font-semibold">+{formatCurrency(sale.tax_amount, currency)}</span>
           </div>
         )}
 
@@ -416,27 +435,27 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
         {activeLayout === 'modern' ? (
           <div className="border-2 border-black border-solid p-2 rounded-xs my-2 text-center bg-white shadow-2xs">
             <div className="text-[10px] font-black uppercase tracking-widest text-slate-600">Total Due</div>
-            <div className="text-base font-black font-mono tracking-tight text-black">{formatCurrency(sale.total_amount, currency)}</div>
+            <div className="text-base font-black tabular-nums tracking-tight text-black">{formatCurrency(sale.total_amount, currency)}</div>
           </div>
         ) : activeLayout === 'compact' ? (
-          <div className="text-center font-black text-sm my-1 py-1 border-y-2 border-black border-solid font-mono">
+          <div className="text-center font-black text-sm my-1 py-1 border-y-2 border-black border-solid tabular-nums">
             &gt;&gt;&gt; TOTAL: {formatCurrency(sale.total_amount, currency)} &lt;&lt;&lt;
           </div>
         ) : activeLayout === 'elegant' ? (
           <div className="border-y-2 border-black border-solid py-2 my-1 text-center">
             <div className="text-[9.5px] font-bold uppercase tracking-widest text-slate-500">Net Amount Payable</div>
-            <div className="text-base font-black font-mono text-black">{formatCurrency(sale.total_amount, currency)}</div>
+            <div className="text-base font-black tabular-nums text-black">{formatCurrency(sale.total_amount, currency)}</div>
           </div>
         ) : activeLayout === 'tabular' ? (
           <div className="flex justify-between font-black text-sm border-t-2 border-b-2 border-black border-solid py-1.5 my-1">
             <span>TOTAL AMOUNT:</span>
-            <span className="font-mono">{formatCurrency(sale.total_amount, currency)}</span>
+            <span className="tabular-nums font-bold">{formatCurrency(sale.total_amount, currency)}</span>
           </div>
         ) : (
           /* classic */
           <div className="flex justify-between font-black text-sm border-t-2 border-b-2 border-black border-solid py-1.5 my-1 tracking-tight">
             <span>TOTAL:</span>
-            <span className="font-mono">{formatCurrency(sale.total_amount, currency)}</span>
+            <span className="tabular-nums font-bold">{formatCurrency(sale.total_amount, currency)}</span>
           </div>
         )}
 
@@ -444,11 +463,11 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
           <>
             <div className="flex justify-between font-bold">
               <span>Less Returned Items:</span>
-              <span className="font-mono">-{formatCurrency(sale.total_returned_amount, currency)}</span>
+              <span className="tabular-nums">-{formatCurrency(sale.total_returned_amount, currency)}</span>
             </div>
             <div className="flex justify-between font-black border-t-2 border-black pt-1">
               <span>NET PAYABLE:</span>
-              <span className="font-mono">{formatCurrency(Math.max(0, Number(sale.total_amount || 0) - Number(sale.total_returned_amount || 0)), currency)}</span>
+              <span className="tabular-nums">{formatCurrency(Math.max(0, Number(sale.total_amount || 0) - Number(sale.total_returned_amount || 0)), currency)}</span>
             </div>
           </>
         )}
@@ -458,12 +477,12 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
       <div className={`py-2 ${divBorder} space-y-1 receipt-section`}>
         <div className="flex justify-between font-bold">
           <span>{activeLayout === 'modern' ? 'Paid:' : activeLayout === 'elegant' ? 'Tendered via ' + (sale.payments?.[0]?.payment_method || 'Cash') + ':' : 'Paid Amount:'}</span>
-          <span className="font-mono">{formatCurrency(sale.paid_amount, currency)}</span>
+          <span className="tabular-nums">{formatCurrency(sale.paid_amount, currency)}</span>
         </div>
         {Number(sale.due_amount || 0) > 0 ? (
           <div className="flex justify-between font-black">
             <span>Remaining Due:</span>
-            <span className="font-mono">{formatCurrency(sale.due_amount, currency)}</span>
+            <span className="tabular-nums">{formatCurrency(sale.due_amount, currency)}</span>
           </div>
         ) : (
           <div className="flex justify-between font-bold">
@@ -480,7 +499,7 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
         {Number(sale.paid_amount || 0) > Number(sale.total_amount || 0) && (
           <div className="flex justify-between text-black font-bold">
             <span>Change:</span>
-            <span className="font-mono">
+            <span className="tabular-nums">
               {formatCurrency(Number(sale.paid_amount || 0) - Number(sale.total_amount || 0), currency)}
             </span>
           </div>
@@ -506,14 +525,13 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
       )}
 
       {/* Footer message */}
-      <div className="text-center pt-2 receipt-footer receipt-section">
-        <p className="font-bold leading-tight text-black">{footerText}</p>
-        {activeLayout === 'elegant' && (
-          <p className="text-[10px] italic text-slate-500 mt-1 font-serif">
-            "Thank you for visiting us! We look forward to seeing you again."
+      {footerText && footerText.trim() ? (
+        <div className="text-center pt-2 receipt-footer receipt-section">
+          <p className={`font-bold leading-tight text-black ${activeLayout === 'elegant' ? 'font-serif italic text-[11px] text-slate-800' : ''}`}>
+            {footerText}
           </p>
-        )}
-      </div>
+        </div>
+      ) : null}
 
       {/* Paper Cutter Feed Spacing */}
       <div className="h-4 print:h-6" />

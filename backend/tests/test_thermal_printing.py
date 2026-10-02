@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from backend.app.services.escpos_service import (
     list_system_printers,
     generate_escpos_receipt,
+    generate_code128_raster_escpos,
     send_to_thermal_printer,
     ESC,
     GS,
@@ -445,10 +446,22 @@ def test_generate_escpos_receipt_classic_vs_modern_layouts():
     assert b">>> TOTAL:" in compact_bytes
     assert b"SUB:" in compact_bytes
 
-    # Elegant layout
+    # Elegant layout (with custom or default boutique subtitle)
+    settings.receipt_header = "~ Boutique Guest Receipt ~"
     elegant_bytes = generate_escpos_receipt(sale_data, settings=settings, receipt_layout="elegant")
     assert b"Boutique Guest Receipt" in elegant_bytes
     assert b"NET AMOUNT PAYABLE" in elegant_bytes
+
+    # Elegant layout with user customized subtitle
+    settings.receipt_header = "Fine Dining Guest Bill"
+    elegant_custom = generate_escpos_receipt(sale_data, settings=settings, receipt_layout="elegant")
+    assert b"Fine Dining Guest Bill" in elegant_custom
+
+    # Elegant layout with subtitle removed (empty string)
+    settings.receipt_header = ""
+    elegant_removed = generate_escpos_receipt(sale_data, settings=settings, receipt_layout="elegant")
+    assert b"Boutique Guest Receipt" not in elegant_removed
+    assert b"NET AMOUNT PAYABLE" in elegant_removed
 
 
 def test_generate_escpos_receipt_logo_inclusion_and_omission():
@@ -659,4 +672,21 @@ def test_diagnostic_endpoint(mock_send, client):
     assert data['success'] is True
     assert data['printer'] == 'Test_POS_Printer'
     assert mock_send.called
+
+
+def test_generate_code128_raster_escpos():
+    # 80mm roll width
+    bc_80 = generate_code128_raster_escpos("TEST-POS-001", paper_width="80mm", height_dots=56, include_text=True)
+    assert isinstance(bc_80, bytes)
+    assert bc_80.startswith(b"\x1d\x76\x30\x00")  # GS v 0 raster header
+    assert b"TEST-POS-001" in bc_80  # HRI text included
+
+    # 58mm roll width
+    bc_58 = generate_code128_raster_escpos("TEST-POS-001", paper_width="58mm", height_dots=40, include_text=True)
+    assert isinstance(bc_58, bytes)
+    assert bc_58.startswith(b"\x1d\x76\x30\x00")
+    assert b"TEST-POS-001" in bc_58
+
+    # Empty text returns empty bytes
+    assert generate_code128_raster_escpos("") == b""
 

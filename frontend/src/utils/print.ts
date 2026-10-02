@@ -117,8 +117,10 @@ export const printElement = (
         height: auto !important;
         min-height: 0 !important;
         max-height: none !important;
-        overflow: visible !important;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+        font-variant-numeric: tabular-nums !important;
+        font-feature-settings: "tnum" 1, "zero" 1 !important;
+        letter-spacing: -0.01em !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
         page-break-before: avoid !important;
