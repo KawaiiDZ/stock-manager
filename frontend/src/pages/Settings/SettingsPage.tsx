@@ -41,6 +41,7 @@ import {
   Table,
   Sparkles,
   Leaf,
+  Keyboard,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -179,6 +180,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [invoiceTitle, setInvoiceTitle] = useState(settings?.invoice_title || 'TAX INVOICE');
   const [enableQuotations, setEnableQuotations] = useState(settings?.enable_quotations ?? true);
   const [enableNavigationHub, setEnableNavigationHub] = useState(settings?.enable_navigation_hub ?? true);
+  const [enablePosQuickPay, setEnablePosQuickPay] = useState(settings?.enable_pos_quick_pay ?? true);
   const [invoiceTerms, setInvoiceTerms] = useState(settings?.invoice_terms || '');
   const [quotationTerms, setQuotationTerms] = useState(settings?.quotation_terms || '');
 
@@ -383,6 +385,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setInvoiceTitle(settings.invoice_title || 'TAX INVOICE');
       setEnableQuotations(settings.enable_quotations ?? true);
       setEnableNavigationHub(settings.enable_navigation_hub ?? true);
+      setEnablePosQuickPay(settings.enable_pos_quick_pay ?? true);
       setInvoiceTerms(settings.invoice_terms || '1. Goods once sold will be accepted for return within 7 days in original condition.\n2. Warranty claims require presenting this invoice.\n3. Thank you for your business!');
       setQuotationTerms(settings.quotation_terms || '1. This quotation is an estimate and valid for 15 days from issue date.\n2. Stock is subject to physical availability upon confirmation.\n3. This document does not constitute a tax invoice until approved.');
       setEnableBarcodeScanner(settings.enable_barcode_scanner ?? true);
@@ -515,6 +518,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         invoice_title: invoiceTitle.trim() || 'TAX INVOICE',
         enable_quotations: enableQuotations,
         enable_navigation_hub: enableNavigationHub,
+        enable_pos_quick_pay: enablePosQuickPay,
         theme_mode: themeMode,
         color_theme: colorTheme,
         invoice_terms: invoiceTerms,
@@ -1412,6 +1416,36 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   <span className="font-bold text-slate-800 block">Enable Central Navigation Hub</span>
                   <span className="text-slate-500 text-[11px] leading-relaxed">
                     Display the Navigation Hub in the sidebar and top navigation for quick departmental overview and access.
+                  </span>
+                </div>
+              </label>
+            </div>
+
+            {/* POS & Keyboard Navigation */}
+            <div className="pt-3 border-t border-slate-100 space-y-3">
+              <div>
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Keyboard className="h-4 w-4 text-emerald-600" />
+                  POS & Keyboard Navigation
+                </h4>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Optimize checkout speed with keyboard-first flows.
+                </p>
+              </div>
+
+              <label className="flex items-start gap-3 p-3.5 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition">
+                <input
+                  type="checkbox"
+                  checked={enablePosQuickPay}
+                  onChange={(e) => setEnablePosQuickPay(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <div className="text-xs">
+                  <span className="font-bold text-slate-800 block">
+                    Quick-Pay Dialogue on Ctrl + Enter (or Cmd + Enter / F9)
+                  </span>
+                  <span className="text-slate-500 text-[11px] leading-relaxed">
+                    When pressing Ctrl+Enter in POS, opens a fast pop-up dialogue to enter the amount paid, preview change or remaining due, and finalize on Enter. Pressing Esc closes the dialogue and preserves the sale on screen.
                   </span>
                 </div>
               </label>

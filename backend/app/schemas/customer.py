@@ -55,3 +55,7 @@ class CustomerLedgerEntry(BaseModel):
     debit: Decimal  # Increases customer due (Sale)
     credit: Decimal # Decreases customer due (Payment, Return credit)
     balance: Decimal # Running balance
+    bill_amount: Optional[Decimal] = None
+    paid_amount: Optional[Decimal] = None
+    bill_remaining: Optional[Decimal] = None
+    bill_reference: Optional[str] = None

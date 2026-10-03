@@ -754,9 +754,21 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
                         />
                       </div>
                       {amountPaid < calculatedApprovalTotal && (
-                        <span className="text-[10px] text-amber-700 font-bold block mt-1">
-                          Remaining Due: {formatCurrency(calculatedApprovalTotal - amountPaid, currency)} (Recorded to Customer Account)
-                        </span>
+                        (!approvingQuotation?.customer_id || approvingQuotation?.customer_id === 1 || approvingQuotation?.customer_name?.toLowerCase().includes('walk-in') || approvingQuotation?.customer_name?.toLowerCase().includes('counter')) ? (
+                          <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs mt-2 space-y-1">
+                            <span className="font-bold flex items-center gap-1.5 text-rose-700 dark:text-rose-300">
+                              <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+                              Counter Credit Not Allowed
+                            </span>
+                            <p className="text-[11px] leading-relaxed text-rose-600 dark:text-rose-400">
+                              Walk-in / Counter customers cannot purchase on credit. Either collect the full amount ({formatCurrency(calculatedApprovalTotal, currency)}) or revise this quotation with a specific customer account before converting.
+                            </p>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-amber-700 dark:text-amber-400 font-bold block mt-1">
+                            Remaining Due: {formatCurrency(calculatedApprovalTotal - amountPaid, currency)} (Recorded to Customer Account)
+                          </span>
+                        )
                       )}
                     </div>
                   </div>
@@ -791,7 +803,7 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
                     icon={<CheckCircle2 className="h-4 w-4" />}
                     onClick={handleConfirmApproval}
                     loading={converting}
-                    disabled={Boolean(conversionCheck?.has_stock_shortages)}
+                    disabled={Boolean(conversionCheck?.has_stock_shortages) || (amountPaid < calculatedApprovalTotal && (!approvingQuotation?.customer_id || approvingQuotation?.customer_id === 1 || approvingQuotation?.customer_name?.toLowerCase().includes('walk-in') || approvingQuotation?.customer_name?.toLowerCase().includes('counter')))}
                     className="bg-emerald-600 hover:bg-emerald-700 font-bold shadow-md shadow-emerald-600/20"
                   >
                     Confirm & Create Invoice

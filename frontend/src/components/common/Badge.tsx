@@ -15,12 +15,18 @@ export const Badge: React.FC<BadgeProps> = ({ status, className = '' }) => {
   if (normalized === 'PAID') {
     colorClasses = 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800';
     label = 'Paid';
-  } else if (normalized === 'PARTIALLY_PAID') {
+  } else if (normalized === 'PARTIALLY_PAID' || normalized === 'PARTIAL') {
     colorClasses = 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800';
+    dotColor = 'bg-amber-500';
     label = 'Partially Paid';
   } else if (normalized === 'UNPAID' || normalized === 'TO_PAY') {
     colorClasses = 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800';
+    dotColor = 'bg-rose-500';
     label = normalized === 'TO_PAY' ? 'To Pay' : 'Unpaid';
+  } else if (normalized === 'OVERDUE') {
+    colorClasses = 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-200 border-rose-300 dark:border-rose-700';
+    dotColor = 'bg-rose-600 animate-pulse';
+    label = 'Overdue';
   } else if (normalized === 'RETURNED') {
     colorClasses = 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800';
     label = 'Returned';
@@ -30,6 +36,19 @@ export const Badge: React.FC<BadgeProps> = ({ status, className = '' }) => {
   } else if (normalized === 'PENDING') {
     colorClasses = 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800';
     label = 'Pending';
+  } else if (normalized === 'APPROVED' || normalized === 'ACCEPTED') {
+    colorClasses = 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800';
+    dotColor = 'bg-emerald-500';
+    label = 'Approved';
+  } else if (normalized === 'SUPERSEDED') {
+    colorClasses = 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800';
+    label = 'Superseded';
+  } else if (normalized === 'EXPIRED') {
+    colorClasses = 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700';
+    label = 'Expired';
+  } else if (normalized === 'CANCELLED' || normalized === 'CANCELED' || normalized === 'REJECTED') {
+    colorClasses = 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800';
+    label = normalized === 'REJECTED' ? 'Disapproved' : 'Cancelled';
   } else if (normalized === 'ACTIVE') {
     colorClasses = 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800';
     label = 'Active';

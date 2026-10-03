@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
 from sqlalchemy.orm import Session
@@ -172,7 +173,8 @@ def record_customer_payment(db: Session, customer_id: int, data: CustomerPayment
         customer_id=customer_id,
         amount=data.amount,
         payment_method=data.payment_method or "Cash",
-        notes=data.notes
+        notes=data.notes,
+        created_at=datetime.now()
     )
     db.add(payment)
     db.flush()
@@ -227,69 +229,165 @@ def get_customer_ledger(db: Session, customer_id: int) -> List[CustomerLedgerEnt
     returns = db.query(SalesReturn).filter(SalesReturn.customer_id == customer_id).all()
 
     timeline = []
+    allocated_sale_payment_ids = set()
+    linked_return_ids = set()
+    customer_payment_allocated_totals = {}
+
     for s in sales:
+        # 1. Sale Invoice Creation Event
         timeline.append({
             "date": s.created_at,
             "type": "Sale",
             "reference": s.receipt_number,
-            "description": f"Invoice ({s.payment_status.replace('_', ' ')})",
+            "bill_reference": s.receipt_number,
+            "description": f"Invoice #{s.receipt_number} ({s.payment_status.replace('_', ' ')})",
             "debit": s.total_amount,
             "credit": Decimal("0.00"),
+            "bill_amount": s.total_amount,
+            "paid_amount": Decimal("0.00"),
+            "_bill_event_type": "SALE_CREATION",
+            "_sale_id": s.id,
         })
 
-        # Sale payments not linked to a standalone CustomerPayment
+        # 2. Payments on this specific sale (checkout downpayments and allocated ledger payments)
         sorted_pms = sorted(
-            [pm for pm in (s.payments or []) if pm.customer_payment_id is None and pm.amount > Decimal("0.00")],
-            key=lambda x: x.id
+            [pm for pm in (s.payments or []) if pm.amount > Decimal("0.00")],
+            key=lambda x: (x.created_at, x.id)
         )
         for idx, pm in enumerate(sorted_pms):
-            is_initial = (idx == 0 and abs((pm.created_at - s.created_at).total_seconds()) < 2)
+            allocated_sale_payment_ids.add(pm.id)
+            is_initial = (idx == 0 and pm.customer_payment_id is None and abs((pm.created_at - s.created_at).total_seconds()) < 2)
+
+            ref_num = s.receipt_number
+            desc = f"Down payment at checkout ({pm.payment_method})" if is_initial else f"Direct payment on receipt ({pm.payment_method})"
+
+            if pm.customer_payment_id:
+                cp = pm.customer_payment
+                if cp:
+                    ref_num = cp.payment_number
+                else:
+                    ref_num = f"CP-{pm.customer_payment_id:06d}"
+                desc = f"Ledger Payment on {s.receipt_number} ({pm.payment_method})"
+                customer_payment_allocated_totals[pm.customer_payment_id] = (
+                    customer_payment_allocated_totals.get(pm.customer_payment_id, Decimal("0.00")) + pm.amount
+                )
+
             timeline.append({
                 "date": s.created_at if is_initial else pm.created_at,
                 "type": "Payment",
-                "reference": s.receipt_number,
-                "description": f"Down payment at checkout ({pm.payment_method})" if is_initial else f"Direct payment on receipt ({pm.payment_method})",
+                "reference": ref_num,
+                "bill_reference": s.receipt_number,
+                "description": desc,
                 "debit": Decimal("0.00"),
                 "credit": pm.amount,
+                "bill_amount": s.total_amount,
+                "paid_amount": pm.amount,
+                "_bill_event_type": "PAYMENT",
+                "_sale_id": s.id,
             })
 
-    for p in standalone_payments:
-        timeline.append({
-            "date": p.created_at,
-            "type": "Payment",
-            "reference": p.payment_number,
-            "description": f"Received Payment ({p.payment_method})",
-            "debit": Decimal("0.00"),
-            "credit": p.amount,
-        })
+        # 3. Returns on this specific sale
+        for r in (s.returns or []):
+            if r.balance_credit_amount > Decimal("0.00"):
+                linked_return_ids.add(r.id)
+                timeline.append({
+                    "date": r.created_at,
+                    "type": "Return",
+                    "reference": r.return_number,
+                    "bill_reference": s.receipt_number,
+                    "description": f"Return Credit on {s.receipt_number}",
+                    "debit": Decimal("0.00"),
+                    "credit": r.balance_credit_amount,
+                    "bill_amount": s.total_amount,
+                    "paid_amount": r.balance_credit_amount,
+                    "_bill_event_type": "RETURN",
+                    "_sale_id": s.id,
+                })
 
+    # 4. Standalone customer payments that were not allocated to sales (or any remaining balance)
+    for p in standalone_payments:
+        allocated = customer_payment_allocated_totals.get(p.id, Decimal("0.00"))
+        unallocated = max(Decimal("0.00"), p.amount - allocated)
+        if unallocated > Decimal("0.00"):
+            timeline.append({
+                "date": p.created_at,
+                "type": "Payment",
+                "reference": p.payment_number,
+                "bill_reference": None,
+                "description": f"Advance / Unallocated Payment ({p.payment_method})",
+                "debit": Decimal("0.00"),
+                "credit": unallocated,
+                "bill_amount": None,
+                "paid_amount": unallocated,
+                "bill_remaining": None,
+                "_bill_event_type": "UNALLOCATED_PAYMENT",
+                "_sale_id": None,
+            })
+
+    # 5. General returns not tied to a specific sale
     for r in returns:
-        if r.balance_credit_amount > Decimal("0.00"):
+        if r.id not in linked_return_ids and r.balance_credit_amount > Decimal("0.00"):
             timeline.append({
                 "date": r.created_at,
                 "type": "Return",
                 "reference": r.return_number,
-                "description": f"Return Credit (Balance reduced)",
+                "bill_reference": None,
+                "description": "General Return Credit (Balance reduced)",
                 "debit": Decimal("0.00"),
                 "credit": r.balance_credit_amount,
+                "bill_amount": None,
+                "paid_amount": r.balance_credit_amount,
+                "bill_remaining": None,
+                "_bill_event_type": "STANDALONE_RETURN",
+                "_sale_id": None,
             })
 
-    timeline.sort(key=lambda x: x["date"])
+    # 6. Calculate progressive payoff (bill_remaining) for each distinct sale
+    for s in sales:
+        sale_events = [ev for ev in timeline if ev.get("_sale_id") == s.id]
+        sale_events.sort(key=lambda ev: (ev["date"], 0 if ev["_bill_event_type"] == "SALE_CREATION" else 1))
 
+        cur_bill_remaining = s.total_amount
+        for ev in sale_events:
+            if ev["_bill_event_type"] == "SALE_CREATION":
+                ev["bill_remaining"] = cur_bill_remaining
+            else:
+                paid_or_credit = ev.get("paid_amount") or Decimal("0.00")
+                cur_bill_remaining = max(Decimal("0.00"), cur_bill_remaining - paid_or_credit)
+                ev["bill_remaining"] = cur_bill_remaining
+
+    # 7. Sort all timeline entries chronologically
+    def global_sort_key(ev):
+        type_priority = 0 if ev.get("_bill_event_type") == "SALE_CREATION" else 1
+        return (ev["date"], type_priority)
+
+    timeline.sort(key=global_sort_key)
+
+    # 8. Compute running overall account balance
     running_balance = Decimal("0.00")
     ledger_entries = []
     for item in timeline:
         d = item["debit"].quantize(Decimal("0.01"))
         c = item["credit"].quantize(Decimal("0.01"))
         running_balance = (running_balance + d - c).quantize(Decimal("0.01"))
+
+        b_amt = item["bill_amount"].quantize(Decimal("0.01")) if item.get("bill_amount") is not None else None
+        p_amt = item["paid_amount"].quantize(Decimal("0.01")) if item.get("paid_amount") is not None else None
+        b_rem = item["bill_remaining"].quantize(Decimal("0.01")) if item.get("bill_remaining") is not None else None
+
         ledger_entries.append(CustomerLedgerEntry(
             date=item["date"],
             type=item["type"],
             reference=item["reference"],
+            bill_reference=item.get("bill_reference"),
             description=item["description"],
             debit=d,
             credit=c,
-            balance=running_balance
+            balance=running_balance,
+            bill_amount=b_amt,
+            paid_amount=p_amt,
+            bill_remaining=b_rem
         ))
 
     return ledger_entries
+

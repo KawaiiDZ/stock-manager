@@ -275,7 +275,7 @@ export const PurchasesPage: React.FC<PurchasesPageProps> = ({ settings }) => {
         onClose={() => setPaymentPurchase(null)}
         title={`Record Payment for ${paymentPurchase?.purchase_number}`}
         subtitle={`Supplier: ${paymentPurchase?.supplier_name || 'Direct / No Supplier'}`}
-        maxWidth="sm"
+        maxWidth="md"
       >
         {paymentPurchase && (
           <form onSubmit={handleSavePurchasePayment} className="space-y-4">
@@ -286,51 +286,123 @@ export const PurchasesPage: React.FC<PurchasesPageProps> = ({ settings }) => {
               </div>
             )}
 
-            <div className="p-3.5 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-2 text-xs">
-              <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
-                <span>Total Amount:</span>
-                <span className="font-bold text-slate-800 dark:text-slate-100">{formatCurrency(paymentPurchase.total_amount, currency)}</span>
+            {/* 1. Summary Cards */}
+            <div className="grid grid-cols-3 gap-2.5 text-center">
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Cost</span>
+                <span className="text-base font-black text-slate-800 dark:text-slate-100 mt-0.5 block">
+                  {formatCurrency(paymentPurchase.total_amount, currency)}
+                </span>
               </div>
-              <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
-                <span>Already Paid:</span>
-                <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(paymentPurchase.paid_amount, currency)}</span>
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Paid So Far</span>
+                <span className="text-base font-black text-emerald-600 dark:text-emerald-400 mt-0.5 block">
+                  {formatCurrency(paymentPurchase.paid_amount, currency)}
+                </span>
               </div>
-              <div className="flex justify-between items-center pt-1.5 border-t border-slate-200 dark:border-slate-700">
-                <span className="font-bold text-slate-700 dark:text-slate-300">Remaining Due:</span>
-                <span className="font-extrabold text-rose-600 dark:text-rose-400 text-sm">{formatCurrency(paymentPurchase.due_amount, currency)}</span>
+              <div className="p-3 rounded-2xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+                <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider block">Balance Due</span>
+                <span className="text-base font-black text-rose-600 dark:text-rose-400 mt-0.5 block">
+                  {formatCurrency(paymentPurchase.due_amount, currency)}
+                </span>
               </div>
             </div>
 
-            <div>
-              <Input
-                label="Payment Amount *"
-                type="number"
-                step="0.01"
-                min="0.01"
-                max={Number(paymentPurchase.due_amount || 0)}
-                value={paymentAmount}
-                onChange={(e) => setPaymentAmount(Number(e.target.value))}
-                required
-                autoFocus
-              />
+            {/* 2. Amount Input & Quick Shortcuts */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Input
+                  label="Payment Amount *"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  max={Number(paymentPurchase.due_amount || 0)}
+                  value={paymentAmount || ''}
+                  onChange={(e) => setPaymentAmount(Number(e.target.value))}
+                  prefix={currency}
+                  required
+                  autoFocus
+                />
+                <div className="flex items-center gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentAmount(Number(paymentPurchase.due_amount || 0))}
+                    className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 hover:underline bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800"
+                  >
+                    Full: {formatCurrency(paymentPurchase.due_amount, currency)}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentAmount(Math.round((Number(paymentPurchase.due_amount || 0) / 2) * 100) / 100)}
+                    className="text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:underline bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700"
+                  >
+                    50% Half
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5">
+                  Payment Method *
+                </label>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-brand-500 shadow-sm cursor-pointer"
+                >
+                  <option value="Cash">Cash</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                  <option value="Card">Card</option>
+                  <option value="Cheque">Cheque</option>
+                  <option value="Online">Online</option>
+                </select>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">
-                Payment Method *
-              </label>
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-                className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-100 focus:outline-none focus:border-brand-500"
-              >
-                <option value="Cash">Cash</option>
-                <option value="Bank Transfer">Bank Transfer</option>
-                <option value="Card">Card</option>
-                <option value="Cheque">Cheque</option>
-                <option value="Online">Online</option>
-              </select>
-            </div>
+            {/* 3. Live Amount Remaining & Dynamic Status Pill */}
+            {(() => {
+              const currentDueNum = Number(paymentPurchase.due_amount || 0);
+              const isOverpayment = paymentAmount > currentDueNum;
+              const newRemaining = Math.max(0, currentDueNum - paymentAmount);
+
+              return (
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                      Amount Remaining:
+                    </span>
+                    <span className="text-sm font-black text-slate-900 dark:text-white">
+                      {formatCurrency(newRemaining, currency)}
+                    </span>
+                  </div>
+
+                  {/* Status Pill */}
+                  {isOverpayment ? (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-200 border border-rose-300 dark:border-rose-800 animate-pulse">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5" />
+                      Overpaid
+                    </span>
+                  ) : newRemaining === 0 && paymentAmount > 0 ? (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5" />
+                      Full (Paid Off)
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-800">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5" />
+                      Still Due
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+
+            {paymentAmount > Number(paymentPurchase.due_amount || 0) && (
+              <p className="text-xs text-rose-600 dark:text-rose-400 font-semibold flex items-center gap-1.5">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                Payment amount cannot exceed remaining due on this purchase.
+              </p>
+            )}
 
             <div className="flex justify-end gap-2 pt-2">
               <Button
@@ -346,9 +418,9 @@ export const PurchasesPage: React.FC<PurchasesPageProps> = ({ settings }) => {
                 type="submit"
                 variant="primary"
                 size="md"
-                disabled={submittingPayment || paymentAmount <= 0}
+                disabled={submittingPayment || paymentAmount <= 0 || paymentAmount > Number(paymentPurchase.due_amount || 0)}
               >
-                {submittingPayment ? 'Recording...' : `Record Payment (${formatCurrency(paymentAmount, currency)})`}
+                {submittingPayment ? 'Recording...' : paymentAmount > 0 ? `Record ${formatCurrency(paymentAmount, currency)}` : 'Record Payment'}
               </Button>
             </div>
           </form>

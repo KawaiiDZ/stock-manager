@@ -55,3 +55,7 @@ class SupplierLedgerEntry(BaseModel):
     debit: Decimal   # Decreases supplier obligation (Payments, Returns)
     credit: Decimal  # Increases supplier obligation (Purchases)
     balance: Decimal # Running balance
+    bill_amount: Optional[Decimal] = None
+    paid_amount: Optional[Decimal] = None
+    bill_remaining: Optional[Decimal] = None
+    bill_reference: Optional[str] = None

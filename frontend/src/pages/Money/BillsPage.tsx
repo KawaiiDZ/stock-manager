@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
 import { Bill, BillCategory, BusinessSettings } from '../../types';
-import { Receipt, Plus, Search, DollarSign, AlertTriangle, CheckCircle2, Calendar, Tag } from 'lucide-react';
+import { Receipt, Plus, Search, DollarSign, AlertTriangle, AlertCircle, CheckCircle2, Calendar, Tag } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Modal } from '../../components/common/Modal';
@@ -402,36 +402,132 @@ export const BillsPage: React.FC<BillsPageProps> = ({ settings }) => {
         isOpen={Boolean(payingBill)}
         onClose={() => setPayingBill(null)}
         title={`Pay Bill: ${payingBill?.name}`}
-        subtitle={`Remaining Due: ${formatCurrency(payingBill?.due_amount, currency)}`}
-        maxWidth="sm"
+        subtitle={payingBill?.bill_number ? `Bill Reference: #${payingBill.bill_number}` : undefined}
+        maxWidth="md"
       >
-        <form onSubmit={handleSavePayment} className="space-y-4">
-          <Input
-            label="Payment Amount *"
-            type="number"
-            step="0.01"
-            max={payingBill?.due_amount}
-            value={payAmount}
-            onChange={(e) => setPayAmount(Number(e.target.value))}
-            prefix={currency}
-            required
-            autoFocus
-          />
-          <Input
-            label="Notes (Optional)"
-            placeholder="e.g. Paid online / Paid by cash"
-            value={payNotes}
-            onChange={(e) => setPayNotes(e.target.value)}
-          />
-          <div className="flex justify-end gap-3 pt-2">
-            <Button type="button" variant="secondary" onClick={() => setPayingBill(null)}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" loading={paying}>
-              Confirm Payment
-            </Button>
-          </div>
-        </form>
+        {payingBill && (
+          <form onSubmit={handleSavePayment} className="space-y-4">
+            {/* 1. Summary Cards */}
+            <div className="grid grid-cols-3 gap-2.5 text-center">
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Billed</span>
+                <span className="text-base font-black text-slate-800 dark:text-slate-100 mt-0.5 block">
+                  {formatCurrency(payingBill.amount, currency)}
+                </span>
+              </div>
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Paid So Far</span>
+                <span className="text-base font-black text-emerald-600 dark:text-emerald-400 mt-0.5 block">
+                  {formatCurrency(payingBill.paid_amount, currency)}
+                </span>
+              </div>
+              <div className="p-3 rounded-2xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+                <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider block">Balance Due</span>
+                <span className="text-base font-black text-rose-600 dark:text-rose-400 mt-0.5 block">
+                  {formatCurrency(payingBill.due_amount, currency)}
+                </span>
+              </div>
+            </div>
+
+            {/* 2. Amount Input & Quick Shortcuts */}
+            <div className="space-y-1">
+              <Input
+                label="Payment Amount *"
+                type="number"
+                step="0.01"
+                min="0.01"
+                max={Number(payingBill.due_amount || 0)}
+                value={payAmount || ''}
+                onChange={(e) => setPayAmount(Number(e.target.value))}
+                prefix={currency}
+                required
+                autoFocus
+              />
+              <div className="flex items-center gap-1.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setPayAmount(Number(payingBill.due_amount || 0))}
+                  className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 hover:underline bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800"
+                >
+                  Full: {formatCurrency(payingBill.due_amount, currency)}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPayAmount(Math.round((Number(payingBill.due_amount || 0) / 2) * 100) / 100)}
+                  className="text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:underline bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700"
+                >
+                  50% Half
+                </button>
+              </div>
+            </div>
+
+            <Input
+              label="Notes (Optional)"
+              placeholder="e.g. Paid online, cheque #, bank receipt"
+              value={payNotes}
+              onChange={(e) => setPayNotes(e.target.value)}
+            />
+
+            {/* 3. Live Amount Remaining & Dynamic Status Pill */}
+            {(() => {
+              const currentDueNum = Number(payingBill.due_amount || 0);
+              const isOverpayment = payAmount > currentDueNum;
+              const newRemaining = Math.max(0, currentDueNum - payAmount);
+
+              return (
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                      Amount Remaining:
+                    </span>
+                    <span className="text-sm font-black text-slate-900 dark:text-white">
+                      {formatCurrency(newRemaining, currency)}
+                    </span>
+                  </div>
+
+                  {/* Status Pill */}
+                  {isOverpayment ? (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-200 border border-rose-300 dark:border-rose-800 animate-pulse">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5" />
+                      Overpaid
+                    </span>
+                  ) : newRemaining === 0 && payAmount > 0 ? (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5" />
+                      Full (Paid Off)
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-800">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5" />
+                      Still Due
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+
+            {payAmount > Number(payingBill.due_amount || 0) && (
+              <p className="text-xs text-rose-600 dark:text-rose-400 font-semibold flex items-center gap-1.5">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                Payment amount cannot exceed remaining due on this bill.
+              </p>
+            )}
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button type="button" variant="secondary" onClick={() => setPayingBill(null)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                loading={paying}
+                disabled={payAmount <= 0 || payAmount > Number(payingBill.due_amount || 0)}
+              >
+                {payAmount > 0 ? `Confirm ${formatCurrency(payAmount, currency)}` : 'Confirm Payment'}
+              </Button>
+            </div>
+          </form>
+        )}
       </Modal>
     </div>
   );

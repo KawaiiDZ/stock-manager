@@ -53,6 +53,7 @@ class BusinessSettingsResponse(BaseModel):
     barcode_label_custom_text: str = ""
     lock_dashboard_finances: bool = False
     has_dashboard_financials_pin: bool = False
+    enable_pos_quick_pay: bool = True
 
     class Config:
         from_attributes = True
@@ -106,6 +107,7 @@ class BusinessSettingsUpdate(BaseModel):
     barcode_label_custom_text: Optional[str] = None
     lock_dashboard_finances: Optional[bool] = None
     dashboard_financials_pin: Optional[str] = None
+    enable_pos_quick_pay: Optional[bool] = None
 
 class PresetTemplateResponse(BaseModel):
     key: str

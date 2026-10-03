@@ -49,6 +49,7 @@ export interface BusinessSettings {
   lock_dashboard_finances?: boolean;
   has_dashboard_financials_pin?: boolean;
   dashboard_financials_pin?: string;
+  enable_pos_quick_pay?: boolean;
 }
 
 export interface PrinterInfo {
@@ -144,6 +145,10 @@ export interface CustomerLedgerEntry {
   debit: number;
   credit: number;
   balance: number;
+  bill_amount?: number | null;
+  paid_amount?: number | null;
+  bill_remaining?: number | null;
+  bill_reference?: string | null;
 }
 
 export interface Supplier {
@@ -169,6 +174,10 @@ export interface SupplierLedgerEntry {
   debit: number;
   credit: number;
   balance: number;
+  bill_amount?: number | null;
+  paid_amount?: number | null;
+  bill_remaining?: number | null;
+  bill_reference?: string | null;
 }
 
 export interface SaleItemBatch {

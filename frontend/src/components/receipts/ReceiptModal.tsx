@@ -184,26 +184,38 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
           </button>
         </div>
 
-        {/* Hardware Destination Badge */}
-        <div className="flex items-center gap-2">
+        {/* Hardware Destination Small Pill */}
+        <div className="shrink-0 flex items-center">
           {receiptType === 'thermal' ? (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700">
-              <span className={`w-2.5 h-2.5 rounded-full ${settings?.thermal_print_mode === 'direct_escpos' ? 'bg-emerald-500' : 'bg-blue-500'}`} />
-              <span className="font-bold text-slate-900">
-                {settings?.selected_thermal_printer || 'Auto-detect Thermal Printer'}
+            <div
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 shadow-2xs transition hover:bg-slate-200/70 dark:hover:bg-slate-700/70"
+              title={`Printer: ${settings?.selected_thermal_printer || 'Auto-detect Thermal Printer'} (${paperWidth}, ${receiptLayout.toUpperCase()})`}
+            >
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 ${
+                  settings?.thermal_print_mode === 'direct_escpos' ? 'bg-emerald-500 animate-pulse' : 'bg-blue-500'
+                }`}
+              />
+              <Printer className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+              <span className="font-semibold text-slate-800 dark:text-slate-200 max-w-[130px] sm:max-w-[170px] truncate">
+                {settings?.selected_thermal_printer || 'Auto-detect'}
               </span>
-              <span className="text-[11px] text-slate-400 font-normal">
-                ({paperWidth} • {receiptLayout.toUpperCase()})
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold uppercase tracking-wider">
+                {paperWidth}
               </span>
             </div>
           ) : (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700">
-              <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-              <span className="font-bold text-slate-900">
-                {settings?.selected_a4_printer || 'System Default A4 Printer'}
+            <div
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 shadow-2xs transition hover:bg-slate-200/70 dark:hover:bg-slate-700/70"
+              title={`Printer: ${settings?.selected_a4_printer || 'System Default A4 Printer'} (A4 Document)`}
+            >
+              <span className="w-2 h-2 rounded-full shrink-0 bg-blue-500" />
+              <Printer className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+              <span className="font-semibold text-slate-800 dark:text-slate-200 max-w-[130px] sm:max-w-[170px] truncate">
+                {settings?.selected_a4_printer || 'System Default'}
               </span>
-              <span className="text-[11px] text-slate-400 font-normal">
-                (A4 Document)
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold uppercase tracking-wider">
+                A4
               </span>
             </div>
           )}
@@ -280,9 +292,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             loading={directPrinting}
             onClick={handlePrint}
           >
-            {receiptType === 'thermal'
-              ? `Print Thermal Receipt (${settings?.selected_thermal_printer || 'Thermal Printer'})`
-              : `Print A4 Invoice (${settings?.selected_a4_printer || 'A4 Printer'})`}
+            {receiptType === 'thermal' ? 'Print Thermal Receipt' : 'Print A4 Invoice'}
           </Button>
 
           {onNewSale ? (

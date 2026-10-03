@@ -563,55 +563,150 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
         isOpen={Boolean(paymentSale)}
         onClose={() => setPaymentSale(null)}
         title={`Receive Payment for ${paymentSale?.receipt_number}`}
-        subtitle={`Remaining Due: ${formatCurrency(paymentSale?.due_amount, currency)}`}
-        maxWidth="sm"
+        subtitle={paymentSale?.customer_name ? `Customer: ${paymentSale.customer_name}` : undefined}
+        maxWidth="md"
       >
-        <form onSubmit={handleSavePayment} className="space-y-4">
-          <Input
-            label="Payment Amount *"
-            type="number"
-            step="0.01"
-            min="0.01"
-            max={paymentSale ? Number(paymentSale.due_amount) : undefined}
-            value={paymentAmount}
-            onChange={(e) => setPaymentAmount(Number(e.target.value))}
-            prefix={currency}
-            required
-            autoFocus
-          />
+        {paymentSale && (
+          <form onSubmit={handleSavePayment} className="space-y-4">
+            {/* 1. Summary Cards */}
+            <div className="grid grid-cols-3 gap-2.5 text-center">
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Invoice Total</span>
+                <span className="text-base font-black text-slate-800 dark:text-slate-100 mt-0.5 block">
+                  {formatCurrency(paymentSale.total_amount, currency)}
+                </span>
+              </div>
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Already Paid</span>
+                <span className="text-base font-black text-emerald-600 dark:text-emerald-400 mt-0.5 block">
+                  {formatCurrency(paymentSale.paid_amount, currency)}
+                </span>
+              </div>
+              <div className="p-3 rounded-2xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+                <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider block">Current Due</span>
+                <span className="text-base font-black text-rose-600 dark:text-rose-400 mt-0.5 block">
+                  {formatCurrency(paymentSale.due_amount, currency)}
+                </span>
+              </div>
+            </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5">Payment Method *</label>
-            <select
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-              className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-brand-500 shadow-sm cursor-pointer"
-            >
-              <option value="Cash">Cash</option>
-              <option value="Bank Transfer">Bank Transfer</option>
-              <option value="Credit Card">Credit Card</option>
-              <option value="Debit Card">Debit Card</option>
-              <option value="Cheque">Cheque</option>
-              <option value="Online / Mobile Wallet">Online / Mobile Wallet</option>
-            </select>
-          </div>
+            {/* 2. Amount Input & Quick Shortcuts */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Input
+                  label="Payment Amount *"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  max={Number(paymentSale.due_amount || 0)}
+                  value={paymentAmount || ''}
+                  onChange={(e) => setPaymentAmount(Number(e.target.value))}
+                  prefix={currency}
+                  required
+                  autoFocus
+                />
+                <div className="flex items-center gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentAmount(Number(paymentSale.due_amount || 0))}
+                    className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 hover:underline bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800"
+                  >
+                    Full: {formatCurrency(paymentSale.due_amount, currency)}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentAmount(Math.round((Number(paymentSale.due_amount || 0) / 2) * 100) / 100)}
+                    className="text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:underline bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700"
+                  >
+                    50% Half
+                  </button>
+                </div>
+              </div>
 
-          <Input
-            label="Notes (Optional)"
-            placeholder="e.g. Counter collection, online ref #, check #"
-            value={paymentNotes}
-            onChange={(e) => setPaymentNotes(e.target.value)}
-          />
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5">Payment Method *</label>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-brand-500 shadow-sm cursor-pointer"
+                >
+                  <option value="Cash">Cash</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                  <option value="Credit Card">Credit Card</option>
+                  <option value="Debit Card">Debit Card</option>
+                  <option value="Cheque">Cheque</option>
+                  <option value="Online / Mobile Wallet">Online / Mobile Wallet</option>
+                </select>
+              </div>
+            </div>
 
-          <div className="flex justify-end gap-3 pt-2">
-            <Button type="button" variant="secondary" onClick={() => setPaymentSale(null)}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" loading={submittingPayment}>
-              Receive Payment
-            </Button>
-          </div>
-        </form>
+            <Input
+              label="Notes (Optional)"
+              placeholder="e.g. Counter collection, online ref #, check #"
+              value={paymentNotes}
+              onChange={(e) => setPaymentNotes(e.target.value)}
+            />
+
+            {/* 3. Live Amount Remaining & Dynamic Status Pill */}
+            {(() => {
+              const currentDueNum = Number(paymentSale.due_amount || 0);
+              const isOverpayment = paymentAmount > currentDueNum;
+              const newRemaining = Math.max(0, currentDueNum - paymentAmount);
+
+              return (
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                      Amount Remaining:
+                    </span>
+                    <span className="text-sm font-black text-slate-900 dark:text-white">
+                      {formatCurrency(newRemaining, currency)}
+                    </span>
+                  </div>
+
+                  {/* Status Pill */}
+                  {isOverpayment ? (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-200 border border-rose-300 dark:border-rose-800 animate-pulse">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5" />
+                      Overpaid
+                    </span>
+                  ) : newRemaining === 0 && paymentAmount > 0 ? (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5" />
+                      Full (Paid Off)
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-800">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5" />
+                      Still Due
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+
+            {paymentAmount > Number(paymentSale.due_amount || 0) && (
+              <p className="text-xs text-rose-600 dark:text-rose-400 font-semibold flex items-center gap-1.5">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                Payment amount cannot exceed the current invoice due balance.
+              </p>
+            )}
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button type="button" variant="secondary" onClick={() => setPaymentSale(null)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                loading={submittingPayment}
+                disabled={paymentAmount <= 0 || paymentAmount > Number(paymentSale.due_amount || 0)}
+              >
+                {paymentAmount > 0 ? `Receive ${formatCurrency(paymentAmount, currency)}` : 'Receive Payment'}
+              </Button>
+            </div>
+          </form>
+        )}
       </Modal>
 
       {/* Floating Action Toast */}

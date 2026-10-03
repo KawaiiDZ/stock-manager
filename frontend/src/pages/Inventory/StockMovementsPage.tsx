@@ -54,14 +54,14 @@ export const StockMovementsPage: React.FC<StockMovementsPageProps> = ({ settings
     const numericQty = Number(qty || 0);
     if (numericQty > 0) {
       return (
-        <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full text-xs font-bold">
+        <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 rounded-full text-xs font-bold">
           <ArrowDownLeft className="h-3.5 w-3.5" />
           +{numericQty} (In)
         </span>
       );
     } else {
       return (
-        <span className="inline-flex items-center gap-1 text-rose-700 bg-rose-50 px-2.5 py-1 rounded-full text-xs font-bold">
+        <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 px-2.5 py-1 rounded-full text-xs font-bold">
           <ArrowUpRight className="h-3.5 w-3.5" />
           {numericQty} (Out)
         </span>
@@ -121,7 +121,7 @@ export const StockMovementsPage: React.FC<StockMovementsPageProps> = ({ settings
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="w-full text-left text-sm min-w-[720px]">
               <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-800 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                 <tr>
                   <th className="py-3.5 px-6">Date & Time</th>

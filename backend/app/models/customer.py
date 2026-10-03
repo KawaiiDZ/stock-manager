@@ -12,8 +12,8 @@ class Customer(Base):
     phone = Column(String(50), nullable=True, index=True)
     address = Column(Text, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     sales = relationship("Sale", back_populates="customer")
     payments = relationship("CustomerPayment", back_populates="customer")
@@ -28,7 +28,7 @@ class CustomerPayment(Base):
     amount = Column(Numeric(12, 2), nullable=False)
     payment_method = Column(String(30), nullable=False, default="Cash")
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=datetime.now, index=True)
 
     __table_args__ = (
         CheckConstraint('amount > 0', name='check_customer_payment_amount_positive'),

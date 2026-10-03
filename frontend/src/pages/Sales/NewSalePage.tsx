@@ -84,6 +84,12 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   const [autoPrintEnabled, setAutoPrintEnabled] = useState<boolean>(Boolean(settings?.skip_receipt_preview));
   const isCompletingRef = useRef<boolean>(false);
 
+  // Quick-Pay Dialogue State
+  const [showQuickPayModal, setShowQuickPayModal] = useState(false);
+  const [quickPayAmount, setQuickPayAmount] = useState<number>(0);
+  const [quickPayTouched, setQuickPayTouched] = useState(false);
+  const quickPayInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     setAutoPrintEnabled(Boolean(settings?.skip_receipt_preview));
   }, [settings?.skip_receipt_preview]);
@@ -260,6 +266,16 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   // Global POS Keyboard Shortcuts & Arrow Navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // If Quick-Pay modal is open, let the modal manage Enter / Escape
+      if (showQuickPayModal) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          setShowQuickPayModal(false);
+          searchInputRef.current?.focus();
+        }
+        return;
+      }
+
       // F4 to focus search
       if (e.key === 'F4') {
         e.preventDefault();
@@ -280,12 +296,20 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         searchInputRef.current?.focus();
         return;
       }
-      // Ctrl+Enter or F9 to complete sale
-      if ((e.ctrlKey && e.key === 'Enter') || e.key === 'F9') {
+      // F9 to complete sale directly (same as clicking Complete Sale)
+      if (e.key === 'F9') {
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
         handleCompleteSale();
+        return;
+      }
+      // Ctrl+Enter or Cmd+Enter to open Quick Pay (or complete directly if Quick Pay disabled)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        handleOpenQuickPayOrComplete();
         return;
       }
 
@@ -486,11 +510,19 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
     : [];
 
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
-    // Complete sale from search bar via Ctrl+Enter or F9
-    if ((e.ctrlKey && e.key === 'Enter') || e.key === 'F9') {
+    // F9 to complete sale directly
+    if (e.key === 'F9') {
       e.preventDefault();
       e.stopPropagation();
       handleCompleteSale();
+      return;
+    }
+
+    // Complete sale from search bar via Ctrl+Enter or Cmd+Enter
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      handleOpenQuickPayOrComplete();
       return;
     }
 
@@ -588,15 +620,38 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       ? 'PARTIAL'
       : 'UNPAID';
 
+  // Trigger Quick-Pay Modal if enabled, or complete immediately
+  const handleOpenQuickPayOrComplete = () => {
+    if (cart.length === 0) {
+      setErrorMsg('Cannot complete an empty sale. Please add items to cart.');
+      return;
+    }
+    const isQuickPayEnabled = settings?.enable_pos_quick_pay ?? true;
+    if (isQuickPayEnabled) {
+      setQuickPayAmount(grandTotal);
+      setQuickPayTouched(false);
+      setShowQuickPayModal(true);
+      setTimeout(() => {
+        quickPayInputRef.current?.focus();
+        quickPayInputRef.current?.select();
+      }, 50);
+    } else {
+      handleCompleteSale();
+    }
+  };
+
   // Complete Sale Execution
-  const handleCompleteSale = async () => {
+  const handleCompleteSale = async (overridePaidAmount?: number) => {
     if (completing || isCompletingRef.current) return;
     if (cart.length === 0) {
       setErrorMsg('Cannot complete an empty sale. Please add items to cart.');
       return;
     }
 
-    const effectivePaid = Math.max(0, Number(paidAmount || 0));
+    const effectivePaid = Math.max(
+      0,
+      overridePaidAmount !== undefined ? Number(overridePaidAmount) : Number(paidAmount || 0)
+    );
     const effectiveDue = Math.max(0, grandTotal - effectivePaid);
 
     const selectedCust = customers.find((c) => c.id === selectedCustomerId);
@@ -607,6 +662,11 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         'Walk-in / Counter Customer cannot purchase on credit. Please enter or select a customer name for partial or unpaid sales.'
       );
       return;
+    }
+
+    if (overridePaidAmount !== undefined) {
+      setPaidAmount(effectivePaid);
+      setIsPaidAmountCustomized(true);
     }
 
     isCompletingRef.current = true;
@@ -1371,7 +1431,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                 type="button"
                 variant="primary"
                 size="lg"
-                onClick={handleCompleteSale}
+                onClick={() => handleCompleteSale()}
                 disabled={cart.length === 0 || completing || savingQuotation}
                 loading={completing}
                 className="flex-1 py-3.5 text-base font-bold tracking-wide rounded-2xl shadow-lg shadow-brand-600/20 flex items-center justify-center gap-2"
@@ -1420,6 +1480,11 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                   setInlineCustomerPhone(c.phone || '');
                   setShowAddCustomerModal(false);
                   setCustomerSearchQuery('');
+                } else if (customerSearchQuery.trim()) {
+                  setSelectedCustomerId(null);
+                  setInlineCustomerName(customerSearchQuery.trim());
+                  setShowAddCustomerModal(false);
+                  setCustomerSearchQuery('');
                 }
               }
             }}
@@ -1428,8 +1493,26 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
 
           <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 border border-slate-100 rounded-2xl">
             {filteredModalCustomers.length === 0 ? (
-              <div className="p-4 text-center text-xs text-slate-400">
-                No customers found matching "{customerSearchQuery}"
+              <div className="p-4 text-center space-y-2">
+                <div className="text-xs text-slate-400">
+                  No registered customers found matching "{customerSearchQuery}"
+                </div>
+                {customerSearchQuery.trim() && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="primary"
+                    onClick={() => {
+                      setSelectedCustomerId(null);
+                      setInlineCustomerName(customerSearchQuery.trim());
+                      setShowAddCustomerModal(false);
+                      setCustomerSearchQuery('');
+                    }}
+                    className="text-xs font-bold"
+                  >
+                    Use "{customerSearchQuery.trim()}" for this Sale
+                  </Button>
+                )}
               </div>
             ) : (
               filteredModalCustomers.map((c, idx) => {
@@ -1566,6 +1649,190 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
           setQuickAddBarcode(null);
         }}
       />
+
+      {/* POS Quick-Pay Dialogue */}
+      <Modal
+        isOpen={showQuickPayModal}
+        onClose={() => {
+          setShowQuickPayModal(false);
+          searchInputRef.current?.focus();
+        }}
+        title="POS Quick-Pay Checkout"
+        subtitle="Review total, type amount tendered, and press Enter to finalize sale."
+        maxWidth="md"
+      >
+        <div className="space-y-4">
+          {/* Total Bill Card */}
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between">
+            <div>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Total Bill</span>
+              <span className="text-3xl font-black text-slate-900 dark:text-white">
+                {formatCurrency(grandTotal, currency)}
+              </span>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Items in Cart</span>
+              <span className="text-xs font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-600 inline-block mt-0.5">
+                {cart.reduce((sum, item) => sum + item.quantity, 0)} units ({cart.length} items)
+              </span>
+            </div>
+          </div>
+
+          {/* Amount Paid Input with Live Currency Prefix */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                Amount Paid / Tendered *
+              </label>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuickPayAmount(grandTotal);
+                    setQuickPayTouched(true);
+                    quickPayInputRef.current?.focus();
+                  }}
+                  className="text-[11px] font-bold text-brand-600 dark:text-brand-400 hover:underline bg-brand-50 dark:bg-brand-950/40 px-2 py-0.5 rounded-lg border border-brand-200 dark:border-brand-800"
+                >
+                  Exact ({formatCurrency(grandTotal, currency)})
+                </button>
+              </div>
+            </div>
+
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 font-bold text-base">
+                {currency}
+              </div>
+              <input
+                ref={quickPayInputRef}
+                type="number"
+                step="any"
+                min="0"
+                value={quickPayAmount === 0 && !quickPayTouched ? '' : quickPayAmount}
+                onChange={(e) => {
+                  setQuickPayTouched(true);
+                  const val = parseFloat(e.target.value);
+                  setQuickPayAmount(isNaN(val) ? 0 : val);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const isFull = Number(quickPayAmount || 0) >= grandTotal;
+                    if (!isFull) {
+                      setErrorMsg(
+                        `Quick-Pay only accepts full payment (${formatCurrency(grandTotal, currency)}). For partial payments or credit sales, press Esc and enter customer details.`
+                      );
+                      return;
+                    }
+                    setShowQuickPayModal(false);
+                    handleCompleteSale(quickPayAmount);
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowQuickPayModal(false);
+                    searchInputRef.current?.focus();
+                  }
+                }}
+                placeholder="0.00"
+                autoFocus
+                className="w-full pl-14 pr-4 py-3 rounded-2xl border-2 border-brand-500 focus:border-brand-600 focus:ring-4 focus:ring-brand-500/20 text-2xl font-black text-slate-900 dark:text-white bg-white dark:bg-slate-800 shadow-inner"
+              />
+            </div>
+          </div>
+
+          {/* Change or Warning if not full payment */}
+          {(() => {
+            const paidNum = Number(quickPayAmount || 0);
+            const isFull = paidNum >= grandTotal;
+            const change = Math.max(0, paidNum - grandTotal);
+            const shortAmount = Math.max(0, grandTotal - paidNum);
+
+            if (!isFull) {
+              return (
+                <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/30 border border-rose-300 dark:border-rose-800 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                      <span className="text-xs font-bold text-rose-800 dark:text-rose-300">
+                        Quick-Pay only accepts full payment.
+                      </span>
+                    </div>
+                    <span className="text-xs font-black text-rose-600 dark:text-rose-400">
+                      Short by {formatCurrency(shortAmount, currency)}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-rose-700 dark:text-rose-400 leading-relaxed">
+                    For partial payments or credit sales, press <kbd className="px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-900/60 font-mono text-[10px] font-bold">Esc</kbd> to return to screen and enter customer details.
+                  </p>
+                </div>
+              );
+            }
+
+            if (change > 0) {
+              return (
+                <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                      Change to Return:
+                    </span>
+                  </div>
+                  <span className="text-xl font-black text-emerald-700 dark:text-emerald-400">
+                    {formatCurrency(change, currency)}
+                  </span>
+                </div>
+              );
+            }
+
+            return (
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Payment Status:
+                  </span>
+                </div>
+                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                  Fully Settled (Exact Amount)
+                </span>
+              </div>
+            );
+          })()}
+
+          {/* Modal Actions */}
+          <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setShowQuickPayModal(false);
+                searchInputRef.current?.focus();
+              }}
+              className="text-xs font-semibold"
+            >
+              Back (Esc)
+            </Button>
+
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => {
+                if (Number(quickPayAmount || 0) < grandTotal) return;
+                setShowQuickPayModal(false);
+                handleCompleteSale(quickPayAmount);
+              }}
+              disabled={completing || Number(quickPayAmount || 0) < grandTotal}
+              className="font-bold flex items-center gap-2 px-5 py-2.5"
+            >
+              <span>Finalize Sale</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-white/20 text-white text-[10px] font-mono font-bold">
+                Enter ↵
+              </kbd>
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

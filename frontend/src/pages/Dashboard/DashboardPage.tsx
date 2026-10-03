@@ -299,7 +299,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
         {/* Customer Outstanding */}
         <div
           onClick={() => onNavigate('customers')}
-          className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col justify-between cursor-pointer hover:border-emerald-300 dark:hover:border-slate-700 transition"
+          className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col justify-between cursor-pointer hover:border-amber-300 dark:hover:border-amber-700 transition"
         >
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
@@ -322,7 +322,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
         {/* Supplier Outstanding */}
         <div
           onClick={() => onNavigate('suppliers')}
-          className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col justify-between cursor-pointer hover:border-emerald-300 dark:hover:border-slate-700 transition"
+          className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col justify-between cursor-pointer hover:border-rose-300 dark:hover:border-rose-700 transition"
         >
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
