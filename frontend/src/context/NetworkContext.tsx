@@ -7,6 +7,7 @@ import {
   getClientId,
   getStationName
 } from '../services/offlineQueue';
+import { offlineStorage } from '../services/offlineStorage';
 import { SyncPushResponse, MergedItemSummary } from '../types';
 
 interface NetworkContextType {
@@ -18,11 +19,13 @@ interface NetworkContextType {
   pendingSyncCount: number;
   isSyncing: boolean;
   lastSyncTime: Date | null;
+  lastSnapshotTime: string | null;
   lastSyncResult: MergedItemSummary[] | null;
   syncStatusMessage: string | null;
   connectToHost: (url: string, username?: string, password?: string) => Promise<{ success: boolean; message: string }>;
   disconnectFromHost: () => void;
   syncNow: () => Promise<SyncPushResponse | null>;
+  pullHostSnapshot: () => Promise<boolean>;
   refreshStatus: () => Promise<void>;
 }
 
@@ -31,11 +34,12 @@ const NetworkContext = createContext<NetworkContextType | undefined>(undefined);
 export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [remoteHostUrl, setRemoteHostUrlState] = useState<string | null>(getRemoteHostUrl() || null);
-  const [stationName, setStationNameState] = useState<string>('Main Host Register');
+  const [stationName, setStationNameState] = useState<string>('Main Counter');
   const [lanIp, setLanIp] = useState<string>('127.0.0.1');
   const [pendingSyncCount, setPendingSyncCount] = useState<number>(getPendingCount());
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  const [lastSnapshotTime, setLastSnapshotTimeState] = useState<string | null>(null);
   const [lastSyncResult, setLastSyncResult] = useState<MergedItemSummary[] | null>(null);
   const [syncStatusMessage, setSyncStatusMessage] = useState<string | null>(null);
 
@@ -46,6 +50,13 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     isOnlineRef.current = isOnline;
   }, [isOnline]);
+
+  // Load cached snapshot timestamp on mount
+  useEffect(() => {
+    offlineStorage.getLastSnapshotTime().then(t => {
+      if (t) setLastSnapshotTimeState(t);
+    });
+  }, []);
 
   const updatePendingCount = useCallback(() => {
     setPendingSyncCount(getPendingCount());
@@ -64,26 +75,42 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (info) {
         setLanIp(info.lan_ip || '127.0.0.1');
         if (!getRemoteHostUrl()) {
-          setStationNameState(info.station_name || 'Main Host Register');
+          setStationNameState(info.station_name || 'Main Counter');
         }
       }
     } catch {
-      // Local host offline or starting up
+      // Local host starting up or quiet
     }
   }, []);
 
-  // Sync pending commits to host
+  // Pull complete store snapshot from Main Counter into local offline cache
+  const pullHostSnapshot = useCallback(async (): Promise<boolean> => {
+    try {
+      const snapshot = await api.sync.getSnapshot();
+      if (snapshot) {
+        await offlineStorage.saveSnapshot(snapshot);
+        setLastSnapshotTimeState(snapshot.timestamp);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.warn('Failed to refresh items from Main Counter:', err);
+      return false;
+    }
+  }, []);
+
+  // Send pending saved changes to Main Counter
   const syncNow = useCallback(async (): Promise<SyncPushResponse | null> => {
     if (isSyncingRef.current) return null;
     const pending = getPendingCommits();
     if (pending.length === 0) {
-      setSyncStatusMessage('Everything is up to date.');
+      setSyncStatusMessage('All saved changes have already been sent.');
       return null;
     }
 
     isSyncingRef.current = true;
     setIsSyncing(true);
-    setSyncStatusMessage(`Pushing ${pending.length} offline changes to Host...`);
+    setSyncStatusMessage(`Sending ${pending.length} saved change${pending.length > 1 ? 's' : ''} to Main Counter...`);
 
     try {
       const payload = {
@@ -103,20 +130,23 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
           removeCommits(finishedIds);
         }
 
+        // Refresh snapshot so local catalog reflects reconciled inventory
+        pullHostSnapshot();
+
         setLastSyncTime(new Date());
         setLastSyncResult(response.results);
         setSyncStatusMessage(
-          `Sync successful: ${response.processed_count} processed, ${response.skipped_count} skipped.`
+          `Changes sent successfully! (${response.processed_count} item${response.processed_count === 1 ? '' : 's'} updated)`
         );
         setIsOnline(true);
         return response;
       } else {
-        setSyncStatusMessage(response?.message || 'Sync failed.');
+        setSyncStatusMessage(response?.message || 'Could not send changes.');
         return response;
       }
     } catch (err: any) {
       console.warn('Sync push failed:', err);
-      setSyncStatusMessage(`Sync failed: ${err.message || 'Host unreachable'}`);
+      setSyncStatusMessage(`Could not send changes: ${err.message || 'Main Counter unreachable'}`);
       setIsOnline(false);
       return null;
     } finally {
@@ -124,7 +154,7 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setIsSyncing(false);
       updatePendingCount();
     }
-  }, [updatePendingCount]);
+  }, [updatePendingCount, pullHostSnapshot]);
 
   // Heartbeat check: Ping host every 6 seconds
   const pingHost = useCallback(async () => {
@@ -132,30 +162,35 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
       await api.network.ping();
       if (!isOnlineRef.current) {
         setIsOnline(true);
-        // Connection just restored! Auto-push offline commits if any
+        // Connection just restored! Auto-send pending saved changes if any
         if (getPendingCount() > 0) {
           syncNow();
         }
+        // Refresh local items from Main Counter
+        pullHostSnapshot();
       }
     } catch {
       if (isOnlineRef.current) {
         setIsOnline(false);
       }
     }
-  }, [syncNow]);
+  }, [syncNow, pullHostSnapshot]);
 
   useEffect(() => {
     fetchHostInfo();
     pingHost();
+    if (getRemoteHostUrl()) {
+      pullHostSnapshot();
+    }
 
     const interval = setInterval(() => {
       pingHost();
     }, 6000);
 
     return () => clearInterval(interval);
-  }, [fetchHostInfo, pingHost]);
+  }, [fetchHostInfo, pingHost, pullHostSnapshot]);
 
-  // Connect to a remote host terminal
+  // Connect to a remote Main Counter
   const connectToHost = useCallback(
     async (
       rawUrl: string,
@@ -164,7 +199,7 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
     ): Promise<{ success: boolean; message: string }> => {
       const cleanUrl = rawUrl.trim().replace(/\/+$/, '');
       if (!cleanUrl) {
-        return { success: false, message: 'Invalid Host URL.' };
+        return { success: false, message: 'Please enter a valid Main Counter Address.' };
       }
 
       setIsSyncing(true);
@@ -173,7 +208,7 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const testRes = await api.network.testHost(cleanUrl);
         if (!testRes.reachable) {
           setIsSyncing(false);
-          return { success: false, message: testRes.message || 'Host unreachable.' };
+          return { success: false, message: testRes.message || 'Could not reach Main Counter at this address.' };
         }
 
         // 2. If credentials provided, login to get JWT token
@@ -188,7 +223,7 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setIsSyncing(false);
             return {
               success: false,
-              message: loginData.detail || 'Authentication failed on host.'
+              message: loginData.detail || 'Incorrect username or password on Main Counter.'
             };
           }
           if (loginData.token) {
@@ -199,16 +234,27 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
         // 3. Save remote host url
         setRemoteHostUrl(cleanUrl);
         setRemoteHostUrlState(cleanUrl);
-        setStationNameState(testRes.station_name || 'Remote Host');
+        setStationNameState(testRes.station_name || 'Main Counter');
         setIsOnline(true);
 
-        // 4. Trigger sync immediately if there are pending commits
+        // 4. Download complete store snapshot to local offline storage
+        try {
+          const snapshot = await api.sync.getSnapshot();
+          if (snapshot) {
+            await offlineStorage.saveSnapshot(snapshot);
+            setLastSnapshotTimeState(snapshot.timestamp);
+          }
+        } catch (e) {
+          console.warn('Initial snapshot download error:', e);
+        }
+
+        // 5. Trigger sync immediately if there are pending commits
         if (getPendingCount() > 0) {
           syncNow();
         }
 
         setIsSyncing(false);
-        return { success: true, message: `Connected to ${testRes.station_name || 'Host'} successfully!` };
+        return { success: true, message: `Connected to ${testRes.station_name || 'Main Counter'} successfully!` };
       } catch (err: any) {
         setIsSyncing(false);
         return { success: false, message: err.message || 'Connection error.' };
@@ -217,14 +263,14 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
     [syncNow]
   );
 
-  // Disconnect from remote host and revert to standalone host mode
+  // Disconnect from remote host and revert to standalone mode
   const disconnectFromHost = useCallback(() => {
     setRemoteHostUrl(null);
     setRemoteHostUrlState(null);
     setAuthToken(null);
     fetchHostInfo();
     setIsOnline(true);
-    setSyncStatusMessage('Disconnected. Operating as Standalone / Host.');
+    setSyncStatusMessage('Disconnected. Operating on this device.');
   }, [fetchHostInfo]);
 
   const refreshStatus = useCallback(async () => {
@@ -242,11 +288,13 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
     pendingSyncCount,
     isSyncing,
     lastSyncTime,
+    lastSnapshotTime,
     lastSyncResult,
     syncStatusMessage,
     connectToHost,
     disconnectFromHost,
     syncNow,
+    pullHostSnapshot,
     refreshStatus,
   };
 

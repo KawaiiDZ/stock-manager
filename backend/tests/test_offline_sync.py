@@ -192,3 +192,38 @@ def test_sync_idempotency_prevents_duplicate_restock(client: TestClient, db_sess
     db_session.expire_all()
     prod = db_session.query(Product).filter(Product.id == prod_id).first()
     assert Decimal(str(prod.current_stock)) == Decimal("35.00")
+
+def test_get_sync_snapshot(client: TestClient, db_session):
+    """
+    Test that GET /api/sync/snapshot returns complete store snapshot
+    with settings, categories, custom fields, and products for offline replica.
+    """
+    # 1. Create a category
+    cat_res = client.post("/api/categories", json={"name": "Power Tools"})
+    assert cat_res.status_code in [200, 201]
+
+    # 2. Create a product
+    prod_res = client.post("/api/products", json={
+        "name": "Cordless Drill 18V",
+        "barcode": "5544332211009",
+        "sku": "DRILL-18V",
+        "purchase_price": "40.00",
+        "selling_price": "89.00",
+        "opening_stock": "12.00",
+        "category_id": cat_res.json()["id"]
+    })
+    assert prod_res.status_code in [200, 201]
+
+    # 3. Call GET /api/sync/snapshot
+    res = client.get("/api/sync/snapshot")
+    assert res.status_code == 200
+    snapshot = res.json()
+
+    assert "timestamp" in snapshot
+    assert "settings" in snapshot
+    assert "categories" in snapshot
+    assert any(c["name"] == "Power Tools" for c in snapshot["categories"])
+    assert "products" in snapshot
+    assert snapshot["products_count"] >= 1
+    assert any(p["barcode"] == "5544332211009" for p in snapshot["products"])
+

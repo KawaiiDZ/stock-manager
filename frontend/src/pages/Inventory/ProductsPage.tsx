@@ -142,6 +142,12 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
     loadData();
   }, [search, selectedCategory, activeTab]);
 
+  useEffect(() => {
+    const handleCatalogUpdate = () => loadData();
+    window.addEventListener('offlineCatalogUpdated', handleCatalogUpdate);
+    return () => window.removeEventListener('offlineCatalogUpdated', handleCatalogUpdate);
+  }, []);
+
   // Hardware Barcode Scanner in Inventory - pulls product or prompts if unregistered
   useBarcodeScanner({
     enabled: enableBarcodeScanner && !showProductModal && !showBulkModal && !showBarcodeModal && !Boolean(unregisteredBarcode),
@@ -318,7 +324,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
         setShowBarcodeModal(true);
       }
     } catch (err: any) {
-      if (!editingProduct && (!navigator.onLine || err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError') || err.message?.includes('Host unreachable'))) {
+      if (!editingProduct && (!navigator.onLine || err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError') || err.message?.includes('Host unreachable') || err.message?.includes('Could not reach'))) {
         enqueueAddProduct({
           name: formData.name.trim(),
           sku: showSku ? (formData.sku.trim() || undefined) : undefined,
@@ -329,7 +335,8 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
           opening_stock: formData.opening_stock,
         });
         setShowProductModal(false);
-        alert(`Host is currently offline. Product "${formData.name.trim()}" (${formData.opening_stock} units) has been queued locally and will automatically sync with the Host when reconnected!`);
+        loadData();
+        alert(`Working Offline: Product "${formData.name.trim()}" (${formData.opening_stock} items) saved safely on this device. It will automatically update the Main Counter once connection is restored.`);
         return;
       }
       setModalError(err.detail || 'Failed to save product.');

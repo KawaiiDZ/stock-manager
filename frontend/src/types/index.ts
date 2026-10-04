@@ -653,6 +653,17 @@ export interface SyncPushResponse {
   message: string;
 }
 
+export interface SyncSnapshotResponse {
+  timestamp: string;
+  settings?: BusinessSettings | null;
+  categories: Category[];
+  custom_fields: CustomField[];
+  products: Product[];
+  customers: Customer[];
+  suppliers: Supplier[];
+  products_count: number;
+}
+
 // Network Discovery
 export interface NetworkInfo {
   service: string;

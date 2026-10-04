@@ -56,7 +56,7 @@ export const Topbar: React.FC<TopbarProps> = ({
                 ? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
                 : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
             }`}
-            title="Local Network & Multi-Terminal Status"
+            title="Device Connection & Sync Status"
           >
             {!isOnline ? (
               <WifiOff className="h-3.5 w-3.5 text-amber-500" />
@@ -66,10 +66,10 @@ export const Topbar: React.FC<TopbarProps> = ({
               <Wifi className={`h-3.5 w-3.5 ${isHost ? 'text-emerald-500' : 'text-blue-500'}`} />
             )}
             <span className="hidden sm:inline">
-              {!isOnline ? 'Offline' : isHost ? 'Host' : 'Terminal'}
+              {!isOnline ? 'Working Offline' : isHost ? 'Main Counter' : 'Connected'}
             </span>
             {pendingSyncCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-600 text-white font-bold">
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-600 text-white font-bold" title="Saved changes waiting to send">
                 {pendingSyncCount}
               </span>
             )}

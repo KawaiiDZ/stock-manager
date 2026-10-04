@@ -1,4 +1,5 @@
 import { SyncCommit } from '../types';
+import { offlineStorage } from './offlineStorage';
 
 const STORAGE_KEY = 'stokflow_offline_sync_queue';
 const CLIENT_ID_KEY = 'stokflow_terminal_client_id';
@@ -58,6 +59,11 @@ export function enqueueCommit(action: 'ADD_PRODUCT' | 'RESTOCK_DELTA', data: Rec
   } catch (e) {
     console.error('Failed to persist commit to localStorage:', e);
   }
+
+  // Optimistically update local offline catalog so UI reflects additions immediately
+  offlineStorage.applyOptimisticCommit(commit).catch(err => {
+    console.warn('Failed optimistic update:', err);
+  });
 
   // Dispatch custom storage event for reactive UI updates across components
   window.dispatchEvent(new Event('offlineQueueUpdated'));

@@ -14,8 +14,8 @@ import {
   AlertCircle,
   Lock,
   ArrowRight,
-  Layers,
-  Database
+  Database,
+  DownloadCloud
 } from 'lucide-react';
 import { useNetwork } from '../../context/NetworkContext';
 import { api } from '../../services/api';
@@ -37,17 +37,20 @@ export const NetworkSyncModal: React.FC<NetworkSyncModalProps> = ({ isOpen, onCl
     pendingSyncCount,
     isSyncing,
     lastSyncTime,
+    lastSnapshotTime,
     lastSyncResult,
     syncStatusMessage,
     connectToHost,
     disconnectFromHost,
     syncNow,
+    pullHostSnapshot,
     refreshStatus,
   } = useNetwork();
 
   const [scanning, setScanning] = useState(false);
   const [discoveredHosts, setDiscoveredHosts] = useState<DiscoveredHost[]>([]);
   const [copiedIp, setCopiedIp] = useState(false);
+  const [refreshingCatalog, setRefreshingCatalog] = useState(false);
 
   // Manual connect inputs
   const [manualIp, setManualIp] = useState('');
@@ -89,7 +92,7 @@ export const NetworkSyncModal: React.FC<NetworkSyncModalProps> = ({ isOpen, onCl
         setDiscoveredHosts(filtered);
       }
     } catch (err: any) {
-      setConnectError('Network scan failed: ' + (err.message || 'Unknown error'));
+      setConnectError('Could not find nearby devices: ' + (err.message || 'Check your Wi-Fi or router connection.'));
     } finally {
       setScanning(false);
     }
@@ -110,6 +113,20 @@ export const NetworkSyncModal: React.FC<NetworkSyncModalProps> = ({ isOpen, onCl
     }
   };
 
+  const handleManualPullSnapshot = async () => {
+    setRefreshingCatalog(true);
+    try {
+      const ok = await pullHostSnapshot();
+      if (ok) {
+        setConnectSuccess('Store items and settings refreshed from Main Counter successfully!');
+      } else {
+        setConnectError('Could not refresh items. Please check if Main Counter is switched on.');
+      }
+    } finally {
+      setRefreshingCatalog(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -121,10 +138,10 @@ export const NetworkSyncModal: React.FC<NetworkSyncModalProps> = ({ isOpen, onCl
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-800 dark:text-slate-100 leading-tight">
-                Local Network & Multi-Terminal Sync
+                Connect Extra Devices
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Connect secondary stations to restock inventory in real-time with zero cashier downtime.
+                Link another computer or phone to restock and manage items while the Main Counter serves customers.
               </p>
             </div>
           </div>
@@ -148,17 +165,17 @@ export const NetworkSyncModal: React.FC<NetworkSyncModalProps> = ({ isOpen, onCl
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
-                    {isHost ? 'Host Register' : 'Client Terminal'}
+                    {isHost ? 'Main Counter' : 'Secondary Station'}
                   </span>
                   <span className="text-xs text-slate-500 dark:text-slate-400">
-                    Status: {isOnline ? 'Online' : 'Offline'}
+                    Status: {isOnline ? 'Online' : 'Working Offline'}
                   </span>
                 </div>
                 <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 mt-1">
                   {stationName}
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-0.5">
-                  LAN Address: http://{lanIp}:8000
+                  Device Address: http://{lanIp}:8000
                 </p>
               </div>
             </div>
@@ -170,29 +187,45 @@ export const NetworkSyncModal: React.FC<NetworkSyncModalProps> = ({ isOpen, onCl
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition"
               >
                 {copiedIp ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-                {copiedIp ? 'Copied' : 'Copy LAN URL'}
+                {copiedIp ? 'Copied' : 'Copy Address'}
               </button>
             </div>
           </div>
 
-          {/* Connected State / Disconnect Action */}
+          {/* Connected State / Disconnect & Refresh Actions */}
           {!isHost && remoteHostUrl && (
-            <div className="p-4 rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/30 flex items-center justify-between">
+            <div className="p-4 rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-bold text-blue-800 dark:text-blue-300">
-                  Connected to Remote Host:
+                  Connected to Main Counter:
                 </p>
                 <p className="text-xs text-blue-600 dark:text-blue-400 font-mono mt-0.5">
                   {remoteHostUrl}
                 </p>
+                {lastSnapshotTime && (
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    Store catalog saved on this device (available offline).
+                  </p>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={disconnectFromHost}
-                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
-              >
-                Disconnect & Use Local
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleManualPullSnapshot}
+                  disabled={refreshingCatalog || !isOnline}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-slate-800 border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/40 transition disabled:opacity-50 flex items-center gap-1"
+                >
+                  <DownloadCloud className={`h-3.5 w-3.5 ${refreshingCatalog ? 'animate-spin' : ''}`} />
+                  {refreshingCatalog ? 'Refreshing...' : 'Refresh Items'}
+                </button>
+                <button
+                  type="button"
+                  onClick={disconnectFromHost}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
+                >
+                  Disconnect
+                </button>
+              </div>
             </div>
           )}
 
@@ -200,7 +233,7 @@ export const NetworkSyncModal: React.FC<NetworkSyncModalProps> = ({ isOpen, onCl
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                Connect To Counter Host
+                Connect To Main Counter
               </h3>
               <button
                 type="button"
@@ -209,7 +242,7 @@ export const NetworkSyncModal: React.FC<NetworkSyncModalProps> = ({ isOpen, onCl
                 className="flex items-center gap-1.5 text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline disabled:opacity-50"
               >
                 <Search className={`h-3.5 w-3.5 ${scanning ? 'animate-spin' : ''}`} />
-                {scanning ? 'Scanning Network...' : 'Scan Local Network'}
+                {scanning ? 'Searching...' : 'Find Main Counter'}
               </button>
             </div>
 
@@ -217,7 +250,7 @@ export const NetworkSyncModal: React.FC<NetworkSyncModalProps> = ({ isOpen, onCl
             {discoveredHosts.length > 0 && (
               <div className="space-y-2">
                 <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">
-                  Found {discoveredHosts.length} Host{discoveredHosts.length > 1 ? 's' : ''} on LAN:
+                  Found {discoveredHosts.length} Counter{discoveredHosts.length > 1 ? 's' : ''} on your Wi-Fi:
                 </p>
                 <div className="grid gap-2">
                   {discoveredHosts.map((h, i) => (
@@ -231,11 +264,11 @@ export const NetworkSyncModal: React.FC<NetworkSyncModalProps> = ({ isOpen, onCl
                             {h.station_name}
                           </span>
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono">
-                            v{h.version}
+                            Online
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                          {h.url} ({h.discovery_method === 'udp' ? 'UDP Beacon' : 'Subnet Probe'})
+                          {h.url}
                         </p>
                       </div>
                       <button
@@ -258,7 +291,7 @@ export const NetworkSyncModal: React.FC<NetworkSyncModalProps> = ({ isOpen, onCl
             <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Host URL or IP Address
+                  Main Counter Address
                 </label>
                 <input
                   type="text"
@@ -275,7 +308,7 @@ export const NetworkSyncModal: React.FC<NetworkSyncModalProps> = ({ isOpen, onCl
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-                    <Lock className="h-3 w-3 text-slate-400" /> Host Username
+                    <Lock className="h-3 w-3 text-slate-400" /> Staff Username
                   </label>
                   <input
                     type="text"
@@ -321,19 +354,19 @@ export const NetworkSyncModal: React.FC<NetworkSyncModalProps> = ({ isOpen, onCl
                   className="px-4 py-2 text-xs font-bold rounded-xl bg-brand-600 hover:bg-brand-700 text-white transition disabled:opacity-50 flex items-center gap-1.5 shadow-xs"
                 >
                   <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                  {isSyncing ? 'Connecting...' : 'Connect to Host'}
+                  {isSyncing ? 'Connecting...' : 'Connect to Main Counter'}
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Git-like Offline Commits Section */}
+          {/* Saved Changes Waiting to Send Section */}
           <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Database className="h-4 w-4 text-slate-500" />
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                  Offline Commit Queue ({pendingList.length} Pending)
+                  Saved Changes Waiting to Send ({pendingList.length})
                 </h3>
               </div>
               {pendingList.length > 0 && isOnline && (
@@ -347,7 +380,7 @@ export const NetworkSyncModal: React.FC<NetworkSyncModalProps> = ({ isOpen, onCl
                   className="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center gap-1.5 shadow-2xs"
                 >
                   <RefreshCw className={`h-3 w-3 ${isSyncing ? 'animate-spin' : ''}`} />
-                  Push All Commits
+                  Send All Saved Changes Now
                 </button>
               )}
             </div>
@@ -362,10 +395,10 @@ export const NetworkSyncModal: React.FC<NetworkSyncModalProps> = ({ isOpen, onCl
               <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 text-center">
                 <CheckCircle2 className="h-6 w-6 text-emerald-500 mx-auto mb-1" />
                 <p className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                  All local changes are in sync with Host.
+                  All items and stock changes are fully up to date.
                 </p>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Any products added or restocked while offline will queue here and merge additively.
+                  Any items added or restocked while offline will be kept safely on this device and combined automatically.
                 </p>
               </div>
             ) : (
@@ -378,18 +411,18 @@ export const NetworkSyncModal: React.FC<NetworkSyncModalProps> = ({ isOpen, onCl
                     <div>
                       <div className="flex items-center gap-1.5">
                         <span className="font-bold text-slate-800 dark:text-slate-100">
-                          {commit.data?.name || `Product #${commit.data?.product_id}`}
+                          {commit.data?.name || `Item #${commit.data?.product_id}`}
                         </span>
-                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-mono">
-                          {commit.action}
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-medium">
+                          {commit.action === 'ADD_PRODUCT' ? 'New Item' : 'Added Stock'}
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                        Qty: +{commit.data?.opening_stock || commit.data?.delta_quantity || 0} • {commit.id.substring(0, 12)}...
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Quantity: +{commit.data?.opening_stock || commit.data?.delta_quantity || 0}
                       </p>
                     </div>
                     <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60">
-                      Unmerged
+                      Waiting to Send
                     </span>
                   </div>
                 ))}
@@ -401,7 +434,7 @@ export const NetworkSyncModal: React.FC<NetworkSyncModalProps> = ({ isOpen, onCl
         {/* Footer */}
         <div className="px-6 py-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/40">
           <span className="text-[11px] text-slate-400">
-            {lastSyncTime ? `Last synced: ${lastSyncTime.toLocaleTimeString()}` : 'No sync recorded yet this session'}
+            {lastSyncTime ? `Last updated: ${lastSyncTime.toLocaleTimeString()}` : 'Ready to connect'}
           </span>
           <button
             type="button"

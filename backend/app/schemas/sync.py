@@ -27,3 +27,13 @@ class SyncPushResponse(BaseModel):
     skipped_count: int
     results: List[MergedItemSummary]
     message: str
+
+class SyncSnapshotResponse(BaseModel):
+    timestamp: str
+    settings: Optional[Dict[str, Any]] = None
+    categories: List[Dict[str, Any]] = []
+    custom_fields: List[Dict[str, Any]] = []
+    products: List[Dict[str, Any]] = []
+    customers: List[Dict[str, Any]] = []
+    suppliers: List[Dict[str, Any]] = []
+    products_count: int = 0

@@ -49,7 +49,7 @@ export const UsersManagementTab: React.FC = () => {
       const data = await api.users.getAll();
       setUsers(data);
     } catch (err: any) {
-      setError(err.message || 'Failed to load user accounts.');
+      setError(err.message || 'Failed to load staff accounts.');
     } finally {
       setLoading(false);
     }
@@ -98,16 +98,11 @@ export const UsersManagementTab: React.FC = () => {
           payload.password = password.trim();
         }
         await api.users.update(editingUser.id, payload);
-        setSuccessMsg(`User '${editingUser.username}' updated successfully.`);
+        setSuccessMsg(`Updated '${editingUser.username}' successfully.`);
       } else {
         // Create
-        if (!username.trim()) {
-          setFormError('Username is required.');
-          setSaving(false);
-          return;
-        }
         if (!password.trim()) {
-          setFormError('Password is required.');
+          setFormError('Please enter a password.');
           setSaving(false);
           return;
         }
@@ -119,14 +114,14 @@ export const UsersManagementTab: React.FC = () => {
           is_active: isActive,
         };
         await api.users.create(payload);
-        setSuccessMsg(`User '${username.trim()}' created successfully.`);
+        setSuccessMsg(`Created '${username.trim()}' successfully.`);
       }
 
       setIsModalOpen(false);
       fetchUsers();
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
-      setFormError(err.message || 'Operation failed.');
+      setFormError(err.detail || err.message || 'Failed to save staff member.');
     } finally {
       setSaving(false);
     }
@@ -138,12 +133,12 @@ export const UsersManagementTab: React.FC = () => {
     setError(null);
     try {
       await api.users.delete(userToDelete.id);
-      setSuccessMsg(`User '${userToDelete.username}' deleted.`);
+      setSuccessMsg(`Staff member '${userToDelete.username}' removed.`);
       setUserToDelete(null);
       fetchUsers();
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
-      setError(err.message || 'Could not delete user.');
+      setError(err.message || 'Could not delete staff account.');
     } finally {
       setDeleting(false);
     }
@@ -154,19 +149,19 @@ export const UsersManagementTab: React.FC = () => {
       case 'ADMIN':
         return (
           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-            ADMIN
+            Manager / Owner
           </span>
         );
       case 'CASHIER':
         return (
           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-            CASHIER
+            Cashier
           </span>
         );
       case 'RESTOCKER':
         return (
           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-            RESTOCKER
+            Stock Helper
           </span>
         );
       default:
@@ -185,10 +180,10 @@ export const UsersManagementTab: React.FC = () => {
         <div>
           <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <Users className="h-4 w-4 text-brand-600 dark:text-brand-400" />
-            User Management & Multi-Terminal Access Control
+            Staff Accounts & Device Passwords
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xl">
-            Configure accounts for cashiers and warehouse restock stations. When secondary terminals connect to this Host, they authenticate with these credentials.
+            Create accounts for cashiers and warehouse helpers. When extra computers or phones connect to this Main Counter, use these login details.
           </p>
         </div>
 
@@ -198,7 +193,7 @@ export const UsersManagementTab: React.FC = () => {
           className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-brand-600 hover:bg-brand-700 text-white transition shadow-xs shrink-0"
         >
           <Plus className="h-4 w-4" />
-          Add User Account
+          Add Staff Member
         </button>
       </div>
 
@@ -223,9 +218,9 @@ export const UsersManagementTab: React.FC = () => {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-semibold">
-                <th className="py-3 px-4">User</th>
-                <th className="py-3 px-4">Username</th>
-                <th className="py-3 px-4">Role</th>
+                <th className="py-3 px-4">Staff Name</th>
+                <th className="py-3 px-4">Login Username</th>
+                <th className="py-3 px-4">Permission Role</th>
                 <th className="py-3 px-4">Status</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
@@ -235,13 +230,13 @@ export const UsersManagementTab: React.FC = () => {
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-slate-400">
                     <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2 text-slate-400" />
-                    Loading accounts...
+                    Loading staff accounts...
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-slate-400">
-                    No user accounts found. Click "Add User Account" to create one.
+                    No staff accounts found. Click "Add Staff Member" to create one.
                   </td>
                 </tr>
               ) : (
@@ -263,7 +258,7 @@ export const UsersManagementTab: React.FC = () => {
                         </span>
                       ) : (
                         <span className="flex items-center gap-1 text-slate-400 font-medium text-[11px]">
-                          <UserX className="h-3.5 w-3.5" /> Deactivated
+                          <UserX className="h-3.5 w-3.5" /> Disabled
                         </span>
                       )}
                     </td>
@@ -273,7 +268,7 @@ export const UsersManagementTab: React.FC = () => {
                           type="button"
                           onClick={() => openEditModal(u)}
                           className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                          title="Edit user details"
+                          title="Edit details"
                         >
                           <Edit2 className="h-3.5 w-3.5" />
                         </button>
@@ -281,7 +276,7 @@ export const UsersManagementTab: React.FC = () => {
                           type="button"
                           onClick={() => setUserToDelete(u)}
                           className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
-                          title="Delete user"
+                          title="Remove user"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -299,7 +294,7 @@ export const UsersManagementTab: React.FC = () => {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editingUser ? `Edit User: ${editingUser.username}` : 'Add New User Account'}
+        title={editingUser ? `Edit Staff Member: ${editingUser.username}` : 'Add New Staff Member'}
       >
         <form onSubmit={handleSave} className="space-y-4 text-xs">
           {formError && (
@@ -311,14 +306,14 @@ export const UsersManagementTab: React.FC = () => {
 
           <div>
             <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Username <span className="text-rose-500">*</span>
+              Login Username <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
               disabled={!!editingUser}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="e.g. warehouse_station_1"
+              placeholder="e.g. warehouse_staff"
               className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50"
               required
             />
@@ -326,13 +321,13 @@ export const UsersManagementTab: React.FC = () => {
 
           <div>
             <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Full Name / Station Label
+              Full Name or Station Name
             </label>
             <input
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder="e.g. Warehouse Scanner #1"
+              placeholder="e.g. Stock Counter A"
               className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </div>
@@ -345,7 +340,7 @@ export const UsersManagementTab: React.FC = () => {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder={editingUser ? '••••••••' : 'Enter a secure password'}
+              placeholder={editingUser ? '••••••••' : 'Enter password'}
               className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500"
               required={!editingUser}
             />
@@ -353,16 +348,16 @@ export const UsersManagementTab: React.FC = () => {
 
           <div>
             <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Role
+              Permission Role
             </label>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as UserRole)}
               className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
-              <option value="ADMIN">ADMIN - Full Settings & Business Control</option>
-              <option value="CASHIER">CASHIER - POS Sales & Receipt Checkout</option>
-              <option value="RESTOCKER">RESTOCKER - Warehouse Stocking & Offline Sync</option>
+              <option value="RESTOCKER">Stock Helper (Warehouse & Restocking)</option>
+              <option value="CASHIER">Cashier (Sales & Receipts)</option>
+              <option value="ADMIN">Manager / Owner (Full Access & Settings)</option>
             </select>
           </div>
 
@@ -375,7 +370,7 @@ export const UsersManagementTab: React.FC = () => {
               className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
             />
             <label htmlFor="isActiveCheck" className="text-slate-700 dark:text-slate-300 select-none">
-              Account Active & Allowed to Connect
+              Account Active (Allowed to Connect)
             </label>
           </div>
 
@@ -392,7 +387,7 @@ export const UsersManagementTab: React.FC = () => {
               disabled={saving}
               className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold transition disabled:opacity-50"
             >
-              {saving ? 'Saving...' : editingUser ? 'Update User' : 'Create User'}
+              {saving ? 'Saving...' : editingUser ? 'Save Changes' : 'Create Account'}
             </button>
           </div>
         </form>
@@ -403,9 +398,9 @@ export const UsersManagementTab: React.FC = () => {
         isOpen={!!userToDelete}
         onClose={() => setUserToDelete(null)}
         onConfirm={handleDelete}
-        title={`Delete User '${userToDelete?.username}'?`}
-        message="Are you sure you want to delete this user account? Terminals currently using this credential will no longer be able to authenticate."
-        confirmText="Delete User"
+        title={`Remove Staff Member '${userToDelete?.username}'?`}
+        message="Are you sure you want to remove this staff account? Any device using this password will no longer be able to connect."
+        confirmText="Remove Account"
         variant="danger"
         loading={deleting}
       />

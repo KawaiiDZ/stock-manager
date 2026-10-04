@@ -56,9 +56,9 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
       onStockAdjusted();
       onClose();
     } catch (err: any) {
-      if (!navigator.onLine || err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError') || err.message?.includes('Host unreachable')) {
+      if (!navigator.onLine || err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError') || err.message?.includes('Host unreachable') || err.message?.includes('Could not reach')) {
         enqueueRestockDelta(product.id, diff, product.purchase_price, product.barcode, product.name);
-        alert(`Host is currently offline. Stock change of ${diff > 0 ? '+' : ''}${diff} units for "${product.name}" has been queued locally and will automatically sync when reconnected!`);
+        alert(`Working Offline: Stock change of ${diff > 0 ? '+' : ''}${diff} items for "${product.name}" saved safely on this device. It will automatically update the Main Counter once connection is restored.`);
         onStockAdjusted();
         onClose();
         return;

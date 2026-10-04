@@ -43,19 +43,19 @@ export const ConnectionBanner: React.FC<ConnectionBannerProps> = ({ onOpenModal 
           <>
             <WifiOff className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
             <span className="truncate">
-              <strong>Offline Mode:</strong> Host disconnected. Product additions & restocks will be saved locally and pushed when reconnected.
+              <strong>Working Offline:</strong> Saved safely on this device. Everything will update the Main Counter once reconnected.
             </span>
           </>
         ) : isSyncing ? (
           <>
             <RefreshCw className="h-4 w-4 shrink-0 animate-spin text-blue-600 dark:text-blue-400" />
-            <span className="truncate">Synchronizing queued restocks with {stationName}...</span>
+            <span className="truncate">Sending saved changes to {stationName}...</span>
           </>
         ) : pendingSyncCount > 0 ? (
           <>
             <AlertTriangle className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
             <span className="truncate">
-              <strong>{pendingSyncCount} offline change{pendingSyncCount > 1 ? 's' : ''} ready to sync</strong> to {stationName}.
+              <strong>{pendingSyncCount} saved change{pendingSyncCount > 1 ? 's' : ''} ready to send</strong> to {stationName}.
             </span>
           </>
         ) : (
@@ -78,7 +78,7 @@ export const ConnectionBanner: React.FC<ConnectionBannerProps> = ({ onOpenModal 
             className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition disabled:opacity-50"
           >
             <RefreshCw className={`h-3 w-3 ${isSyncing ? 'animate-spin' : ''}`} />
-            Sync Now ({pendingSyncCount})
+            Send Changes ({pendingSyncCount})
           </button>
         )}
 
@@ -88,7 +88,7 @@ export const ConnectionBanner: React.FC<ConnectionBannerProps> = ({ onOpenModal 
           className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition shadow-2xs"
         >
           <Network className="h-3 w-3" />
-          Network Settings
+          Connection Details
         </button>
       </div>
     </div>

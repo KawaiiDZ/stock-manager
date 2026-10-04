@@ -11,9 +11,10 @@ import {
   GoogleDriveFileItem, GoogleBackupStatusResponse, GoogleBackupSettingsUpdate, GoogleBackupActionResponse,
   PrinterInfo,
   User, UserCreate, UserUpdate,
-  SyncPushRequest, SyncPushResponse,
+  SyncPushRequest, SyncPushResponse, SyncSnapshotResponse,
   NetworkInfo, DiscoveredHost, HostPingResponse, TestHostResponse
 } from '../types';
+import { offlineStorage } from './offlineStorage';
 
 export function getRemoteHostUrl(): string {
   return (localStorage.getItem('remote_host_url') || '').replace(/\/+$/, '');
@@ -120,7 +121,19 @@ export const api = {
     request<{ success: boolean; message: string }>('/auth/change-pin', { method: 'POST', body: JSON.stringify(data) }),
 
   // Business Settings & Presets
-  getSettings: () => request<BusinessSettings>('/settings'),
+  getSettings: async () => {
+    try {
+      const settings = await request<BusinessSettings>('/settings');
+      if (settings) {
+        offlineStorage.saveSettings(settings).catch(() => {});
+      }
+      return settings;
+    } catch (err) {
+      const cached = await offlineStorage.getSettings();
+      if (cached) return cached;
+      throw err;
+    }
+  },
   updateSettings: (data: Partial<BusinessSettings>) =>
     request<BusinessSettings>('/settings', { method: 'PUT', body: JSON.stringify(data) }),
   getPresets: () => request<IndustryPreset[]>('/settings/presets'),
@@ -134,17 +147,39 @@ export const api = {
   }) => request<BusinessSettings>('/settings/apply-preset', { method: 'POST', body: JSON.stringify(data) }),
 
   // Products
-  getProducts: (params?: { search?: string; category_id?: number; is_active?: boolean; skip?: number; limit?: number }) => {
+  getProducts: async (params?: { search?: string; category_id?: number; is_active?: boolean; skip?: number; limit?: number }) => {
     const sp = new URLSearchParams();
     if (params?.search) sp.append('search', params.search);
     if (params?.category_id) sp.append('category_id', String(params.category_id));
     if (params?.is_active !== undefined) sp.append('is_active', String(params.is_active));
     if (params?.skip) sp.append('skip', String(params.skip));
     if (params?.limit) sp.append('limit', String(params.limit));
-    return request<Product[]>(`/products?${sp.toString()}`);
+    try {
+      return await request<Product[]>(`/products?${sp.toString()}`);
+    } catch (err) {
+      const cached = await offlineStorage.getProducts(params);
+      if (cached && cached.length > 0) return cached;
+      throw err;
+    }
   },
-  getProduct: (id: number) => request<Product>(`/products/${id}`),
-  getProductByBarcode: (barcode: string) => request<Product | null>(`/products/barcode/${encodeURIComponent(barcode.trim())}`),
+  getProduct: async (id: number) => {
+    try {
+      return await request<Product>(`/products/${id}`);
+    } catch (err) {
+      const cached = await offlineStorage.getProduct(id);
+      if (cached) return cached;
+      throw err;
+    }
+  },
+  getProductByBarcode: async (barcode: string) => {
+    try {
+      return await request<Product | null>(`/products/barcode/${encodeURIComponent(barcode.trim())}`);
+    } catch (err) {
+      const cached = await offlineStorage.getProductByBarcode(barcode);
+      if (cached) return cached;
+      throw err;
+    }
+  },
   generateBarcode: () => request<{ barcode: string }>('/products/generate-barcode'),
   createProduct: (data: {
     name: string;
@@ -179,20 +214,34 @@ export const api = {
     request<{ message: string }>(`/products/${id}/permanent`, { method: 'DELETE' }),
 
   // Categories
-  getCategories: (activeOnly = true) => request<Category[]>(`/categories?active_only=${activeOnly}`),
+  getCategories: async (activeOnly = true) => {
+    try {
+      return await request<Category[]>(`/categories?active_only=${activeOnly}`);
+    } catch (err) {
+      const cached = await offlineStorage.getCategories(activeOnly);
+      if (cached && cached.length > 0) return cached;
+      throw err;
+    }
+  },
   createCategory: (data: { name: string }) => request<Category>('/categories', { method: 'POST', body: JSON.stringify(data) }),
   updateCategory: (id: number, data: { name: string }) => request<Category>(`/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCategory: (id: number) => request<{ message: string }>(`/categories/${id}`, { method: 'DELETE' }),
 
   // Custom Fields
-  getCustomFields: (params?: { category_id?: number; active_only?: boolean } | boolean) => {
+  getCustomFields: async (params?: { category_id?: number; active_only?: boolean } | boolean) => {
     const activeOnly = typeof params === 'boolean' ? params : (params?.active_only !== undefined ? params.active_only : true);
     const catId = typeof params === 'object' && params?.category_id !== undefined ? params.category_id : undefined;
     let url = `/custom-fields?active_only=${activeOnly}`;
     if (catId !== undefined) {
       url += `&category_id=${catId}`;
     }
-    return request<CustomField[]>(url);
+    try {
+      return await request<CustomField[]>(url);
+    } catch (err) {
+      const cached = await offlineStorage.getCustomFields(catId, activeOnly);
+      if (cached && cached.length > 0) return cached;
+      throw err;
+    }
   },
   createCustomField: (data: Partial<CustomField>) =>
     request<CustomField>('/custom-fields', { method: 'POST', body: JSON.stringify(data) }),
@@ -216,11 +265,17 @@ export const api = {
   },
 
   // Customers
-  getCustomers: (params?: { search?: string; is_active?: boolean }) => {
+  getCustomers: async (params?: { search?: string; is_active?: boolean }) => {
     const sp = new URLSearchParams();
     if (params?.search) sp.append('search', params.search);
     if (params?.is_active !== undefined) sp.append('is_active', String(params.is_active));
-    return request<Customer[]>(`/customers?${sp.toString()}`);
+    try {
+      return await request<Customer[]>(`/customers?${sp.toString()}`);
+    } catch (err) {
+      const cached = await offlineStorage.getCustomers(params);
+      if (cached && cached.length > 0) return cached;
+      throw err;
+    }
   },
   createCustomer: (data: { name: string; phone?: string; address?: string }) =>
     request<Customer>('/customers', { method: 'POST', body: JSON.stringify(data) }),
@@ -505,6 +560,8 @@ export const api = {
       }),
     getStatus: () =>
       request<{ status: string; processed_commits_count: number }>('/sync/status'),
+    getSnapshot: () =>
+      request<SyncSnapshotResponse>('/sync/snapshot'),
   },
 
   // Local Network Discovery
