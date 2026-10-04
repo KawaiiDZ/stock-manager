@@ -197,7 +197,16 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   const showBarcode = settings?.show_barcode !== false;
   const scannerEnabled = settings?.enable_barcode_scanner !== false;
 
-  // Initial load
+  // Initial load & silent window focus background refresh
+  const refreshCatalog = async () => {
+    try {
+      const prods = await api.getProducts({ is_active: true });
+      if (prods) setProducts(prods);
+    } catch {
+      // silent background refresh
+    }
+  };
+
   useEffect(() => {
     const init = async () => {
       try {
@@ -214,6 +223,12 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       }
     };
     init();
+
+    const handleFocus = () => {
+      refreshCatalog();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, []);
 
   // Handle pre-loaded product passed via [ Sell ] button

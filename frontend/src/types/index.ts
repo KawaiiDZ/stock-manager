@@ -594,3 +594,98 @@ export interface GoogleBackupActionResponse {
   file?: GoogleDriveFileItem;
 }
 
+// User Management & Roles
+export type UserRole = 'ADMIN' | 'CASHIER' | 'RESTOCKER';
+
+export interface User {
+  id: number;
+  username: string;
+  full_name: string;
+  role: UserRole;
+  is_active: boolean;
+  created_at?: string;
+}
+
+export interface UserCreate {
+  username: string;
+  password: string;
+  full_name?: string;
+  role?: UserRole;
+  is_active?: boolean;
+}
+
+export interface UserUpdate {
+  full_name?: string;
+  password?: string;
+  role?: UserRole;
+  is_active?: boolean;
+}
+
+// Git-like Offline Sync
+export interface SyncCommit {
+  id: string;
+  action: 'ADD_PRODUCT' | 'RESTOCK_DELTA';
+  timestamp: string;
+  data: Record<string, any>;
+}
+
+export interface SyncPushRequest {
+  client_id: string;
+  station_name?: string;
+  commits: SyncCommit[];
+}
+
+export interface MergedItemSummary {
+  commit_id: string;
+  action: string;
+  status: 'CREATED_NEW' | 'ADDITIVE_MERGED' | 'ALREADY_PROCESSED' | 'FAILED';
+  product_name?: string;
+  delta_quantity?: number;
+  new_stock?: number;
+  message?: string;
+}
+
+export interface SyncPushResponse {
+  success: boolean;
+  processed_count: number;
+  skipped_count: number;
+  results: MergedItemSummary[];
+  message: string;
+}
+
+// Network Discovery
+export interface NetworkInfo {
+  service: string;
+  station_name: string;
+  lan_ip: string;
+  http_port: number;
+  udp_port: number;
+  url: string;
+}
+
+export interface DiscoveredHost {
+  service: string;
+  station_name: string;
+  ip: string;
+  port: number;
+  version: string;
+  discovered_ip: string;
+  discovery_method: 'udp' | 'subnet_probe';
+  url: string;
+}
+
+export interface HostPingResponse {
+  service: string;
+  status: string;
+  station_name: string;
+  version: string;
+}
+
+export interface TestHostResponse {
+  reachable: boolean;
+  station_name?: string;
+  version?: string;
+  url: string;
+  message: string;
+}
+

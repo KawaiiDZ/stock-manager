@@ -22,6 +22,8 @@ import { SettingsPage } from './pages/Settings/SettingsPage';
 import { QuotationsPage } from './pages/Sales/QuotationsPage';
 import { NavigationHubPage } from './pages/Hub/NavigationHubPage';
 import { SetupWizardModal } from './components/wizard/SetupWizardModal';
+import { ConnectionBanner } from './components/network/ConnectionBanner';
+import { NetworkSyncModal } from './components/network/NetworkSyncModal';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 import { setGlobalFormattingPreferences } from './utils/format';
@@ -44,6 +46,7 @@ export const App: React.FC = () => {
   const [returnSaleId, setReturnSaleId] = useState<number | undefined>();
   const [preLoadedSellProduct, setPreLoadedSellProduct] = useState<Product | null>(null);
   const [showWizard, setShowWizard] = useState<boolean>(false);
+  const [showNetworkModal, setShowNetworkModal] = useState<boolean>(false);
 
   const loadSettingsAndBadges = async () => {
     try {
@@ -182,8 +185,11 @@ export const App: React.FC = () => {
             setCurrentTab('new_sale');
           }}
           onHubClick={() => setCurrentTab('hub')}
+          onNetworkClick={() => setShowNetworkModal(true)}
           onLogout={handleLogout}
         />
+
+        <ConnectionBanner onOpenModal={() => setShowNetworkModal(true)} />
 
         <main className={`flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 transition-colors duration-200 ${currentTab === 'hub' ? 'p-3 md:p-4' : 'p-6 md:p-8'}`}>
           <ErrorBoundary key={currentTab}>
@@ -277,6 +283,12 @@ export const App: React.FC = () => {
           setSettings(updated);
           loadSettingsAndBadges();
         }}
+      />
+
+      {/* Local Network & Multi-Terminal Sync Modal */}
+      <NetworkSyncModal
+        isOpen={showNetworkModal}
+        onClose={() => setShowNetworkModal(false)}
       />
     </div>
   );

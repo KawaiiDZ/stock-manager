@@ -30,6 +30,7 @@ import { BarcodePrintModal } from '../../components/barcode/BarcodePrintModal';
 import { UnregisteredBarcodeModal } from '../../components/barcode/UnregisteredBarcodeModal';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { formatCurrency, formatMoney } from '../../utils/format';
+import { enqueueAddProduct } from '../../services/offlineQueue';
 
 interface ProductsPageProps {
   settings: BusinessSettings | null;
@@ -317,6 +318,20 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
         setShowBarcodeModal(true);
       }
     } catch (err: any) {
+      if (!editingProduct && (!navigator.onLine || err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError') || err.message?.includes('Host unreachable'))) {
+        enqueueAddProduct({
+          name: formData.name.trim(),
+          sku: showSku ? (formData.sku.trim() || undefined) : undefined,
+          barcode: showBarcode ? (formData.barcode.trim() || undefined) : undefined,
+          category_id: formData.category_id > 0 ? formData.category_id : undefined,
+          purchase_price: formData.purchase_price,
+          selling_price: formData.selling_price,
+          opening_stock: formData.opening_stock,
+        });
+        setShowProductModal(false);
+        alert(`Host is currently offline. Product "${formData.name.trim()}" (${formData.opening_stock} units) has been queued locally and will automatically sync with the Host when reconnected!`);
+        return;
+      }
       setModalError(err.detail || 'Failed to save product.');
     } finally {
       setSaving(false);

@@ -9,11 +9,35 @@ import {
   BusinessSettings, BackupFile, LoginResponse, IndustryPreset,
   Quotation, QuotationCreate, QuotationConversionCheckResponse, QuotationConvertRequest,
   GoogleDriveFileItem, GoogleBackupStatusResponse, GoogleBackupSettingsUpdate, GoogleBackupActionResponse,
-  PrinterInfo
+  PrinterInfo,
+  User, UserCreate, UserUpdate,
+  SyncPushRequest, SyncPushResponse,
+  NetworkInfo, DiscoveredHost, HostPingResponse, TestHostResponse
 } from '../types';
 
+export function getRemoteHostUrl(): string {
+  return (localStorage.getItem('remote_host_url') || '').replace(/\/+$/, '');
+}
 
-const API_BASE = '/api';
+export function setRemoteHostUrl(url: string | null): void {
+  if (url) {
+    localStorage.setItem('remote_host_url', url.trim().replace(/\/+$/, ''));
+  } else {
+    localStorage.removeItem('remote_host_url');
+  }
+}
+
+export function getAuthToken(): string | null {
+  return localStorage.getItem('auth_token');
+}
+
+export function setAuthToken(token: string | null): void {
+  if (token) {
+    localStorage.setItem('auth_token', token);
+  } else {
+    localStorage.removeItem('auth_token');
+  }
+}
 
 export class ApiError extends Error {
   detail: string;
@@ -28,12 +52,20 @@ export class ApiError extends Error {
 }
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const headers = {
+  const remoteHost = getRemoteHostUrl();
+  const base = remoteHost ? `${remoteHost}/api` : '/api';
+  const token = getAuthToken();
+
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(options.headers || {}),
+    ...((options.headers as Record<string, string>) || {}),
   };
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
+  if (token && !headers['Authorization']) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${base}${endpoint}`, {
     ...options,
     headers,
   });
@@ -444,4 +476,55 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ printer_name: printerName }),
     }),
+
+  // User Management
+  users: {
+    getAll: () => request<User[]>('/users'),
+    create: (data: UserCreate) =>
+      request<User>('/users', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    update: (id: number, data: UserUpdate) =>
+      request<User>(`/users/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    delete: (id: number) =>
+      request<{ success: boolean; message: string }>(`/users/${id}`, {
+        method: 'DELETE',
+      }),
+  },
+
+  // Git-like Additive Offline Sync
+  sync: {
+    push: (payload: SyncPushRequest) =>
+      request<SyncPushResponse>('/sync/push', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    getStatus: () =>
+      request<{ status: string; processed_commits_count: number }>('/sync/status'),
+  },
+
+  // Local Network Discovery
+  network: {
+    getInfo: () => request<NetworkInfo>('/network/info'),
+    ping: async (overrideUrl?: string): Promise<HostPingResponse> => {
+      const url = overrideUrl ? `${overrideUrl.replace(/\/+$/, '')}/api/network/ping` : `${getRemoteHostUrl() || ''}/api/network/ping`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Host unreachable');
+      return res.json();
+    },
+    discover: (subnetFallback: boolean = true) =>
+      request<{ discovered_count: number; hosts: DiscoveredHost[] }>(
+        `/network/discover${subnetFallback ? '?subnet_fallback=true' : ''}`,
+        { method: 'POST' }
+      ),
+    testHost: (url: string) =>
+      request<TestHostResponse>('/network/test-host', {
+        method: 'POST',
+        body: JSON.stringify({ url }),
+      }),
+  },
 };

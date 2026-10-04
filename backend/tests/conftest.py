@@ -17,6 +17,7 @@ import backend.app.models.sales
 import backend.app.models.purchase
 import backend.app.models.bills
 import backend.app.models.expenses
+import backend.app.models.sync
 
 TEST_DATABASE_URL = "sqlite:///:memory:"
 

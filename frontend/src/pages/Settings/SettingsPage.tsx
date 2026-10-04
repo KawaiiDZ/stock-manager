@@ -42,6 +42,7 @@ import {
   Sparkles,
   Leaf,
   Keyboard,
+  Users,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -58,6 +59,7 @@ import { STANDARD_LABEL_SIZES, generateBarcodeSvg, parseLabelDimensions } from '
 import { STANDARD_DATE_FORMATS, setGlobalFormattingPreferences, formatDate, formatCurrency } from '../../utils/format';
 import { GoogleBackupCard } from '../../components/settings/GoogleBackupCard';
 import { rasterizeReceiptElement } from '../../utils/receiptRasterizer';
+import { UsersManagementTab } from '../../components/settings/UsersManagementTab';
 
 export interface ThermalLayoutOption {
   id: 'classic' | 'modern' | 'tabular' | 'compact' | 'elegant';
@@ -155,7 +157,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
   // Settings tab
   const [activeTab, setActiveTab] = useState<
-    'business' | 'appearance' | 'tax' | 'custom_fields' | 'printer' | 'barcode' | 'backup' | 'security' | 'danger_zone'
+    'business' | 'appearance' | 'tax' | 'custom_fields' | 'printer' | 'barcode' | 'backup' | 'users' | 'security' | 'danger_zone'
   >('business');
 
   // Business Form State
@@ -1194,6 +1196,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           { id: 'printer', label: 'Receipt & Printer', icon: <Printer className="h-4 w-4" /> },
           { id: 'barcode', label: 'Barcodes & Scanners', icon: <Barcode className="h-4 w-4" /> },
           { id: 'backup', label: 'Backup & Cloud Sync', icon: <Database className="h-4 w-4" /> },
+          { id: 'users', label: 'Users & Terminals', icon: <Users className="h-4 w-4" /> },
           { id: 'security', label: 'Security & PIN', icon: <KeyRound className="h-4 w-4" /> },
           { id: 'danger_zone', label: 'Wipe / Reset Data', icon: <Trash2 className="h-4 w-4 text-rose-500" /> },
         ].map((tab) => (
@@ -3418,6 +3421,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Tab: Users & Terminals */}
+      {activeTab === 'users' && (
+        <div className="max-w-4xl">
+          <UsersManagementTab />
         </div>
       )}
 

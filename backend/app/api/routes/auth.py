@@ -19,6 +19,7 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
         success=True,
         username=user.username,
         full_name=user.full_name,
+        role=getattr(user, "role", "ADMIN"),
         token=f"local-session-{user.id}"
     )
 

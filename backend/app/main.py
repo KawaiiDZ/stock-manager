@@ -18,9 +18,10 @@ from backend.app.api.routes import (
     auth, settings as settings_routes, products, inventory,
     customers, sales, returns, suppliers, purchases,
     bills, expenses, dashboard, reports, backup, quotations,
-    google_backup, printing
+    google_backup, printing, users, sync, network
 )
 from backend.app.services.backup_scheduler import start_backup_scheduler, stop_backup_scheduler
+from backend.app.services.network_service import start_discovery_beacon, stop_discovery_beacon
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,7 +37,10 @@ async def lifespan(app: FastAPI):
     
     # 3. Start background cloud backup scheduler
     start_backup_scheduler()
+    # 4. Start local network discovery beacon
+    start_discovery_beacon()
     yield
+    stop_discovery_beacon()
     stop_backup_scheduler()
 
 
@@ -119,6 +123,9 @@ app.include_router(backup.router, prefix=api_prefix)
 app.include_router(google_backup.router, prefix=api_prefix)
 app.include_router(quotations.router, prefix=api_prefix)
 app.include_router(printing.router, prefix=api_prefix)
+app.include_router(users.router, prefix=api_prefix)
+app.include_router(sync.router, prefix=api_prefix)
+app.include_router(network.router, prefix=api_prefix)
 
 @app.get("/api/health")
 def health_check():

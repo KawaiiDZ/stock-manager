@@ -1,13 +1,15 @@
 import React from 'react';
 import { BusinessSettings } from '../../types';
-import { ShoppingCart, LogOut, Store, Zap, Compass, Sun, Moon } from 'lucide-react';
+import { ShoppingCart, LogOut, Store, Zap, Compass, Sun, Moon, Radio, Wifi, WifiOff } from 'lucide-react';
 import { Button } from '../common/Button';
 import { useTheme } from '../../context/ThemeContext';
+import { useNetwork } from '../../context/NetworkContext';
 
 interface TopbarProps {
   settings: BusinessSettings | null;
   onNewSaleClick: () => void;
   onHubClick?: () => void;
+  onNetworkClick?: () => void;
   onLogout: () => void;
 }
 
@@ -15,9 +17,11 @@ export const Topbar: React.FC<TopbarProps> = ({
   settings,
   onNewSaleClick,
   onHubClick,
+  onNetworkClick,
   onLogout,
 }) => {
   const { effectiveMode, toggleDarkMode } = useTheme();
+  const { isOnline, isHost, pendingSyncCount, isSyncing } = useNetwork();
 
   return (
     <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 flex items-center justify-between shrink-0 transition-colors">
@@ -36,8 +40,41 @@ export const Topbar: React.FC<TopbarProps> = ({
         </div>
       </div>
 
-      {/* Right actions: Theme Toggle + Navigation Hub + Big Sell Button + User Logout */}
+      {/* Right actions: Network Pill + Theme Toggle + Navigation Hub + Big Sell Button + User Logout */}
       <div className="flex items-center gap-3">
+        {/* Network & Multi-Terminal Sync Pill */}
+        {onNetworkClick && (
+          <button
+            type="button"
+            onClick={onNetworkClick}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-xl border transition shadow-2xs ${
+              !isOnline
+                ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                : pendingSyncCount > 0
+                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                : isHost
+                ? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+            }`}
+            title="Local Network & Multi-Terminal Status"
+          >
+            {!isOnline ? (
+              <WifiOff className="h-3.5 w-3.5 text-amber-500" />
+            ) : isSyncing ? (
+              <Radio className="h-3.5 w-3.5 text-blue-500 animate-pulse" />
+            ) : (
+              <Wifi className={`h-3.5 w-3.5 ${isHost ? 'text-emerald-500' : 'text-blue-500'}`} />
+            )}
+            <span className="hidden sm:inline">
+              {!isOnline ? 'Offline' : isHost ? 'Host' : 'Terminal'}
+            </span>
+            {pendingSyncCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-600 text-white font-bold">
+                {pendingSyncCount}
+              </span>
+            )}
+          </button>
+        )}
         {/* Quick Theme Toggle */}
         <button
           type="button"

@@ -12,6 +12,7 @@ from backend.app.models.expenses import ExpenseCategory, Expense
 
 from backend.app.models.quotation import Quotation, QuotationItem
 from backend.app.models.google_backup import GoogleBackupSettings
+from backend.app.models.sync import ProcessedSyncCommit
 
 __all__ = [
     "Base",
@@ -46,5 +47,6 @@ __all__ = [
     "Quotation",
     "QuotationItem",
     "GoogleBackupSettings",
+    "ProcessedSyncCommit",
 ]
 

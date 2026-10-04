@@ -104,9 +104,15 @@ def seed_initial_data(db: Session):
     db.commit()
 
 def authenticate_user(db: Session, username: str, password: str) -> User:
-    user = db.query(User).filter(User.username == username).first()
+    clean_u = (username or "").strip().lower()
+    user = db.query(User).filter(User.username == clean_u).first()
+    if not user:
+        # Also check direct username match if legacy casing
+        user = db.query(User).filter(User.username == username).first()
     if not user or not verify_password(user.password_hash, password):
         raise BusinessRuleException("Invalid username or password. Please try again.")
+    if hasattr(user, "is_active") and not user.is_active:
+        raise BusinessRuleException("This user account is currently deactivated. Please contact an administrator.")
     return user
 
 def verify_settings_pin(db: Session, pin: str) -> bool:

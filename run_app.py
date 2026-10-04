@@ -19,6 +19,8 @@ import uvicorn
 from backend.app.core.config import settings
 from backend.app.main import app
 
+from backend.app.services.network_service import get_local_lan_ip
+
 DEFAULT_PORT = 8000
 
 def is_stock_manager_already_running(port: int = DEFAULT_PORT) -> bool:
@@ -37,7 +39,7 @@ def find_available_port(start_port: int = DEFAULT_PORT, max_tries: int = 10) -> 
     for port in range(start_port, start_port + max_tries):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
-                s.bind(('127.0.0.1', port))
+                s.bind(('0.0.0.0', port))
                 return port
             except OSError:
                 continue
@@ -45,20 +47,23 @@ def find_available_port(start_port: int = DEFAULT_PORT, max_tries: int = 10) -> 
 
 def open_browser(port: int = DEFAULT_PORT):
     time.sleep(1.2)
-    url = f"http://127.0.0.1:{port}"
+    local_url = f"http://127.0.0.1:{port}"
+    lan_ip = get_local_lan_ip()
+    lan_url = f"http://{lan_ip}:{port}"
     print(f"\n=======================================================")
-    print(f"  Stock Manager (Offline Edition) is now LIVE at:")
-    print(f"  --> {url}")
+    print(f"  Stock Manager (Offline Edition) is now LIVE!")
+    print(f"  --> Local:   {local_url}")
+    print(f"  --> Network: {lan_url} (for secondary terminals)")
     print(f"  Press Ctrl+C to stop the application.")
     print(f"=======================================================\n")
     try:
         if sys.platform == "win32":
             try:
-                os.startfile(url)
+                os.startfile(local_url)
                 return
             except Exception:
                 pass
-        webbrowser.open(url)
+        webbrowser.open(local_url)
     except Exception:
         pass
 
@@ -83,10 +88,10 @@ def main():
     # 3. Launch browser in a background thread
     threading.Thread(target=open_browser, args=(active_port,), daemon=True).start()
 
-    # 4. Start FastAPI server on active port
+    # 4. Start FastAPI server bound to 0.0.0.0 for LAN access
     uvicorn.run(
         app,
-        host="127.0.0.1",
+        host="0.0.0.0",
         port=active_port,
         log_level="info",
         reload=False

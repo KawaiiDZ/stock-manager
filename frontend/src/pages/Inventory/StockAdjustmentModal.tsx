@@ -5,6 +5,7 @@ import { Modal } from '../../components/common/Modal';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { AlertCircle } from 'lucide-react';
+import { enqueueRestockDelta } from '../../services/offlineQueue';
 
 interface StockAdjustmentModalProps {
   isOpen: boolean;
@@ -55,6 +56,13 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
       onStockAdjusted();
       onClose();
     } catch (err: any) {
+      if (!navigator.onLine || err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError') || err.message?.includes('Host unreachable')) {
+        enqueueRestockDelta(product.id, diff, product.purchase_price, product.barcode, product.name);
+        alert(`Host is currently offline. Stock change of ${diff > 0 ? '+' : ''}${diff} units for "${product.name}" has been queued locally and will automatically sync when reconnected!`);
+        onStockAdjusted();
+        onClose();
+        return;
+      }
       setErrorMsg(err.detail || 'Failed to adjust stock.');
     } finally {
       setLoading(false);
