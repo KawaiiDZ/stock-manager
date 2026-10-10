@@ -28,7 +28,7 @@ import { UnregisteredBarcodeModal } from '../../components/barcode/UnregisteredB
 import { QuickAddProductModal } from '../../components/products/QuickAddProductModal';
 import { OutOfStockRestockModal } from '../../components/pos/OutOfStockRestockModal';
 import { CartQuantityInput } from '../../components/pos/CartQuantityInput';
-import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
+import { useBarcodeScanner, setNativeInputValue } from '../../hooks/useBarcodeScanner';
 import { formatCurrency, formatMoney, formatQty } from '../../utils/format';
 import { rasterizeReceiptOffscreen } from '../../utils/receiptRasterizer';
 
@@ -247,6 +247,13 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   const handleBarcodeScanned = async (scannedCode: string) => {
     const code = scannedCode.trim();
     if (!code) return;
+
+    // Immediately clear search query & close dropdown so scanner input never lingers or concatenates
+    setSearchQuery('');
+    setDropdownActiveIndex(-1);
+    if (searchInputRef.current) {
+      setNativeInputValue(searchInputRef.current, '');
+    }
 
     // 1. Check local in-memory catalog
     const localMatch = products.find(
