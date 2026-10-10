@@ -700,3 +700,28 @@ export interface TestHostResponse {
   message: string;
 }
 
+export interface ClientHeartbeatRequest {
+  client_id: string;
+  station_name: string;
+  pending_sync_count: number;
+  version?: string;
+}
+
+export interface ConnectedClientItem {
+  client_id: string;
+  station_name: string;
+  ip_address: string;
+  status: 'online' | 'idle' | 'offline';
+  pending_sync_count: number;
+  version: string;
+  last_seen: string;
+  last_seen_seconds_ago: number;
+}
+
+export interface ConnectedClientsResponse {
+  online_count: number;
+  total_count: number;
+  clients: ConnectedClientItem[];
+}
+
+

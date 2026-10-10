@@ -12,14 +12,17 @@ import {
   Lock,
   UserCheck,
   UserX,
-  RefreshCw
+  RefreshCw,
+  Laptop
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { User, UserCreate, UserUpdate, UserRole } from '../../types';
 import { Modal } from '../common/Modal';
 import { ConfirmDialog } from '../common/ConfirmDialog';
+import { useNetwork } from '../../context/NetworkContext';
 
 export const UsersManagementTab: React.FC = () => {
+  const { isHost, connectedClients, onlineClientsCount, lanIp } = useNetwork();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -209,6 +212,76 @@ export const UsersManagementTab: React.FC = () => {
         <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs flex items-center gap-2 border border-emerald-200 dark:border-emerald-900/60">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           <span>{successMsg}</span>
+        </div>
+      )}
+
+      {/* Connected Extra Devices (When this machine is Main Counter) */}
+      {isHost && (
+        <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-white dark:bg-slate-900 shadow-2xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Laptop className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                Connected Extra Devices & Stations ({onlineClientsCount} Active)
+              </h3>
+            </div>
+            <span className="text-[11px] text-slate-400 font-mono">
+              Counter Address: http://{lanIp}:8000
+            </span>
+          </div>
+
+          {connectedClients.length === 0 ? (
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              No extra devices currently linked. Secondary stations can connect using the address above and any staff account credentials below.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {connectedClients.map((client) => {
+                const isClientOnline = client.status === 'online';
+                const isClientIdle = client.status === 'idle';
+                return (
+                  <div
+                    key={client.client_id}
+                    className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
+                        {client.station_name || 'Secondary Station'}
+                      </span>
+                      <span
+                        className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          isClientOnline
+                            ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                            : isClientIdle
+                            ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            isClientOnline ? 'bg-emerald-500 animate-pulse' : isClientIdle ? 'bg-amber-500' : 'bg-slate-400'
+                          }`}
+                        />
+                        {isClientOnline ? 'Online' : isClientIdle ? 'Idle' : 'Offline'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-slate-400">
+                      <span className="font-mono">{client.ip_address}</span>
+                      <span>
+                        {client.pending_sync_count > 0 ? (
+                          <span className="text-amber-600 dark:text-amber-400 font-semibold">
+                            {client.pending_sync_count} unsent changes
+                          </span>
+                        ) : (
+                          <span className="text-emerald-600 dark:text-emerald-400">All saved</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

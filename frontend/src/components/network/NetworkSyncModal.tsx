@@ -40,6 +40,8 @@ export const NetworkSyncModal: React.FC<NetworkSyncModalProps> = ({ isOpen, onCl
     lastSnapshotTime,
     lastSyncResult,
     syncStatusMessage,
+    connectedClients,
+    onlineClientsCount,
     connectToHost,
     disconnectFromHost,
     syncNow,
@@ -191,6 +193,93 @@ export const NetworkSyncModal: React.FC<NetworkSyncModalProps> = ({ isOpen, onCl
               </button>
             </div>
           </div>
+
+          {/* Host View: Connected Secondary Devices & Live Status */}
+          {isHost && (
+            <div className="space-y-3 p-4 rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/30 dark:bg-emerald-950/20">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Laptop className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                    Connected Secondary Devices ({onlineClientsCount} Active)
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => refreshStatus()}
+                  className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1"
+                >
+                  <RefreshCw className="h-3 w-3" /> Refresh
+                </button>
+              </div>
+
+              {connectedClients.length === 0 ? (
+                <div className="p-3.5 rounded-lg bg-white dark:bg-slate-800 border border-emerald-100 dark:border-emerald-900/40 text-center">
+                  <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                    No extra devices currently linked to this Main Counter.
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    To link another device for restocking, open this app on that device and connect to{' '}
+                    <span className="font-mono font-semibold text-slate-600 dark:text-slate-300">http://{lanIp}:8000</span>
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-2">
+                  {connectedClients.map((client) => {
+                    const isClientOnline = client.status === 'online';
+                    const isClientIdle = client.status === 'idle';
+                    return (
+                      <div
+                        key={client.client_id}
+                        className="p-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 shadow-2xs"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                              isClientOnline
+                                ? 'bg-emerald-500 animate-pulse'
+                                : isClientIdle
+                                ? 'bg-amber-400'
+                                : 'bg-slate-300 dark:bg-slate-600'
+                            }`}
+                          />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                                {client.station_name || 'Secondary Station'}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                {client.ip_address}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 mt-0.5">
+                              {isClientOnline
+                                ? 'Active now'
+                                : isClientIdle
+                                ? `Active ${client.last_seen_seconds_ago}s ago`
+                                : `Offline (${Math.round(client.last_seen_seconds_ago / 60)}m ago)`}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div>
+                          {client.pending_sync_count > 0 ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                              {client.pending_sync_count} waiting to send
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                              Up to date
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Connected State / Disconnect & Refresh Actions */}
           {!isHost && remoteHostUrl && (

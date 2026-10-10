@@ -7,6 +7,10 @@ def get_settings(db: Session) -> BusinessSettings:
     settings = db.query(BusinessSettings).filter(BusinessSettings.id == 1).first() or db.query(BusinessSettings).first()
     if not settings:
         raise EntityNotFoundException("Business Settings")
+    if not settings.currency or not settings.currency.strip():
+        settings.currency = "Rs."
+        db.commit()
+        db.refresh(settings)
     setattr(settings, "has_dashboard_financials_pin", bool(getattr(settings, "dashboard_financials_pin_hash", None)))
     return settings
 
@@ -17,6 +21,9 @@ def update_settings(db: Session, update_data: BusinessSettingsUpdate) -> Busines
         if not data["business_name"] or not data["business_name"].strip():
             raise BusinessRuleException("Business name cannot be empty.")
         data["business_name"] = data["business_name"].strip()
+    if "currency" in data:
+        val = (data["currency"] or "").strip()
+        data["currency"] = val if val else "Rs."
     if "dashboard_financials_pin" in data:
         raw_pin = (data.pop("dashboard_financials_pin") or "").strip()
         if raw_pin:
@@ -26,6 +33,8 @@ def update_settings(db: Session, update_data: BusinessSettingsUpdate) -> Busines
             settings.dashboard_financials_pin_hash = None
     for field, value in data.items():
         setattr(settings, field, value)
+    if not settings.currency or not settings.currency.strip():
+        settings.currency = "Rs."
     db.commit()
     db.refresh(settings)
     setattr(settings, "has_dashboard_financials_pin", bool(getattr(settings, "dashboard_financials_pin_hash", None)))

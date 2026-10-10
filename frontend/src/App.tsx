@@ -60,7 +60,7 @@ export const App: React.FC = () => {
         setGlobalFormattingPreferences({
           dateFormat: bizSettings.date_format,
           formatPricesWithCommas: bizSettings.format_prices_with_commas,
-          currency: bizSettings.currency,
+          currency: bizSettings.currency || 'Rs.',
         });
         syncFromSettings(bizSettings.theme_mode, bizSettings.color_theme);
       }
@@ -84,7 +84,7 @@ export const App: React.FC = () => {
         setGlobalFormattingPreferences({
           dateFormat: s.date_format,
           formatPricesWithCommas: s.format_prices_with_commas,
-          currency: s.currency,
+          currency: s.currency || 'Rs.',
         });
         syncFromSettings(s.theme_mode, s.color_theme);
       }

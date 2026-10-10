@@ -27,7 +27,9 @@ export const getGlobalFormatWithCommas = (): boolean => {
 
 export const getGlobalCurrency = (): string => {
   try {
-    return localStorage.getItem('stock_manager_currency') || 'Rs.';
+    const val = localStorage.getItem('stock_manager_currency');
+    if (!val || !val.trim()) return 'Rs.';
+    return val.trim();
   } catch {
     return 'Rs.';
   }
@@ -35,9 +37,8 @@ export const getGlobalCurrency = (): string => {
 
 export const setGlobalCurrency = (currency: string) => {
   try {
-    if (currency && currency.trim()) {
-      localStorage.setItem('stock_manager_currency', currency.trim());
-    }
+    const clean = currency && currency.trim() ? currency.trim() : 'Rs.';
+    localStorage.setItem('stock_manager_currency', clean);
   } catch {
     // Ignore localStorage failures
   }
@@ -55,9 +56,8 @@ export const setGlobalFormattingPreferences = (prefs: {
     if (prefs.formatPricesWithCommas !== undefined) {
       localStorage.setItem('stock_manager_format_commas', String(prefs.formatPricesWithCommas));
     }
-    if (prefs.currency && prefs.currency.trim()) {
-      localStorage.setItem('stock_manager_currency', prefs.currency.trim());
-    }
+    const cleanCurrency = prefs.currency && prefs.currency.trim() ? prefs.currency.trim() : 'Rs.';
+    localStorage.setItem('stock_manager_currency', cleanCurrency);
   } catch {
     // Ignore localStorage failures
   }
@@ -83,7 +83,7 @@ export const formatCurrency = (
   currency?: string,
   useCommas?: boolean
 ): string => {
-  const curr = currency !== undefined && currency !== null && currency !== '' ? currency : getGlobalCurrency();
+  const curr = currency !== undefined && currency !== null && currency.trim() !== '' ? currency.trim() : getGlobalCurrency();
   return `${curr} ${formatMoney(val, useCommas)}`;
 };
 

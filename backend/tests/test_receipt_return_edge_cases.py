@@ -9,8 +9,6 @@ from backend.app.services.customer_service import create_customer
 from backend.app.services.sales_service import create_sale, get_sale
 from backend.app.services.returns_service import create_sales_return
 
-client = TestClient(app)
-
 def test_fully_returned_credit_sale_due_is_zero(db_session):
     cust = create_customer(db_session, CustomerCreate(name='Return Test Cust', phone='03007776655'))
     prod = create_product(db_session, ProductCreate(

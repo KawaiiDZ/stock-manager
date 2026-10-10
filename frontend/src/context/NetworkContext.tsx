@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { api, getRemoteHostUrl, setRemoteHostUrl, setAuthToken } from '../services/api';
+import { api, getRemoteHostUrl, setRemoteHostUrl, setAuthToken, setOfflineMode } from '../services/api';
 import {
   getPendingCommits,
   getPendingCount,
@@ -8,7 +8,7 @@ import {
   getStationName
 } from '../services/offlineQueue';
 import { offlineStorage } from '../services/offlineStorage';
-import { SyncPushResponse, MergedItemSummary } from '../types';
+import { SyncPushResponse, MergedItemSummary, ConnectedClientItem } from '../types';
 
 interface NetworkContextType {
   isOnline: boolean;
@@ -22,6 +22,8 @@ interface NetworkContextType {
   lastSnapshotTime: string | null;
   lastSyncResult: MergedItemSummary[] | null;
   syncStatusMessage: string | null;
+  connectedClients: ConnectedClientItem[];
+  onlineClientsCount: number;
   connectToHost: (url: string, username?: string, password?: string) => Promise<{ success: boolean; message: string }>;
   disconnectFromHost: () => void;
   syncNow: () => Promise<SyncPushResponse | null>;
@@ -42,13 +44,16 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [lastSnapshotTime, setLastSnapshotTimeState] = useState<string | null>(null);
   const [lastSyncResult, setLastSyncResult] = useState<MergedItemSummary[] | null>(null);
   const [syncStatusMessage, setSyncStatusMessage] = useState<string | null>(null);
+  const [connectedClients, setConnectedClients] = useState<ConnectedClientItem[]>([]);
+  const [onlineClientsCount, setOnlineClientsCount] = useState<number>(0);
 
   const isSyncingRef = useRef<boolean>(false);
   const isOnlineRef = useRef<boolean>(true);
 
-  // Sync ref to state
+  // Sync ref and offline mode to state
   useEffect(() => {
     isOnlineRef.current = isOnline;
+    setOfflineMode(!isOnline);
   }, [isOnline]);
 
   // Load cached snapshot timestamp on mount
@@ -156,39 +161,60 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [updatePendingCount, pullHostSnapshot]);
 
-  // Heartbeat check: Ping host every 6 seconds
-  const pingHost = useCallback(async () => {
-    try {
-      await api.network.ping();
-      if (!isOnlineRef.current) {
-        setIsOnline(true);
-        // Connection just restored! Auto-send pending saved changes if any
-        if (getPendingCount() > 0) {
-          syncNow();
+  // Periodic check: Secondary stations send heartbeat to host; Host polls connected clients
+  const checkNetworkStatus = useCallback(async () => {
+    const isClient = !!getRemoteHostUrl();
+    if (isClient) {
+      try {
+        await api.network.heartbeat({
+          client_id: getClientId(),
+          station_name: getStationName(),
+          pending_sync_count: getPendingCount(),
+        });
+        if (!isOnlineRef.current) {
+          setIsOnline(true);
+          // Connection just restored! Auto-send pending saved changes if any
+          if (getPendingCount() > 0) {
+            syncNow();
+          }
+          // Refresh local items from Main Counter
+          pullHostSnapshot();
         }
-        // Refresh local items from Main Counter
-        pullHostSnapshot();
+      } catch {
+        if (isOnlineRef.current) {
+          setIsOnline(false);
+        }
       }
-    } catch {
-      if (isOnlineRef.current) {
-        setIsOnline(false);
+    } else {
+      // Main Counter / Host: poll connected stations
+      try {
+        const res = await api.network.getClients();
+        if (res) {
+          setConnectedClients(res.clients || []);
+          setOnlineClientsCount(res.online_count || 0);
+        }
+        if (!isOnlineRef.current) {
+          setIsOnline(true);
+        }
+      } catch {
+        // Quiet during restart or quiet state
       }
     }
   }, [syncNow, pullHostSnapshot]);
 
   useEffect(() => {
     fetchHostInfo();
-    pingHost();
+    checkNetworkStatus();
     if (getRemoteHostUrl()) {
       pullHostSnapshot();
     }
 
     const interval = setInterval(() => {
-      pingHost();
-    }, 6000);
+      checkNetworkStatus();
+    }, 5000);
 
     return () => clearInterval(interval);
-  }, [fetchHostInfo, pingHost, pullHostSnapshot]);
+  }, [fetchHostInfo, checkNetworkStatus, pullHostSnapshot]);
 
   // Connect to a remote Main Counter
   const connectToHost = useCallback(
@@ -268,16 +294,18 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setRemoteHostUrl(null);
     setRemoteHostUrlState(null);
     setAuthToken(null);
+    setConnectedClients([]);
+    setOnlineClientsCount(0);
     fetchHostInfo();
     setIsOnline(true);
     setSyncStatusMessage('Disconnected. Operating on this device.');
   }, [fetchHostInfo]);
 
   const refreshStatus = useCallback(async () => {
-    await pingHost();
+    await checkNetworkStatus();
     await fetchHostInfo();
     updatePendingCount();
-  }, [pingHost, fetchHostInfo, updatePendingCount]);
+  }, [checkNetworkStatus, fetchHostInfo, updatePendingCount]);
 
   const value: NetworkContextType = {
     isOnline,
@@ -291,6 +319,8 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
     lastSnapshotTime,
     lastSyncResult,
     syncStatusMessage,
+    connectedClients,
+    onlineClientsCount,
     connectToHost,
     disconnectFromHost,
     syncNow,

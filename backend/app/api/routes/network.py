@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional
@@ -8,7 +8,14 @@ from backend.app.services.network_service import (
     get_local_lan_ip,
     scan_network,
     check_remote_host,
+    record_client_heartbeat,
+    get_registered_clients,
     DISCOVERY_UDP_PORT
+)
+from backend.app.schemas.network import (
+    ClientHeartbeatRequest,
+    ConnectedClientsResponse,
+    ConnectedClientItem
 )
 from backend.app.models.business import BusinessSettings
 
@@ -75,3 +82,50 @@ async def test_remote_host_connection(request: TestHostRequest):
     Verify reachability of a specific host URL.
     """
     return await check_remote_host(request.url)
+
+@router.post("/heartbeat")
+def client_heartbeat(
+    payload: ClientHeartbeatRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Record real-time heartbeat from a secondary client station.
+    """
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        client_ip = forwarded.split(",")[0].strip()
+
+    record_client_heartbeat(
+        client_id=payload.client_id,
+        station_name=payload.station_name,
+        ip_address=client_ip,
+        pending_sync_count=payload.pending_sync_count,
+        version=payload.version
+    )
+
+    settings = db.query(BusinessSettings).first()
+    station_name = settings.business_name if settings and settings.business_name else "Main Counter"
+
+    return {
+        "status": "ok",
+        "station_name": station_name,
+        "registered": True
+    }
+
+@router.get("/clients", response_model=ConnectedClientsResponse)
+def get_connected_clients():
+    """
+    Get all active secondary stations reporting to this Main Counter,
+    including their IP, online/idle/offline status, and pending sync counts.
+    """
+    clients = get_registered_clients(online_timeout_seconds=15, idle_timeout_seconds=60)
+    online_count = sum(1 for c in clients if c["status"] == "online")
+
+    return ConnectedClientsResponse(
+        online_count=online_count,
+        total_count=len(clients),
+        clients=clients
+    )
+

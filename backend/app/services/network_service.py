@@ -3,6 +3,7 @@ import json
 import logging
 import threading
 import asyncio
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 import httpx
 
@@ -258,3 +259,74 @@ async def check_remote_host(base_url: str) -> Dict[str, Any]:
             "url": clean_url,
             "message": f"Could not connect: {str(e)}"
         }
+
+# ==========================================================
+# In-Memory Real-Time Connected Client Stations Registry
+# ==========================================================
+_client_registry: Dict[str, Dict[str, Any]] = {}
+_registry_lock = threading.Lock()
+
+def record_client_heartbeat(
+    client_id: str,
+    station_name: str,
+    ip_address: str,
+    pending_sync_count: int = 0,
+    version: str = "1.0.0"
+) -> Dict[str, Any]:
+    """
+    Record or update an active secondary client terminal heartbeat.
+    """
+    with _registry_lock:
+        now = datetime.now(timezone.utc)
+        record = {
+            "client_id": client_id,
+            "station_name": station_name or "Secondary Station",
+            "ip_address": ip_address,
+            "pending_sync_count": max(0, int(pending_sync_count or 0)),
+            "version": version or "1.0.0",
+            "last_seen": now.isoformat(),
+            "last_seen_epoch": now.timestamp(),
+        }
+        _client_registry[client_id] = record
+        return record
+
+def get_registered_clients(online_timeout_seconds: int = 15, idle_timeout_seconds: int = 60) -> List[Dict[str, Any]]:
+    """
+    Get all registered secondary stations with real-time status:
+    - 'online': heartbeat received <= online_timeout_seconds ago
+    - 'idle': heartbeat received between online_timeout and idle_timeout
+    - 'offline': heartbeat older than idle_timeout
+    """
+    with _registry_lock:
+        now_epoch = datetime.now(timezone.utc).timestamp()
+        clients = []
+        for client_id, record in _client_registry.items():
+            diff = max(0, now_epoch - record["last_seen_epoch"])
+            if diff <= online_timeout_seconds:
+                status = "online"
+            elif diff <= idle_timeout_seconds:
+                status = "idle"
+            else:
+                status = "offline"
+
+            clients.append({
+                "client_id": record["client_id"],
+                "station_name": record["station_name"],
+                "ip_address": record["ip_address"],
+                "pending_sync_count": record["pending_sync_count"],
+                "version": record["version"],
+                "last_seen": record["last_seen"],
+                "last_seen_seconds_ago": int(diff),
+                "status": status,
+            })
+
+        # Sort: online first, then idle, then offline; within same status, most recently seen first
+        status_rank = {"online": 0, "idle": 1, "offline": 2}
+        clients.sort(key=lambda c: (status_rank.get(c["status"], 3), c["last_seen_seconds_ago"]))
+        return clients
+
+def clear_client_registry():
+    """Clear client registry (used for tests)."""
+    with _registry_lock:
+        _client_registry.clear()
+

@@ -12,9 +12,18 @@ import {
   PrinterInfo,
   User, UserCreate, UserUpdate,
   SyncPushRequest, SyncPushResponse, SyncSnapshotResponse,
-  NetworkInfo, DiscoveredHost, HostPingResponse, TestHostResponse
+  NetworkInfo, DiscoveredHost, HostPingResponse, TestHostResponse,
+  ClientHeartbeatRequest, ConnectedClientItem, ConnectedClientsResponse
 } from '../types';
 import { offlineStorage } from './offlineStorage';
+
+let _isKnownOffline = false;
+export function setOfflineMode(isOffline: boolean): void {
+  _isKnownOffline = isOffline;
+}
+export function isOfflineMode(): boolean {
+  return _isKnownOffline;
+}
 
 export function getRemoteHostUrl(): string {
   return (localStorage.getItem('remote_host_url') || '').replace(/\/+$/, '');
@@ -66,10 +75,32 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${base}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  // AbortController timeout: 2500ms when pointing to remote host, 10000ms for localhost
+  const timeoutMs = options.signal ? undefined : (remoteHost ? 2500 : 10000);
+  let controller: AbortController | undefined;
+  let timeoutId: any;
+  if (timeoutMs) {
+    controller = new AbortController();
+    timeoutId = setTimeout(() => {
+      try { controller?.abort(); } catch {}
+    }, timeoutMs);
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${base}${endpoint}`, {
+      ...options,
+      signal: options.signal || controller?.signal,
+      headers,
+    });
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new ApiError('Main Counter connection timed out.', 408);
+    }
+    throw err;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     let errorDetail = 'An unexpected error occurred.';
@@ -122,6 +153,10 @@ export const api = {
 
   // Business Settings & Presets
   getSettings: async () => {
+    if (_isKnownOffline && getRemoteHostUrl()) {
+      const cached = await offlineStorage.getSettings();
+      if (cached) return cached;
+    }
     try {
       const settings = await request<BusinessSettings>('/settings');
       if (settings) {
@@ -134,20 +169,34 @@ export const api = {
       throw err;
     }
   },
-  updateSettings: (data: Partial<BusinessSettings>) =>
-    request<BusinessSettings>('/settings', { method: 'PUT', body: JSON.stringify(data) }),
+  updateSettings: async (data: Partial<BusinessSettings>) => {
+    const res = await request<BusinessSettings>('/settings', { method: 'PUT', body: JSON.stringify(data) });
+    if (res) {
+      offlineStorage.saveSettings(res).catch(() => {});
+    }
+    return res;
+  },
   getPresets: () => request<IndustryPreset[]>('/settings/presets'),
-  applyPreset: (data: {
+  applyPreset: async (data: {
     preset_key: string;
     business_name?: string;
     phone?: string;
     address?: string;
     currency?: string;
     custom_fields?: Partial<CustomField>[];
-  }) => request<BusinessSettings>('/settings/apply-preset', { method: 'POST', body: JSON.stringify(data) }),
+  }) => {
+    const res = await request<BusinessSettings>('/settings/apply-preset', { method: 'POST', body: JSON.stringify(data) });
+    if (res) {
+      offlineStorage.saveSettings(res).catch(() => {});
+    }
+    return res;
+  },
 
   // Products
   getProducts: async (params?: { search?: string; category_id?: number; is_active?: boolean; skip?: number; limit?: number }) => {
+    if (_isKnownOffline && getRemoteHostUrl()) {
+      return await offlineStorage.getProducts(params);
+    }
     const sp = new URLSearchParams();
     if (params?.search) sp.append('search', params.search);
     if (params?.category_id) sp.append('category_id', String(params.category_id));
@@ -158,11 +207,15 @@ export const api = {
       return await request<Product[]>(`/products?${sp.toString()}`);
     } catch (err) {
       const cached = await offlineStorage.getProducts(params);
-      if (cached && cached.length > 0) return cached;
+      if (Array.isArray(cached)) return cached;
       throw err;
     }
   },
   getProduct: async (id: number) => {
+    if (_isKnownOffline && getRemoteHostUrl()) {
+      const cached = await offlineStorage.getProduct(id);
+      if (cached) return cached;
+    }
     try {
       return await request<Product>(`/products/${id}`);
     } catch (err) {
@@ -172,6 +225,10 @@ export const api = {
     }
   },
   getProductByBarcode: async (barcode: string) => {
+    if (_isKnownOffline && getRemoteHostUrl()) {
+      const cached = await offlineStorage.getProductByBarcode(barcode);
+      if (cached) return cached;
+    }
     try {
       return await request<Product | null>(`/products/barcode/${encodeURIComponent(barcode.trim())}`);
     } catch (err) {
@@ -215,11 +272,14 @@ export const api = {
 
   // Categories
   getCategories: async (activeOnly = true) => {
+    if (_isKnownOffline && getRemoteHostUrl()) {
+      return await offlineStorage.getCategories(activeOnly);
+    }
     try {
       return await request<Category[]>(`/categories?active_only=${activeOnly}`);
     } catch (err) {
       const cached = await offlineStorage.getCategories(activeOnly);
-      if (cached && cached.length > 0) return cached;
+      if (Array.isArray(cached)) return cached;
       throw err;
     }
   },
@@ -231,6 +291,9 @@ export const api = {
   getCustomFields: async (params?: { category_id?: number; active_only?: boolean } | boolean) => {
     const activeOnly = typeof params === 'boolean' ? params : (params?.active_only !== undefined ? params.active_only : true);
     const catId = typeof params === 'object' && params?.category_id !== undefined ? params.category_id : undefined;
+    if (_isKnownOffline && getRemoteHostUrl()) {
+      return await offlineStorage.getCustomFields(catId, activeOnly);
+    }
     let url = `/custom-fields?active_only=${activeOnly}`;
     if (catId !== undefined) {
       url += `&category_id=${catId}`;
@@ -239,7 +302,7 @@ export const api = {
       return await request<CustomField[]>(url);
     } catch (err) {
       const cached = await offlineStorage.getCustomFields(catId, activeOnly);
-      if (cached && cached.length > 0) return cached;
+      if (Array.isArray(cached)) return cached;
       throw err;
     }
   },
@@ -266,6 +329,9 @@ export const api = {
 
   // Customers
   getCustomers: async (params?: { search?: string; is_active?: boolean }) => {
+    if (_isKnownOffline && getRemoteHostUrl()) {
+      return await offlineStorage.getCustomers(params);
+    }
     const sp = new URLSearchParams();
     if (params?.search) sp.append('search', params.search);
     if (params?.is_active !== undefined) sp.append('is_active', String(params.is_active));
@@ -273,7 +339,7 @@ export const api = {
       return await request<Customer[]>(`/customers?${sp.toString()}`);
     } catch (err) {
       const cached = await offlineStorage.getCustomers(params);
-      if (cached && cached.length > 0) return cached;
+      if (Array.isArray(cached)) return cached;
       throw err;
     }
   },
@@ -369,7 +435,14 @@ export const api = {
   createBill: (data: any) => request<Bill>('/bills', { method: 'POST', body: JSON.stringify(data) }),
   updateBill: (id: number, data: any) => request<Bill>(`/bills/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   recordBillPayment: (id: number, data: any) => request<any>(`/bills/${id}/payments`, { method: 'POST', body: JSON.stringify(data) }),
-  getBillsAttention: () => request<BillAttention[]>('/bills/attention'),
+  getBillsAttention: async () => {
+    if (_isKnownOffline && getRemoteHostUrl()) return [];
+    try {
+      return await request<BillAttention[]>('/bills/attention');
+    } catch {
+      return [];
+    }
+  },
 
   getExpenseCategories: (activeOnly = true) => request<ExpenseCategory[]>(`/expense-categories?active_only=${activeOnly}`),
   createExpenseCategory: (data: { name: string }) => request<ExpenseCategory>('/expense-categories', { method: 'POST', body: JSON.stringify(data) }),
@@ -384,19 +457,40 @@ export const api = {
   deleteExpense: (id: number) => request<any>(`/expenses/${id}`, { method: 'DELETE' }),
 
   // Dashboard
-  getDashboardKPIs: () => request<DashboardKPIs>('/dashboard/stats'),
-  getDashboardStats: () => request<DashboardKPIs>('/dashboard/stats'),
-  getMonthlySalesChart: (year?: number, month?: number) => {
-    const sp = new URLSearchParams();
-    if (year) sp.append('year', String(year));
-    if (month) sp.append('month', String(month));
-    return request<MonthlySalesData>(`/dashboard/monthly-sales?${sp.toString()}`);
+  getDashboardKPIs: async () => {
+    if (_isKnownOffline && getRemoteHostUrl()) {
+      return await offlineStorage.getOfflineDashboardKPIs();
+    }
+    try {
+      return await request<DashboardKPIs>('/dashboard/stats');
+    } catch (err) {
+      if (getRemoteHostUrl()) {
+        return await offlineStorage.getOfflineDashboardKPIs();
+      }
+      throw err;
+    }
   },
-  getMonthlySales: (year?: number, month?: number) => {
+  getDashboardStats: async () => {
+    return api.getDashboardKPIs();
+  },
+  getMonthlySalesChart: async (year?: number, month?: number) => {
+    if (_isKnownOffline && getRemoteHostUrl()) {
+      return { daily_sales: [] } as any;
+    }
     const sp = new URLSearchParams();
     if (year) sp.append('year', String(year));
     if (month) sp.append('month', String(month));
-    return request<MonthlySalesData>(`/dashboard/monthly-sales?${sp.toString()}`);
+    try {
+      return await request<MonthlySalesData>(`/dashboard/monthly-sales?${sp.toString()}`);
+    } catch (err) {
+      if (getRemoteHostUrl()) {
+        return { daily_sales: [] } as any;
+      }
+      throw err;
+    }
+  },
+  getMonthlySales: async (year?: number, month?: number) => {
+    return api.getMonthlySalesChart(year, month);
   },
   getDaySalesDetail: (date: string) => request<DaySalesDetail>(`/dashboard/day-sales/${date}`),
 
@@ -568,11 +662,38 @@ export const api = {
   network: {
     getInfo: () => request<NetworkInfo>('/network/info'),
     ping: async (overrideUrl?: string): Promise<HostPingResponse> => {
-      const url = overrideUrl ? `${overrideUrl.replace(/\/+$/, '')}/api/network/ping` : `${getRemoteHostUrl() || ''}/api/network/ping`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error('Host unreachable');
-      return res.json();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      try {
+        const url = overrideUrl ? `${overrideUrl.replace(/\/+$/, '')}/api/network/ping` : `${getRemoteHostUrl() || ''}/api/network/ping`;
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) throw new Error('Host unreachable');
+        return res.json();
+      } finally {
+        clearTimeout(timeoutId);
+      }
     },
+    heartbeat: async (data: ClientHeartbeatRequest, overrideUrl?: string): Promise<{ success: boolean; status: string }> => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1500);
+      try {
+        const url = overrideUrl ? `${overrideUrl.replace(/\/+$/, '')}/api/network/heartbeat` : `${getRemoteHostUrl() || ''}/api/network/heartbeat`;
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        const token = getAuthToken();
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(data),
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error('Heartbeat failed');
+        return res.json();
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    },
+    getClients: () => request<ConnectedClientsResponse>('/network/clients'),
     discover: (subnetFallback: boolean = true) =>
       request<{ discovered_count: number; hosts: DiscoveredHost[] }>(
         `/network/discover${subnetFallback ? '?subnet_fallback=true' : ''}`,

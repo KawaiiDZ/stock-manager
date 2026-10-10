@@ -331,8 +331,10 @@ def apply_preset(db: Session, request: ApplyPresetRequest) -> BusinessSettingsRe
         settings.phone = request.phone.strip()
     if request.address is not None:
         settings.address = request.address.strip()
-    if request.currency and request.currency.strip():
-        settings.currency = request.currency.strip()
+    if request.currency is not None:
+        settings.currency = request.currency.strip() if request.currency.strip() else "Rs."
+    elif not settings.currency or not settings.currency.strip():
+        settings.currency = "Rs."
     if request.logo_path is not None:
         settings.logo_path = request.logo_path
 

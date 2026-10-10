@@ -7,7 +7,9 @@ import {
   Supplier,
   SyncSnapshotResponse,
   SyncCommit,
+  DashboardKPIs,
 } from '../types';
+import { getPendingCommits } from './offlineQueue';
 
 const DB_NAME = 'stokflow_client_cache';
 const DB_VERSION = 1;
@@ -138,10 +140,13 @@ function writeLocalStorage<T>(key: string, val: T): void {
 
 export const offlineStorage = {
   /**
-   * Save an atomic store snapshot from the main counter host
+   * Save an atomic store snapshot from the main counter host additively.
+   * Preserves local offline product additions (negative IDs) and applies
+   * pending stock deltas on top of incoming host stock.
    */
   async saveSnapshot(snapshot: SyncSnapshotResponse): Promise<void> {
     const nowIso = snapshot.timestamp || new Date().toISOString();
+    const pendingCommits = getPendingCommits();
 
     // Cache locally in localStorage as fast fallback
     if (snapshot.settings) {
@@ -151,11 +156,42 @@ export const offlineStorage = {
     writeLocalStorage('stokflow_cached_categories', snapshot.categories || []);
     writeLocalStorage('stokflow_cached_custom_fields', snapshot.custom_fields || []);
 
+    // 1. Prepare Additive Products List
+    const incomingProducts = snapshot.products || [];
+    const mergedProductsMap = new Map<number, Product>();
+
+    // Put incoming snapshot products into map, applying any unmerged local RESTOCK_DELTA commits
+    incomingProducts.forEach(p => {
+      let currentStock = Number(p.current_stock || 0);
+      pendingCommits.forEach(c => {
+        if (c.action === 'RESTOCK_DELTA') {
+          if ((c.data?.barcode && c.data.barcode === p.barcode) ||
+              (c.data?.product_id && (String(c.data.product_id) === String(p.id) || String(c.data.product_id) === String(p.product_id)))) {
+            currentStock += Number(c.data.delta_quantity || 0);
+          }
+        }
+      });
+      mergedProductsMap.set(p.id, {
+        ...p,
+        current_stock: currentStock,
+      });
+    });
+
+    // Preserve local offline products (temporary negative IDs) from memoryFallback
+    memoryFallback.products.forEach(p => {
+      if (p.id < 0) {
+        const matchedInHost = incomingProducts.find(ip => ip.barcode && p.barcode && ip.barcode === p.barcode);
+        if (!matchedInHost) {
+          mergedProductsMap.set(p.id, p);
+        }
+      }
+    });
+
     // Update in-memory fallback
     memoryFallback.settings = (snapshot.settings as BusinessSettings) || null;
     memoryFallback.categories = snapshot.categories || [];
     memoryFallback.custom_fields = snapshot.custom_fields || [];
-    memoryFallback.products = snapshot.products || [];
+    memoryFallback.products = Array.from(mergedProductsMap.values());
     memoryFallback.customers = snapshot.customers || [];
     memoryFallback.suppliers = snapshot.suppliers || [];
     memoryFallback.meta['last_snapshot_time'] = nowIso;
@@ -190,37 +226,50 @@ export const offlineStorage = {
         settingsStore.put({ key: 'main_settings', value: snapshot.settings });
       }
 
-      // Categories
+      // Categories (additive merge)
       const catStore = tx.objectStore(STORES.CATEGORIES);
-      catStore.clear();
       (snapshot.categories || []).forEach(cat => {
         catStore.put(cat);
       });
 
-      // Custom fields
+      // Custom fields (additive merge)
       const cfStore = tx.objectStore(STORES.CUSTOM_FIELDS);
-      cfStore.clear();
       (snapshot.custom_fields || []).forEach(cf => {
         cfStore.put(cf);
       });
 
-      // Products
+      // Products (additive merge)
       const prodStore = tx.objectStore(STORES.PRODUCTS);
-      prodStore.clear();
-      (snapshot.products || []).forEach(prod => {
+      const existingReq = prodStore.getAll();
+      const existingDbProducts: Product[] = await new Promise((resolve) => {
+        existingReq.onsuccess = () => resolve(existingReq.result || []);
+        existingReq.onerror = () => resolve([]);
+      });
+
+      // Collect any temporary negative-id products stored locally in IndexedDB
+      existingDbProducts.forEach(p => {
+        if (p.id < 0) {
+          const matchedInHost = incomingProducts.find(ip => ip.barcode && p.barcode && ip.barcode === p.barcode);
+          if (matchedInHost) {
+            prodStore.delete(p.id);
+          } else {
+            mergedProductsMap.set(p.id, p);
+          }
+        }
+      });
+
+      mergedProductsMap.forEach(prod => {
         prodStore.put(prod);
       });
 
       // Customers
       const custStore = tx.objectStore(STORES.CUSTOMERS);
-      custStore.clear();
       (snapshot.customers || []).forEach(cust => {
         custStore.put(cust);
       });
 
       // Suppliers
       const suppStore = tx.objectStore(STORES.SUPPLIERS);
-      suppStore.clear();
       (snapshot.suppliers || []).forEach(supp => {
         suppStore.put(supp);
       });
@@ -238,6 +287,29 @@ export const offlineStorage = {
   },
 
   /**
+   * Get safe offline Dashboard KPIs when disconnected from Main Counter
+   */
+  async getOfflineDashboardKPIs(): Promise<DashboardKPIs> {
+    const prods = await this.getProducts({ is_active: true });
+    const lowStock = prods.filter(p => Number(p.current_stock || 0) <= 5 && Number(p.current_stock || 0) > 0).length;
+    const outOfStock = prods.filter(p => Number(p.current_stock || 0) <= 0).length;
+
+    return {
+      today_sales_revenue: 0,
+      today_sales_cash: 0,
+      today_past_debt_collected: 0,
+      today_collected_cash: 0,
+      today_gross_profit: 0,
+      today_realized_profit: 0,
+      today_unrealized_profit: 0,
+      today_past_debt_profit: 0,
+      customer_outstanding: 0,
+      supplier_outstanding: 0,
+      bills_needing_attention_count: 0,
+    };
+  },
+
+  /**
    * Retrieve cached Business Settings
    */
   async getSettings(): Promise<BusinessSettings | null> {
@@ -252,6 +324,9 @@ export const offlineStorage = {
           req.onerror = () => reject(req.error);
         });
         if (res && res.value) {
+          if (!res.value.currency || !res.value.currency.trim()) {
+            res.value.currency = 'Rs.';
+          }
           return res.value;
         }
       }
@@ -261,7 +336,17 @@ export const offlineStorage = {
 
     // Fallback to localStorage or memory
     const fromLs = readLocalStorage<BusinessSettings | null>('stokflow_cached_settings', null);
-    if (fromLs) return fromLs;
+    if (fromLs) {
+      if (!fromLs.currency || !fromLs.currency.trim()) {
+        fromLs.currency = 'Rs.';
+      }
+      return fromLs;
+    }
+    if (memoryFallback.settings) {
+      if (!memoryFallback.settings.currency || !memoryFallback.settings.currency.trim()) {
+        memoryFallback.settings.currency = 'Rs.';
+      }
+    }
     return memoryFallback.settings;
   },
 
@@ -269,7 +354,13 @@ export const offlineStorage = {
    * Save settings directly to cache
    */
   async saveSettings(settings: BusinessSettings): Promise<void> {
+    if (!settings.currency || !settings.currency.trim()) {
+      settings.currency = 'Rs.';
+    }
     writeLocalStorage('stokflow_cached_settings', settings);
+    try {
+      localStorage.setItem('stock_manager_currency', settings.currency);
+    } catch {}
     memoryFallback.settings = settings;
 
     if (!isIndexedDBAvailable()) return;

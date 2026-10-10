@@ -21,7 +21,7 @@ export const Topbar: React.FC<TopbarProps> = ({
   onLogout,
 }) => {
   const { effectiveMode, toggleDarkMode } = useTheme();
-  const { isOnline, isHost, pendingSyncCount, isSyncing } = useNetwork();
+  const { isOnline, isHost, pendingSyncCount, isSyncing, onlineClientsCount } = useNetwork();
 
   return (
     <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 flex items-center justify-between shrink-0 transition-colors">
@@ -53,7 +53,9 @@ export const Topbar: React.FC<TopbarProps> = ({
                 : pendingSyncCount > 0
                 ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
                 : isHost
-                ? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                ? onlineClientsCount > 0
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                  : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
                 : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
             }`}
             title="Device Connection & Sync Status"
@@ -63,10 +65,16 @@ export const Topbar: React.FC<TopbarProps> = ({
             ) : isSyncing ? (
               <Radio className="h-3.5 w-3.5 text-blue-500 animate-pulse" />
             ) : (
-              <Wifi className={`h-3.5 w-3.5 ${isHost ? 'text-emerald-500' : 'text-blue-500'}`} />
+              <Wifi className={`h-3.5 w-3.5 ${isHost ? (onlineClientsCount > 0 ? 'text-emerald-500' : 'text-slate-500') : 'text-blue-500'}`} />
             )}
             <span className="hidden sm:inline">
-              {!isOnline ? 'Working Offline' : isHost ? 'Main Counter' : 'Connected'}
+              {!isOnline
+                ? 'Working Offline'
+                : isHost
+                ? onlineClientsCount > 0
+                  ? `Main Counter • ${onlineClientsCount} Device${onlineClientsCount === 1 ? '' : 's'} Online`
+                  : 'Main Counter'
+                : 'Connected'}
             </span>
             {pendingSyncCount > 0 && (
               <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-600 text-white font-bold" title="Saved changes waiting to send">

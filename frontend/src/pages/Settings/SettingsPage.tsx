@@ -360,7 +360,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setBizName(settings.business_name);
       setBizPhone(settings.phone);
       setBizAddress(settings.address);
-      setCurrency(settings.currency);
+      setCurrency(settings.currency || 'Rs.');
       setTaxEnabled(settings.tax_enabled);
       setDefaultTaxRate(settings.default_tax_rate);
       setReceiptHeader(settings.receipt_header);

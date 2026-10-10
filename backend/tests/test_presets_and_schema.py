@@ -2,8 +2,6 @@ import pytest
 from fastapi.testclient import TestClient
 from backend.app.main import app
 
-client = TestClient(app)
-
 def test_presets_list_and_structure(client):
     res = client.get("/api/settings/presets")
     assert res.status_code == 200

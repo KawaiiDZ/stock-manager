@@ -1,8 +1,17 @@
+import os
+import tempfile
+import atexit
+import shutil
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
+
+# Ensure test suite runs in an isolated directory and never touches real business data
+_test_temp_dir = tempfile.mkdtemp(prefix="stokflow_test_data_")
+os.environ["STOCK_MANAGER_DATA_DIR"] = _test_temp_dir
+atexit.register(lambda: shutil.rmtree(_test_temp_dir, ignore_errors=True))
 
 from backend.app.core.database import Base, get_db
 from backend.app.main import app
