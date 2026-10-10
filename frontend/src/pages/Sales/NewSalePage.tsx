@@ -26,6 +26,7 @@ import { printElement } from '../../utils/print';
 import { QuotationModal } from '../../components/receipts/QuotationModal';
 import { UnregisteredBarcodeModal } from '../../components/barcode/UnregisteredBarcodeModal';
 import { QuickAddProductModal } from '../../components/products/QuickAddProductModal';
+import { OutOfStockRestockModal } from '../../components/pos/OutOfStockRestockModal';
 import { CartQuantityInput } from '../../components/pos/CartQuantityInput';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { formatCurrency, formatMoney, formatQty } from '../../utils/format';
@@ -130,6 +131,9 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   const [categories, setCategories] = useState<Category[]>([]);
   const [unregisteredBarcode, setUnregisteredBarcode] = useState<string | null>(null);
   const [quickAddBarcode, setQuickAddBarcode] = useState<string | null>(null);
+
+  // Out of Stock & Instant Restock state
+  const [outOfStockProduct, setOutOfStockProduct] = useState<Product | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -253,6 +257,10 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
     );
 
     if (localMatch) {
+      if (Number(localMatch.current_stock || 0) <= 0) {
+        setOutOfStockProduct(localMatch);
+        return;
+      }
       addToCart(localMatch);
       return;
     }
@@ -262,6 +270,10 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       const remoteProd = await api.getProductByBarcode(code);
       if (remoteProd) {
         setProducts((prev) => (prev.some((p) => p.id === remoteProd.id) ? prev : [...prev, remoteProd]));
+        if (Number(remoteProd.current_stock || 0) <= 0) {
+          setOutOfStockProduct(remoteProd);
+          return;
+        }
         addToCart(remoteProd);
       } else {
         // Prompt user to register product with this barcode
@@ -281,9 +293,9 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   // Global POS Keyboard Shortcuts & Arrow Navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // If Quick-Pay modal is open, let the modal manage Enter / Escape
-      if (showQuickPayModal) {
-        if (e.key === 'Escape') {
+      // If any dialogue modal is open, avoid triggering global checkout shortcuts
+      if (showQuickPayModal || Boolean(outOfStockProduct) || Boolean(unregisteredBarcode) || Boolean(quickAddBarcode) || showAddCustomerModal) {
+        if (e.key === 'Escape' && showQuickPayModal) {
           e.preventDefault();
           setShowQuickPayModal(false);
           searchInputRef.current?.focus();
@@ -438,6 +450,10 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
     if (existingIndex >= 0) {
       const currentQty = cart[existingIndex].quantity;
       if (currentQty + 1 > availableStock) {
+        if (availableStock <= 0) {
+          setOutOfStockProduct(product);
+          return;
+        }
         setErrorMsg(
           `Not enough stock. Only ${availableStock} units of ${product.name} are available.`
         );
@@ -448,7 +464,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       setCart(updatedCart);
     } else {
       if (availableStock < 1) {
-        setErrorMsg(`Item ${product.name} is currently out of stock.`);
+        setOutOfStockProduct(product);
         return;
       }
       const newCart = [
@@ -1664,6 +1680,45 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
           setQuickAddBarcode(null);
         }}
       />
+
+      {/* Out of Stock & Instant Restock Modal */}
+      {outOfStockProduct && (
+        <OutOfStockRestockModal
+          isOpen={Boolean(outOfStockProduct)}
+          onClose={() => {
+            setOutOfStockProduct(null);
+            searchInputRef.current?.focus();
+          }}
+          product={outOfStockProduct}
+          settings={settings}
+          onRestocked={(updatedProduct, autoAddQty) => {
+            setProducts((prev) =>
+              prev.map((p) => (p.id === updatedProduct.id ? updatedProduct : p))
+            );
+            if (autoAddQty > 0) {
+              setCart((prevCart) => {
+                const exIdx = prevCart.findIndex((i) => i.product.id === updatedProduct.id);
+                if (exIdx >= 0) {
+                  const updated = [...prevCart];
+                  updated[exIdx].quantity += autoAddQty;
+                  return updated;
+                }
+                return [
+                  ...prevCart,
+                  {
+                    product: updatedProduct,
+                    quantity: autoAddQty,
+                    unit_price: Number(updatedProduct.selling_price || 0),
+                    discount_amount: 0,
+                  },
+                ];
+              });
+            }
+            setOutOfStockProduct(null);
+            searchInputRef.current?.focus();
+          }}
+        />
+      )}
 
       {/* POS Quick-Pay Dialogue */}
       <Modal
