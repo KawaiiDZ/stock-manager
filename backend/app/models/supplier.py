@@ -26,7 +26,7 @@ class SupplierPayment(Base):
     payment_number = Column(String(30), unique=True, nullable=False, index=True) # SP-000001
     supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=False, index=True)
     amount = Column(Numeric(12, 2), nullable=False)
-    payment_method = Column(String(30), nullable=False, default="Cash")
+    payment_method = Column(String(100), nullable=False, default="Cash")
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.now, index=True)
 

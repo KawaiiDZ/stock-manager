@@ -57,4 +57,5 @@ class BusinessSettings(Base):
     dashboard_financials_pin_hash = Column(String(255), nullable=True)
     config_pin_hash = Column(String(255), nullable=False)
     enable_pos_quick_pay = Column(Boolean, nullable=False, default=True)
+    payment_accounts = Column(Text, nullable=False, default='["Cash", "Bank Transfer", "Easypaisa", "Jazzcash"]')
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

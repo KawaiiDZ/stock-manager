@@ -52,6 +52,7 @@ class SupplierLedgerEntry(BaseModel):
     type: str  # "Purchase", "Payment", "Return"
     reference: str  # "PO-000001", "SP-000001", "PRET-000001"
     description: str
+    payment_method: Optional[str] = None
     debit: Decimal   # Decreases supplier obligation (Payments, Returns)
     credit: Decimal  # Increases supplier obligation (Purchases)
     balance: Decimal # Running balance

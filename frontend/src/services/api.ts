@@ -2,7 +2,7 @@ import {
   Product, Category, CustomField, CustomValueDto,
   Customer, CustomerLedgerEntry,
   Supplier, SupplierLedgerEntry,
-  Sale, SalesReturn, ReceiptPrintData,
+  Sale, SalesReturn, ReceiptPrintData, PaymentSplit,
   Purchase, Bill, BillCategory, BillAttention,
   Expense, ExpenseCategory,
   DashboardKPIs, MonthlySalesData, DaySalesDetail,
@@ -373,6 +373,7 @@ export const api = {
     tax_rate?: number;
     paid_amount?: number;
     payment_method?: string;
+    payment_splits?: PaymentSplit[];
     notes?: string;
   }) => request<Sale>('/sales', { method: 'POST', body: JSON.stringify(data) }),
   recordSalePayment: (id: number, amount: number, paymentMethod = 'Cash') =>

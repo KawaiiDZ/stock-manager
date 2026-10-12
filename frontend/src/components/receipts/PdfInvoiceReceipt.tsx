@@ -193,7 +193,9 @@ export const PdfInvoiceReceipt: React.FC<PdfInvoiceReceiptProps> = ({
             Payment Mode
           </span>
           <span className="inline-block px-2.5 py-0.5 bg-white border border-slate-200 text-slate-800 rounded font-semibold text-xs">
-            {sale.payments?.[0]?.payment_method || (sale as any).payment_method || 'Cash'}
+            {sale.payments && sale.payments.length > 1
+              ? sale.payments.map((p) => p.payment_method).join(' + ') + ' (Split)'
+              : sale.payments?.[0]?.payment_method || (sale as any).payment_method || 'Cash'}
           </span>
         </div>
       </div>
@@ -353,6 +355,18 @@ export const PdfInvoiceReceipt: React.FC<PdfInvoiceReceiptProps> = ({
             <span>Paid Amount:</span>
             <span className="whitespace-nowrap">{formatCurrency(sale.paid_amount, currency)}</span>
           </div>
+
+          {sale.payments && sale.payments.length > 1 && (
+            <div className="pt-1 pb-1 space-y-0.5 text-[11px] text-slate-600 border-t border-dashed border-slate-200">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Split Breakdown:</span>
+              {sale.payments.map((p, idx) => (
+                <div key={idx} className="flex justify-between pl-1">
+                  <span>• {p.payment_method}:</span>
+                  <span className="font-semibold">{formatCurrency(p.amount, currency)}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {dueAmount > 0 ? (
             <div className="flex justify-between font-bold text-rose-700 pt-1 border-t border-rose-200">

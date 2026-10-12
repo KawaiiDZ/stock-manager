@@ -56,6 +56,11 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
       ? 'border-b border-black border-solid'
       : 'border-b-2 border-black border-solid';
 
+  const isSplit = Boolean(sale.payments && sale.payments.length > 1);
+  const paymentMethodLabel = isSplit
+    ? sale.payments.map((p) => p.payment_method).join(' + ') + ' (Split)'
+    : sale.payments?.[0]?.payment_method || (sale as any).payment_method || 'Cash';
+
   return (
     <div
       id={id}
@@ -172,11 +177,11 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
               <span className="text-black font-bold">Customer:</span>
               <span className="font-bold truncate max-w-[60%]">{sale.customer_name || 'Counter Walk-in'}</span>
             </div>
-            {(sale.payments?.[0]?.payment_method || (sale as any).payment_method) && (
+            {paymentMethodLabel && (
               <div className="flex justify-between text-[10px]">
                 <span className="text-black font-bold">Tender Method:</span>
                 <span className="font-black uppercase px-1 bg-slate-100 border border-slate-300 rounded-xs">
-                  {sale.payments?.[0]?.payment_method || (sale as any).payment_method}
+                  {paymentMethodLabel}
                 </span>
               </div>
             )}
@@ -189,7 +194,7 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
             </div>
             <div className="flex justify-between text-[10px]">
               <span className="font-bold">Client: {sale.customer_name || 'Walk-in'}</span>
-              <span className="font-bold uppercase">Pay: {sale.payments?.[0]?.payment_method || (sale as any).payment_method || 'CASH'}</span>
+              <span className="font-bold uppercase">Pay: {paymentMethodLabel}</span>
             </div>
           </div>
         ) : (
@@ -207,11 +212,11 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
               <span className="text-black font-bold">Customer:</span>
               <span className="font-bold text-right truncate max-w-[65%]">{sale.customer_name || 'Counter Walk-in'}</span>
             </div>
-            {(sale.payments?.[0]?.payment_method || (sale as any).payment_method) && (
+            {paymentMethodLabel && (
               <div className="flex justify-between">
                 <span className="text-black font-bold">Payment:</span>
                 <span className="font-bold uppercase">
-                  {sale.payments?.[0]?.payment_method || (sale as any).payment_method}
+                  {paymentMethodLabel}
                 </span>
               </div>
             )}
@@ -476,9 +481,20 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
       {/* Payment details */}
       <div className={`py-2 ${divBorder} space-y-1 receipt-section`}>
         <div className="flex justify-between font-bold">
-          <span>{activeLayout === 'modern' ? 'Paid:' : activeLayout === 'elegant' ? 'Tendered via ' + (sale.payments?.[0]?.payment_method || 'Cash') + ':' : 'Paid Amount:'}</span>
+          <span>{activeLayout === 'modern' ? 'Paid:' : activeLayout === 'elegant' ? 'Tendered via ' + (isSplit ? paymentMethodLabel : (sale.payments?.[0]?.payment_method || 'Cash')) + ':' : 'Paid Amount:'}</span>
           <span className="tabular-nums">{formatCurrency(sale.paid_amount, currency)}</span>
         </div>
+        {isSplit && sale.payments && (
+          <div className="pt-1 pb-0.5 space-y-0.5 border-t border-dashed border-gray-300">
+            <div className="text-[10px] font-bold text-gray-700 uppercase tracking-wider">Payment Breakdown:</div>
+            {sale.payments.map((p, idx) => (
+              <div key={idx} className="flex justify-between text-[11px] pl-1">
+                <span className="font-semibold text-gray-700">• {p.payment_method}:</span>
+                <span className="tabular-nums font-bold">{formatCurrency(p.amount, currency)}</span>
+              </div>
+            ))}
+          </div>
+        )}
         {Number(sale.due_amount || 0) > 0 ? (
           <div className="flex justify-between font-black">
             <span>Remaining Due:</span>

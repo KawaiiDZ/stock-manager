@@ -310,7 +310,14 @@ def _execute_create_sale(db: Session, data: SaleCreate) -> SaleResponse:
     tax_amount = ((taxable_amount * effective_tax_rate) / Decimal("100.00")).quantize(Decimal("0.01"))
     total_amount = (taxable_amount + tax_amount).quantize(Decimal("0.01"))
 
-    paid_amount = min(data.paid_amount, total_amount) if data.paid_amount > Decimal("0.00") else Decimal("0.00")
+    valid_splits = [sp for sp in (data.payment_splits or []) if sp.amount > Decimal("0.00")]
+    if valid_splits:
+        total_split_amount = sum((sp.amount for sp in valid_splits), Decimal("0.00"))
+        effective_paid = total_split_amount if data.paid_amount <= Decimal("0.00") else data.paid_amount
+    else:
+        effective_paid = data.paid_amount
+
+    paid_amount = min(effective_paid, total_amount) if effective_paid > Decimal("0.00") else Decimal("0.00")
     due_amount = max(Decimal("0.00"), total_amount - paid_amount)
 
     # Prevent credit sales on Walk-in / Counter customer (C-000001)
@@ -373,13 +380,28 @@ def _execute_create_sale(db: Session, data: SaleCreate) -> SaleResponse:
 
     # 8. Record Initial Payment if paid
     if paid_amount > Decimal("0.00"):
-        payment = SalePayment(
-            sale_id=sale.id,
-            amount=paid_amount,
-            payment_method=data.payment_method or "Cash",
-            created_at=sale.created_at
-        )
-        db.add(payment)
+        if valid_splits:
+            remaining_to_allocate = paid_amount
+            for sp in valid_splits:
+                if remaining_to_allocate <= Decimal("0.00"):
+                    break
+                alloc_amount = min(sp.amount, remaining_to_allocate)
+                payment = SalePayment(
+                    sale_id=sale.id,
+                    amount=alloc_amount,
+                    payment_method=sp.payment_method or "Cash",
+                    created_at=sale.created_at
+                )
+                db.add(payment)
+                remaining_to_allocate -= alloc_amount
+        else:
+            payment = SalePayment(
+                sale_id=sale.id,
+                amount=paid_amount,
+                payment_method=data.payment_method or "Cash",
+                created_at=sale.created_at
+            )
+            db.add(payment)
 
     db.commit()
     db.refresh(sale)
@@ -551,5 +573,7 @@ def get_receipt_print_data(db: Session, receipt_number: str) -> ReceiptPrintResp
         total_amount=sale.total_amount,
         paid_amount=sale.paid_amount,
         due_amount=sale.due_amount,
-        payment_status=sale.payment_status
+        payment_status=sale.payment_status,
+        payment_method=" + ".join([p.payment_method for p in (sale.payments or [])]) if sale.payments else "Cash",
+        payments=sale.payments or []
     )

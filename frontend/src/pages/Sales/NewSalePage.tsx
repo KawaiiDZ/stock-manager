@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../../services/api';
-import { Product, Customer, BusinessSettings, Sale, Quotation, QuotationCreate, Category } from '../../types';
+import { Product, Customer, BusinessSettings, Sale, Quotation, QuotationCreate, Category, PaymentSplit } from '../../types';
 import {
   Search,
   Plus,
@@ -15,6 +15,8 @@ import {
   CheckCircle2,
   Zap,
   FileText,
+  CreditCard,
+  Wallet,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -66,7 +68,14 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   // Financial inputs
   const [saleDiscount, setSaleDiscount] = useState<number>(0);
   const [taxRate, setTaxRate] = useState<number>(settings?.default_tax_rate || 0);
-  const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Card' | 'Bank Transfer' | 'Online'>('Cash');
+  const configuredPaymentAccounts = useMemo(() => {
+    if (settings?.payment_accounts && settings.payment_accounts.length > 0) {
+      return settings.payment_accounts;
+    }
+    return ['Cash', 'Bank Transfer', 'Easypaisa', 'Jazzcash'];
+  }, [settings?.payment_accounts]);
+
+  const [paymentMethod, setPaymentMethod] = useState<string>('Cash');
   const [paidAmount, setPaidAmount] = useState<number>(0);
   const [isPaidAmountCustomized, setIsPaidAmountCustomized] = useState(false);
   const [notes, setNotes] = useState('');
@@ -89,6 +98,12 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   const [showQuickPayModal, setShowQuickPayModal] = useState(false);
   const [quickPayAmount, setQuickPayAmount] = useState<number>(0);
   const [quickPayTouched, setQuickPayTouched] = useState(false);
+  const [quickPayMethod, setQuickPayMethod] = useState<string>('Cash');
+  const [isQuickPaySplit, setIsQuickPaySplit] = useState(false);
+  const [quickPaySplits, setQuickPaySplits] = useState<Array<{ payment_method: string; amount: number }>>([
+    { payment_method: 'Cash', amount: 0 },
+    { payment_method: 'Bank Transfer', amount: 0 },
+  ]);
   const quickPayInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -668,6 +683,13 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
     if (isQuickPayEnabled) {
       setQuickPayAmount(grandTotal);
       setQuickPayTouched(false);
+      setQuickPayMethod('Cash');
+      setIsQuickPaySplit(false);
+      const secondMethod = configuredPaymentAccounts.find((a) => a.toLowerCase() !== 'cash') || 'Bank Transfer';
+      setQuickPaySplits([
+        { payment_method: 'Cash', amount: grandTotal },
+        { payment_method: secondMethod, amount: 0 },
+      ]);
       setShowQuickPayModal(true);
       setTimeout(() => {
         quickPayInputRef.current?.focus();
@@ -679,7 +701,11 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   };
 
   // Complete Sale Execution
-  const handleCompleteSale = async (overridePaidAmount?: number) => {
+  const handleCompleteSale = async (
+    overridePaidAmount?: number,
+    overridePaymentMethod?: string,
+    overridePaymentSplits?: PaymentSplit[]
+  ) => {
     if (completing || isCompletingRef.current) return;
     if (cart.length === 0) {
       setErrorMsg('Cannot complete an empty sale. Please add items to cart.');
@@ -707,6 +733,11 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       setIsPaidAmountCustomized(true);
     }
 
+    const effectiveMethod = overridePaymentMethod || paymentMethod || 'Cash';
+    if (overridePaymentMethod) {
+      setPaymentMethod(overridePaymentMethod);
+    }
+
     isCompletingRef.current = true;
     setCompleting(true);
     setErrorMsg(null);
@@ -722,9 +753,13 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         discount_amount: Number(saleDiscount || 0),
         tax_rate: Number(taxRate || 0),
         paid_amount: Math.min(grandTotal, effectivePaid),
-        payment_method: paymentMethod,
+        payment_method: effectiveMethod,
         notes: notes.trim() || undefined,
       };
+
+      if (overridePaymentSplits && overridePaymentSplits.length > 0) {
+        payload.payment_splits = overridePaymentSplits;
+      }
 
       if (selectedCustomerId) {
         payload.customer_id = selectedCustomerId;
@@ -1269,13 +1304,23 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                 </label>
                 <select
                   value={paymentMethod}
-                  onChange={(e: any) => setPaymentMethod(e.target.value)}
+                  onChange={(e: any) => {
+                    const val = e.target.value;
+                    if (val === '__SPLIT__') {
+                      setIsQuickPaySplit(true);
+                      handleOpenQuickPayOrComplete();
+                    } else {
+                      setPaymentMethod(val);
+                    }
+                  }}
                   className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100"
                 >
-                  <option value="Cash">Cash</option>
-                  <option value="Card">Card</option>
-                  <option value="Bank Transfer">Bank Transfer</option>
-                  <option value="Online">Online</option>
+                  {configuredPaymentAccounts.map((acc) => (
+                    <option key={acc} value={acc}>
+                      {acc}
+                    </option>
+                  ))}
+                  <option value="__SPLIT__">⚡ Split / Mix Payment...</option>
                 </select>
               </div>
 
@@ -1735,8 +1780,8 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
           searchInputRef.current?.focus();
         }}
         title="POS Quick-Pay Checkout"
-        subtitle="Review total, type amount tendered, and press Enter to finalize sale."
-        maxWidth="md"
+        subtitle="Select payment method, review total, and press Enter to finalize sale."
+        maxWidth={isQuickPaySplit ? 'lg' : 'md'}
       >
         <div className="space-y-4">
           {/* Total Bill Card */}
@@ -1755,72 +1800,272 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
             </div>
           </div>
 
-          {/* Amount Paid Input with Live Currency Prefix */}
+          {/* Payment Method Selector Pills & Split Toggle */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                Amount Paid / Tendered *
+                Payment Method / Tender
               </label>
-              <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  const nextSplit = !isQuickPaySplit;
+                  setIsQuickPaySplit(nextSplit);
+                  if (nextSplit) {
+                    const secondAcc = configuredPaymentAccounts.find((a) => a.toLowerCase() !== 'cash') || 'Bank Transfer';
+                    setQuickPaySplits([
+                      { payment_method: quickPayMethod || 'Cash', amount: grandTotal },
+                      { payment_method: secondAcc, amount: 0 },
+                    ]);
+                  } else {
+                    setQuickPayAmount(grandTotal);
+                    setQuickPayTouched(true);
+                  }
+                }}
+                className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border transition flex items-center gap-1.5 ${
+                  isQuickPaySplit
+                    ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                    : 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 hover:bg-purple-100'
+                }`}
+              >
+                <Zap className="h-3 w-3" />
+                <span>{isQuickPaySplit ? '✓ Split / Mix Active' : '+ Split / Mix Payment'}</span>
+              </button>
+            </div>
+
+            {!isQuickPaySplit ? (
+              /* Single Method Selection Pills */
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {configuredPaymentAccounts.map((acc) => {
+                  const isSelected = quickPayMethod === acc;
+                  return (
+                    <button
+                      key={acc}
+                      type="button"
+                      onClick={() => {
+                        setQuickPayMethod(acc);
+                        setPaymentMethod(acc);
+                        quickPayInputRef.current?.focus();
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border ${
+                        isSelected
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750'
+                      }`}
+                    >
+                      {acc.toLowerCase() === 'cash' ? (
+                        <Wallet className="h-3.5 w-3.5" />
+                      ) : (
+                        <CreditCard className="h-3.5 w-3.5" />
+                      )}
+                      <span>{acc}</span>
+                      {isSelected && <span className="text-[10px] ml-0.5 opacity-80">✓</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+
+          {!isQuickPaySplit ? (
+            /* Single Tender Amount Input */
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                  Amount Paid / Tendered ({quickPayMethod}) *
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuickPayAmount(grandTotal);
+                      setQuickPayTouched(true);
+                      quickPayInputRef.current?.focus();
+                    }}
+                    className="text-[11px] font-bold text-brand-600 dark:text-brand-400 hover:underline bg-brand-50 dark:bg-brand-950/40 px-2 py-0.5 rounded-lg border border-brand-200 dark:border-brand-800"
+                  >
+                    Exact ({formatCurrency(grandTotal, currency)})
+                  </button>
+                </div>
+              </div>
+
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 font-bold text-base">
+                  {currency}
+                </div>
+                <input
+                  ref={quickPayInputRef}
+                  type="number"
+                  step="any"
+                  min="0"
+                  value={quickPayAmount === 0 && !quickPayTouched ? '' : quickPayAmount}
+                  onChange={(e) => {
+                    setQuickPayTouched(true);
+                    const val = parseFloat(e.target.value);
+                    setQuickPayAmount(isNaN(val) ? 0 : val);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const isFull = Number(quickPayAmount || 0) >= grandTotal;
+                      if (!isFull) {
+                        setErrorMsg(
+                          `Quick-Pay only accepts full payment (${formatCurrency(grandTotal, currency)}). For partial payments or credit sales, press Esc and enter customer details.`
+                        );
+                        return;
+                      }
+                      setShowQuickPayModal(false);
+                      handleCompleteSale(quickPayAmount, quickPayMethod);
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowQuickPayModal(false);
+                      searchInputRef.current?.focus();
+                    }
+                  }}
+                  placeholder="0.00"
+                  autoFocus
+                  className="w-full pl-14 pr-4 py-3 rounded-2xl border-2 border-brand-500 focus:border-brand-600 focus:ring-4 focus:ring-brand-500/20 text-2xl font-black text-slate-900 dark:text-white bg-white dark:bg-slate-800 shadow-inner"
+                />
+              </div>
+            </div>
+          ) : (
+            /* Split / Mix Payment Mode */
+            <div className="space-y-3 p-4 rounded-2xl bg-purple-50/40 dark:bg-purple-950/20 border border-purple-200/80 dark:border-purple-800/80">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                  <span className="text-xs font-bold text-purple-900 dark:text-purple-200">
+                    Split / Mixed Tender Allocation
+                  </span>
+                </div>
                 <button
                   type="button"
                   onClick={() => {
-                    setQuickPayAmount(grandTotal);
-                    setQuickPayTouched(true);
-                    quickPayInputRef.current?.focus();
+                    const unused = configuredPaymentAccounts.find(
+                      (acc) => !quickPaySplits.some((s) => s.payment_method === acc)
+                    ) || configuredPaymentAccounts[0] || 'Bank Transfer';
+                    setQuickPaySplits([...quickPaySplits, { payment_method: unused, amount: 0 }]);
                   }}
-                  className="text-[11px] font-bold text-brand-600 dark:text-brand-400 hover:underline bg-brand-50 dark:bg-brand-950/40 px-2 py-0.5 rounded-lg border border-brand-200 dark:border-brand-800"
+                  className="text-[11px] font-bold text-purple-700 dark:text-purple-300 hover:underline flex items-center gap-1 bg-white dark:bg-slate-800 px-2.5 py-1 rounded-lg border border-purple-200 dark:border-purple-800 shadow-2xs"
                 >
-                  Exact ({formatCurrency(grandTotal, currency)})
+                  <Plus className="h-3 w-3" />
+                  <span>Add Split Account</span>
                 </button>
               </div>
-            </div>
 
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 font-bold text-base">
-                {currency}
+              <div className="space-y-2.5">
+                {quickPaySplits.map((split, sIdx) => {
+                  return (
+                    <div
+                      key={sIdx}
+                      className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
+                    >
+                      <div className="w-full sm:w-48 shrink-0">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                          Payment Account #{sIdx + 1}
+                        </label>
+                        <select
+                          value={split.payment_method}
+                          onChange={(e) => {
+                            const updated = [...quickPaySplits];
+                            updated[sIdx].payment_method = e.target.value;
+                            setQuickPaySplits(updated);
+                          }}
+                          className="w-full bg-slate-50 dark:bg-slate-750 border border-slate-200 dark:border-slate-600 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-800 dark:text-slate-100"
+                        >
+                          {configuredPaymentAccounts.map((acc) => (
+                            <option key={acc} value={acc}>
+                              {acc}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            Amount Tendered
+                          </label>
+                          {sIdx > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentSumExceptThis = quickPaySplits
+                                  .filter((_, idx) => idx !== sIdx)
+                                  .reduce((acc, it) => acc + (Number(it.amount) || 0), 0);
+                                const remainder = Math.max(0, grandTotal - currentSumExceptThis);
+                                const updated = [...quickPaySplits];
+                                updated[sIdx].amount = remainder;
+                                setQuickPaySplits(updated);
+                              }}
+                              className="text-[10px] font-bold text-brand-600 dark:text-brand-400 hover:underline"
+                            >
+                              Fill Remainder
+                            </button>
+                          )}
+                        </div>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 font-bold text-xs">
+                            {currency}
+                          </div>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            value={split.amount === 0 ? '' : split.amount}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              const updated = [...quickPaySplits];
+                              updated[sIdx].amount = isNaN(val) ? 0 : val;
+                              setQuickPaySplits(updated);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const totalAllocated = quickPaySplits.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+                                if (totalAllocated >= grandTotal) {
+                                  const validSplits = quickPaySplits.filter((s) => Number(s.amount) > 0);
+                                  setShowQuickPayModal(false);
+                                  handleCompleteSale(totalAllocated, 'Split', validSplits);
+                                }
+                              } else if (e.key === 'Escape') {
+                                e.preventDefault();
+                                setShowQuickPayModal(false);
+                                searchInputRef.current?.focus();
+                              }
+                            }}
+                            placeholder="0.00"
+                            className="w-full pl-10 pr-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-base font-black text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-750"
+                          />
+                        </div>
+                      </div>
+
+                      {quickPaySplits.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQuickPaySplits(quickPaySplits.filter((_, idx) => idx !== sIdx));
+                          }}
+                          className="self-end sm:self-center p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition"
+                          title="Remove split"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              <input
-                ref={quickPayInputRef}
-                type="number"
-                step="any"
-                min="0"
-                value={quickPayAmount === 0 && !quickPayTouched ? '' : quickPayAmount}
-                onChange={(e) => {
-                  setQuickPayTouched(true);
-                  const val = parseFloat(e.target.value);
-                  setQuickPayAmount(isNaN(val) ? 0 : val);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const isFull = Number(quickPayAmount || 0) >= grandTotal;
-                    if (!isFull) {
-                      setErrorMsg(
-                        `Quick-Pay only accepts full payment (${formatCurrency(grandTotal, currency)}). For partial payments or credit sales, press Esc and enter customer details.`
-                      );
-                      return;
-                    }
-                    setShowQuickPayModal(false);
-                    handleCompleteSale(quickPayAmount);
-                  } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setShowQuickPayModal(false);
-                    searchInputRef.current?.focus();
-                  }
-                }}
-                placeholder="0.00"
-                autoFocus
-                className="w-full pl-14 pr-4 py-3 rounded-2xl border-2 border-brand-500 focus:border-brand-600 focus:ring-4 focus:ring-brand-500/20 text-2xl font-black text-slate-900 dark:text-white bg-white dark:bg-slate-800 shadow-inner"
-              />
             </div>
-          </div>
+          )}
 
           {/* Change or Warning if not full payment */}
           {(() => {
-            const paidNum = Number(quickPayAmount || 0);
+            const paidNum = isQuickPaySplit
+              ? quickPaySplits.reduce((acc, it) => acc + (Number(it.amount) || 0), 0)
+              : Number(quickPayAmount || 0);
             const isFull = paidNum >= grandTotal;
             const change = Math.max(0, paidNum - grandTotal);
             const shortAmount = Math.max(0, grandTotal - paidNum);
@@ -1832,7 +2077,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                     <div className="flex items-center gap-2">
                       <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
                       <span className="text-xs font-bold text-rose-800 dark:text-rose-300">
-                        Quick-Pay only accepts full payment.
+                        Quick-Pay requires full payment.
                       </span>
                     </div>
                     <span className="text-xs font-black text-rose-600 dark:text-rose-400">
@@ -1840,7 +2085,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                     </span>
                   </div>
                   <p className="text-[11px] text-rose-700 dark:text-rose-400 leading-relaxed">
-                    For partial payments or credit sales, press <kbd className="px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-900/60 font-mono text-[10px] font-bold">Esc</kbd> to return to screen and enter customer details.
+                    Total tendered: {formatCurrency(paidNum, currency)} of {formatCurrency(grandTotal, currency)}. For partial or credit sales, press <kbd className="px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-900/60 font-mono text-[10px] font-bold">Esc</kbd> to return to screen and enter customer details.
                   </p>
                 </div>
               );
@@ -1871,7 +2116,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                   </span>
                 </div>
                 <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
-                  Fully Settled (Exact Amount)
+                  {isQuickPaySplit ? 'Fully Settled (Split Payment)' : `Fully Settled (${quickPayMethod})`}
                 </span>
               </div>
             );
@@ -1895,11 +2140,24 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
               type="button"
               variant="primary"
               onClick={() => {
-                if (Number(quickPayAmount || 0) < grandTotal) return;
-                setShowQuickPayModal(false);
-                handleCompleteSale(quickPayAmount);
+                if (isQuickPaySplit) {
+                  const totalAllocated = quickPaySplits.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+                  if (totalAllocated < grandTotal) return;
+                  const validSplits = quickPaySplits.filter((s) => Number(s.amount) > 0);
+                  setShowQuickPayModal(false);
+                  handleCompleteSale(totalAllocated, 'Split', validSplits);
+                } else {
+                  if (Number(quickPayAmount || 0) < grandTotal) return;
+                  setShowQuickPayModal(false);
+                  handleCompleteSale(quickPayAmount, quickPayMethod);
+                }
               }}
-              disabled={completing || Number(quickPayAmount || 0) < grandTotal}
+              disabled={
+                completing ||
+                (isQuickPaySplit
+                  ? quickPaySplits.reduce((sum, s) => sum + (Number(s.amount) || 0), 0) < grandTotal
+                  : Number(quickPayAmount || 0) < grandTotal)
+              }
               className="font-bold flex items-center gap-2 px-5 py-2.5"
             >
               <span>Finalize Sale</span>

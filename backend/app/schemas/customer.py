@@ -52,6 +52,7 @@ class CustomerLedgerEntry(BaseModel):
     type: str  # "Sale", "Payment", "Return"
     reference: str  # "R-000001", "CP-000001", "RET-000001"
     description: str
+    payment_method: Optional[str] = None
     debit: Decimal  # Increases customer due (Sale)
     credit: Decimal # Decreases customer due (Payment, Return credit)
     balance: Decimal # Running balance

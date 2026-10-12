@@ -73,7 +73,7 @@ class SalePayment(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     sale_id = Column(Integer, ForeignKey("sales.id", ondelete="CASCADE"), nullable=False, index=True)
     amount = Column(Numeric(12, 2), nullable=False)
-    payment_method = Column(String(30), nullable=False, default="Cash")
+    payment_method = Column(String(100), nullable=False, default="Cash")
     customer_payment_id = Column(Integer, ForeignKey("customer_payments.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.now)
 

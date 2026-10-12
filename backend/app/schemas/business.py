@@ -1,6 +1,7 @@
+import json
 from decimal import Decimal
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from backend.app.schemas.product import CustomFieldCreate, CustomFieldResponse
 
 class BusinessSettingsResponse(BaseModel):
@@ -54,6 +55,27 @@ class BusinessSettingsResponse(BaseModel):
     lock_dashboard_finances: bool = False
     has_dashboard_financials_pin: bool = False
     enable_pos_quick_pay: bool = True
+    payment_accounts: List[str] = ["Cash", "Bank Transfer", "Easypaisa", "Jazzcash"]
+
+    @field_validator("payment_accounts", mode="before")
+    def parse_payment_accounts(cls, v):
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    res = [str(x).strip() for x in parsed if str(x).strip()]
+                    if "Cash" not in res:
+                        res.insert(0, "Cash")
+                    return res
+            except Exception:
+                pass
+            return ["Cash", "Bank Transfer", "Easypaisa", "Jazzcash"]
+        elif isinstance(v, list):
+            res = [str(x).strip() for x in v if str(x).strip()]
+            if "Cash" not in res:
+                res.insert(0, "Cash")
+            return res
+        return ["Cash", "Bank Transfer", "Easypaisa", "Jazzcash"]
 
     class Config:
         from_attributes = True
@@ -108,6 +130,7 @@ class BusinessSettingsUpdate(BaseModel):
     lock_dashboard_finances: Optional[bool] = None
     dashboard_financials_pin: Optional[str] = None
     enable_pos_quick_pay: Optional[bool] = None
+    payment_accounts: Optional[List[str]] = None
 
 class PresetTemplateResponse(BaseModel):
     key: str

@@ -265,6 +265,7 @@ export const LedgerStatementModal: React.FC<LedgerStatementModalProps> = ({
       'Date',
       'Time',
       'Type',
+      'Payment Method',
       'Bill Reference',
       'Voucher / Ref',
       'Description',
@@ -287,6 +288,7 @@ export const LedgerStatementModal: React.FC<LedgerStatementModalProps> = ({
         dateStr,
         timeStr,
         e.type,
+        `"${(e.payment_method || '').replace(/"/g, '""')}"`,
         e.bill_reference || '',
         e.reference,
         `"${e.description.replace(/"/g, '""')}"`,
@@ -638,18 +640,26 @@ export const LedgerStatementModal: React.FC<LedgerStatementModalProps> = ({
                                       </span>
                                     </td>
                                     <td className="py-2 px-3 font-medium text-slate-800 dark:text-slate-200">
-                                      <span
-                                        className={`inline-block mr-1.5 px-1.5 py-0.2 rounded text-[10px] font-bold ${
-                                          isInvoice
-                                            ? 'bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300'
-                                            : ev.type.toLowerCase() === 'payment'
-                                            ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300'
-                                            : 'bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300'
-                                        }`}
-                                      >
-                                        {ev.type}
-                                      </span>
-                                      {ev.description}
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span
+                                          className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                                            isInvoice
+                                              ? 'bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300'
+                                              : ev.type.toLowerCase() === 'payment'
+                                              ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300'
+                                              : 'bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300'
+                                          }`}
+                                        >
+                                          {ev.type}
+                                        </span>
+                                        <span>{ev.description}</span>
+                                        {ev.payment_method && (
+                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                            <CreditCard className="w-2.5 h-2.5 text-slate-400" />
+                                            {ev.payment_method}
+                                          </span>
+                                        )}
+                                      </div>
                                     </td>
                                     <td className="py-2 px-3 font-mono text-[11px] text-slate-600 dark:text-slate-400">
                                       {ev.reference}
@@ -658,7 +668,12 @@ export const LedgerStatementModal: React.FC<LedgerStatementModalProps> = ({
                                       {formatCurrency(bill.billAmount, currency)}
                                     </td>
                                     <td className="py-2 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-                                      {isInvoice && paidVal === 0 ? '—' : formatCurrency(paidVal, currency)}
+                                      <div>{isInvoice && paidVal === 0 ? '—' : formatCurrency(paidVal, currency)}</div>
+                                      {ev.payment_method && paidVal > 0 && (
+                                        <div className="text-[10px] font-normal text-slate-400 dark:text-slate-500">
+                                          via {ev.payment_method}
+                                        </div>
+                                      )}
                                     </td>
                                     <td className="py-2 px-3 text-right font-bold whitespace-nowrap">
                                       <span
@@ -700,6 +715,12 @@ export const LedgerStatementModal: React.FC<LedgerStatementModalProps> = ({
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-[11px] text-slate-500">{ev.reference}</span>
                         <span className="text-slate-700 dark:text-slate-300">{ev.description}</span>
+                        {ev.payment_method && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                            <CreditCard className="w-2.5 h-2.5 text-slate-400" />
+                            {ev.payment_method}
+                          </span>
+                        )}
                       </div>
                       <span className="font-bold text-emerald-600 dark:text-emerald-400">
                         {formatCurrency(Number(ev.credit || ev.debit) || 0, currency)}
@@ -782,7 +803,7 @@ export const LedgerStatementModal: React.FC<LedgerStatementModalProps> = ({
 
                       {/* Description */}
                       <td className="py-2.5 px-3 text-slate-700 dark:text-slate-300">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span
                             className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold shrink-0 ${
                               isInvoice
@@ -795,6 +816,12 @@ export const LedgerStatementModal: React.FC<LedgerStatementModalProps> = ({
                             {entry.type}
                           </span>
                           <span className="truncate max-w-[240px]">{entry.description}</span>
+                          {entry.payment_method && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shrink-0">
+                              <CreditCard className="w-2.5 h-2.5 text-slate-400" />
+                              {entry.payment_method}
+                            </span>
+                          )}
                         </div>
                       </td>
 
@@ -805,7 +832,12 @@ export const LedgerStatementModal: React.FC<LedgerStatementModalProps> = ({
 
                       {/* Paid / Settled */}
                       <td className="py-2.5 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-                        {paidAmt > 0 ? formatCurrency(paidAmt, currency) : '—'}
+                        <div>{paidAmt > 0 ? formatCurrency(paidAmt, currency) : '—'}</div>
+                        {entry.payment_method && paidAmt > 0 && (
+                          <div className="text-[10px] font-normal text-slate-400 dark:text-slate-500">
+                            via {entry.payment_method}
+                          </div>
+                        )}
                       </td>
 
                       {/* Bill Remaining */}
@@ -901,6 +933,7 @@ export const LedgerStatementModal: React.FC<LedgerStatementModalProps> = ({
               <th className="py-2 px-3">Bill Ref</th>
               <th className="py-2 px-3">Voucher</th>
               <th className="py-2 px-3">Description</th>
+              <th className="py-2 px-3">Method</th>
               <th className="py-2 px-3 text-right">Bill Total</th>
               <th className="py-2 px-3 text-right">Paid</th>
               <th className="py-2 px-3 text-right">Bill Remaining</th>
@@ -926,6 +959,7 @@ export const LedgerStatementModal: React.FC<LedgerStatementModalProps> = ({
                   <td className="py-2 px-3 font-mono font-bold">{entry.bill_reference || '—'}</td>
                   <td className="py-2 px-3 font-mono">{entry.reference}</td>
                   <td className="py-2 px-3">{entry.description}</td>
+                  <td className="py-2 px-3 font-semibold text-slate-700">{entry.payment_method || '—'}</td>
                   <td className="py-2 px-3 text-right">{billAmt}</td>
                   <td className="py-2 px-3 text-right font-medium">{paidAmt}</td>
                   <td className="py-2 px-3 text-right font-bold">{billRem}</td>

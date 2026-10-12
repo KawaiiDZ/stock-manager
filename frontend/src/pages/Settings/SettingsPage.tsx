@@ -43,6 +43,8 @@ import {
   Leaf,
   Keyboard,
   Users,
+  CreditCard,
+  Wallet,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -157,7 +159,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
   // Settings tab
   const [activeTab, setActiveTab] = useState<
-    'business' | 'appearance' | 'tax' | 'custom_fields' | 'printer' | 'barcode' | 'backup' | 'users' | 'security' | 'danger_zone'
+    'business' | 'payments' | 'appearance' | 'tax' | 'custom_fields' | 'printer' | 'barcode' | 'backup' | 'users' | 'security' | 'danger_zone'
   >('business');
 
   // Business Form State
@@ -167,6 +169,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [currency, setCurrency] = useState(settings?.currency || 'Rs.');
   const [showSku, setShowSku] = useState(settings?.show_sku ?? true);
   const [showBarcode, setShowBarcode] = useState(settings?.show_barcode ?? true);
+
+  // Payment Accounts State
+  const [paymentAccounts, setPaymentAccounts] = useState<string[]>(
+    settings?.payment_accounts || ['Cash', 'Bank Transfer', 'Easypaisa', 'Jazzcash']
+  );
+  const [newAccountName, setNewAccountName] = useState('');
+  const [savingAccounts, setSavingAccounts] = useState(false);
 
   // Tax State
   const [taxEnabled, setTaxEnabled] = useState(settings?.tax_enabled || false);
@@ -388,6 +397,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setEnableQuotations(settings.enable_quotations ?? true);
       setEnableNavigationHub(settings.enable_navigation_hub ?? true);
       setEnablePosQuickPay(settings.enable_pos_quick_pay ?? true);
+      if (settings.payment_accounts && settings.payment_accounts.length > 0) {
+        setPaymentAccounts(settings.payment_accounts);
+      }
       setInvoiceTerms(settings.invoice_terms || '1. Goods once sold will be accepted for return within 7 days in original condition.\n2. Warranty claims require presenting this invoice.\n3. Thank you for your business!');
       setQuotationTerms(settings.quotation_terms || '1. This quotation is an estimate and valid for 15 days from issue date.\n2. Stock is subject to physical availability upon confirmation.\n3. This document does not constitute a tax invoice until approved.');
       setEnableBarcodeScanner(settings.enable_barcode_scanner ?? true);
@@ -533,6 +545,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         barcode_label_show_price: barcodeLabelShowPrice,
         barcode_label_show_sku: barcodeLabelShowSku,
         barcode_label_custom_text: barcodeLabelCustomText.trim(),
+        payment_accounts: paymentAccounts,
       });
       setGlobalFormattingPreferences({
         dateFormat,
@@ -545,6 +558,21 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setErrorMsg(err.detail || 'Failed to update settings');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSavePaymentAccounts = async (accountsToSave: string[]) => {
+    setSavingAccounts(true);
+    setErrorMsg(null);
+    try {
+      await api.updateSettings({ payment_accounts: accountsToSave });
+      setSuccessMsg('Payment accounts saved successfully!');
+      onSettingsUpdated();
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      setErrorMsg(err.detail || err.message || 'Failed to update payment accounts');
+    } finally {
+      setSavingAccounts(false);
     }
   };
 
@@ -1190,6 +1218,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-slate-200 dark:border-slate-800">
         {[
           { id: 'business', label: 'Business Profile', icon: <Store className="h-4 w-4" /> },
+          { id: 'payments', label: 'Payment Accounts', icon: <CreditCard className="h-4 w-4" /> },
           { id: 'appearance', label: 'Appearance & Themes', icon: <Palette className="h-4 w-4" /> },
           { id: 'tax', label: 'Tax Settings', icon: <Percent className="h-4 w-4" /> },
           { id: 'custom_fields', label: 'Custom Product Fields', icon: <Sliders className="h-4 w-4" /> },
@@ -1543,6 +1572,125 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   Transparent PNG or SVG (Max 2MB)
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Payment Accounts */}
+      {activeTab === 'payments' && (
+        <div className="max-w-3xl space-y-6">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div>
+                <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-emerald-600" />
+                  Payment Accounts & Tender Methods
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Configure payment accounts and methods for POS checkout, quick pay (Ctrl + Enter), split payments, and customer/supplier ledgers.
+                </p>
+              </div>
+            </div>
+
+            {/* Add New Account Form */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const name = newAccountName.trim();
+                if (!name) return;
+                if (paymentAccounts.some((a) => a.toLowerCase() === name.toLowerCase())) {
+                  setErrorMsg(`Account "${name}" already exists.`);
+                  return;
+                }
+                const updated = [...paymentAccounts, name];
+                setPaymentAccounts(updated);
+                setNewAccountName('');
+                handleSavePaymentAccounts(updated);
+              }}
+              className="flex items-center gap-2"
+            >
+              <div className="flex-1">
+                <Input
+                  placeholder="e.g. Nayapay, SadaPay, Meezan Bank, HBL, Bank Alfalah..."
+                  value={newAccountName}
+                  onChange={(e) => setNewAccountName(e.target.value)}
+                />
+              </div>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={!newAccountName.trim() || savingAccounts}
+                icon={<Plus className="h-4 w-4" />}
+                className="shrink-0 font-bold"
+              >
+                Add Account
+              </Button>
+            </form>
+
+            {/* List of Accounts */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Active Payment Accounts ({paymentAccounts.length})
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {paymentAccounts.map((account, idx) => {
+                  const isCash = account.toLowerCase() === 'cash';
+                  return (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200 dark:border-slate-750 bg-slate-50/50 dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-700 transition"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                            isCash
+                              ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400'
+                              : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400'
+                          }`}
+                        >
+                          {isCash ? <Wallet className="h-4.5 w-4.5" /> : <CreditCard className="h-4.5 w-4.5" />}
+                        </div>
+                        <div>
+                          <div className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                            {account}
+                            {isCash && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                Default Primary
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-slate-400">
+                            {isCash ? 'Base cash tender' : 'Custom account / tender'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {!isCash && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(`Are you sure you want to delete payment account "${account}"?`)) {
+                              const updated = paymentAccounts.filter((a) => a !== account);
+                              setPaymentAccounts(updated);
+                              handleSavePaymentAccounts(updated);
+                            }
+                          }}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition"
+                          title={`Delete ${account}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="pt-2 text-xs text-slate-400 leading-relaxed border-t border-slate-100 dark:border-slate-800">
+              💡 Tip: Configured accounts appear in Quick-Pay (Ctrl + Enter), Checkout split payments, and in the Customer & Supplier ledger dialogs.
             </div>
           </div>
         </div>

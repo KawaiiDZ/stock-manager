@@ -533,9 +533,14 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({ settings }) => {
                   onChange={(e) => setPayMethod(e.target.value)}
                   className="w-full py-2 px-3 rounded-xl text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
-                  <option value="Cash">Cash</option>
-                  <option value="Card">Credit / Debit Card</option>
-                  <option value="Bank Transfer">Bank Transfer</option>
+                  {(settings?.payment_accounts && settings.payment_accounts.length > 0
+                    ? settings.payment_accounts
+                    : ['Cash', 'Bank Transfer', 'Easypaisa', 'Jazzcash']
+                  ).map((acc) => (
+                    <option key={acc} value={acc}>
+                      {acc}
+                    </option>
+                  ))}
                   <option value="Cheque">Cheque</option>
                   <option value="Other">Other</option>
                 </select>

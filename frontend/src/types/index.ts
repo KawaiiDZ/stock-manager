@@ -50,6 +50,13 @@ export interface BusinessSettings {
   has_dashboard_financials_pin?: boolean;
   dashboard_financials_pin?: string;
   enable_pos_quick_pay?: boolean;
+  payment_accounts?: string[];
+}
+
+export interface PaymentSplit {
+  payment_method: string;
+  amount: number;
+  notes?: string;
 }
 
 export interface PrinterInfo {
@@ -142,6 +149,7 @@ export interface CustomerLedgerEntry {
   type: string;
   reference: string;
   description: string;
+  payment_method?: string | null;
   debit: number;
   credit: number;
   balance: number;
@@ -171,6 +179,7 @@ export interface SupplierLedgerEntry {
   type: string;
   reference: string;
   description: string;
+  payment_method?: string | null;
   debit: number;
   credit: number;
   balance: number;

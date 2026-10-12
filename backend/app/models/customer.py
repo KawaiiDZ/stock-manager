@@ -26,7 +26,7 @@ class CustomerPayment(Base):
     payment_number = Column(String(30), unique=True, nullable=False, index=True) # CP-000001
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
     amount = Column(Numeric(12, 2), nullable=False)
-    payment_method = Column(String(30), nullable=False, default="Cash")
+    payment_method = Column(String(100), nullable=False, default="Cash")
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.now, index=True)
 

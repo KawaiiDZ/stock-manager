@@ -9,6 +9,11 @@ class SaleItemCreate(BaseModel):
     unit_price: Decimal
     discount_amount: Decimal = Decimal("0.00")
 
+class PaymentSplit(BaseModel):
+    payment_method: str
+    amount: Decimal
+    notes: Optional[str] = None
+
 class SaleCreate(BaseModel):
     customer_id: Optional[int] = None
     customer_name: Optional[str] = None
@@ -18,6 +23,7 @@ class SaleCreate(BaseModel):
     tax_rate: Optional[Decimal] = None
     paid_amount: Decimal = Decimal("0.00")
     payment_method: str = "Cash"
+    payment_splits: Optional[List[PaymentSplit]] = None
     notes: Optional[str] = None
 
 class SaleItemBatchResponse(BaseModel):
@@ -144,3 +150,5 @@ class ReceiptPrintResponse(BaseModel):
     paid_amount: Decimal
     due_amount: Decimal
     payment_status: str
+    payment_method: Optional[str] = "Cash"
+    payments: List[SalePaymentResponse] = []
