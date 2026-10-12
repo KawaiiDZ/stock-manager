@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../../services/api';
 import { BusinessSettings, CustomField, BackupFile, Sale, PrinterInfo } from '../../types';
 import {
   Settings as SettingsIcon,
+  Search,
   Lock,
   Store,
   Percent,
@@ -144,6 +145,325 @@ interface SettingsPageProps {
   onOpenWizard?: () => void;
 }
 
+
+interface SettingSearchItem {
+  id: string;
+  title: string;
+  category: 'general' | 'finance' | 'hardware' | 'appearance' | 'security' | 'maintenance';
+  subTab?: 'receipts' | 'printers' | 'invoices' | 'barcodes';
+  categoryLabel: string;
+  description: string;
+  keywords: string[];
+}
+
+const SETTINGS_SEARCH_INDEX: SettingSearchItem[] = [
+  {
+    id: 'biz_profile',
+    title: 'Store Name, Phone & Address',
+    category: 'general',
+    categoryLabel: 'Store & General',
+    description: 'Business name, contact phone number, and physical store address.',
+    keywords: ['name', 'phone', 'address', 'store', 'shop', 'business', 'contact', 'location'],
+  },
+  {
+    id: 'store_logo',
+    title: 'Store Brand Logo',
+    category: 'general',
+    categoryLabel: 'Store & General',
+    description: 'Upload custom logo for sidebar header, login screen, and invoices.',
+    keywords: ['logo', 'brand', 'image', 'picture', 'upload', 'header', 'icon'],
+  },
+  {
+    id: 'currency',
+    title: 'Currency Symbol & Presets (Rs. default)',
+    category: 'general',
+    categoryLabel: 'Store & General',
+    description: 'Select primary currency (Rs., PKR, ₹, $, AED, SAR, €, £) or type custom symbol.',
+    keywords: ['currency', 'rs', 'rupee', 'pkr', 'dollar', 'inr', 'symbol', 'money', 'aed', 'sar', 'eur', 'gbp', 'price'],
+  },
+  {
+    id: 'date_format',
+    title: 'Date & Number Formatting',
+    category: 'general',
+    categoryLabel: 'Store & General',
+    description: 'Configure date format across reports and optional thousands separators (commas) in prices.',
+    keywords: ['date', 'format', 'calendar', 'comma', 'commas', 'thousands', 'separator', 'prices'],
+  },
+  {
+    id: 'pos_quick_pay',
+    title: 'POS Quick-Pay Dialogue (Ctrl + Enter)',
+    category: 'general',
+    categoryLabel: 'Store & General',
+    description: 'Fast checkout dialog to enter paid amount, change preview, and split payment on Ctrl+Enter.',
+    keywords: ['pos', 'quick pay', 'ctrl enter', 'shortcut', 'checkout', 'hotkey', 'f9', 'cmd enter'],
+  },
+  {
+    id: 'navigation_hub',
+    title: 'Central Navigation Hub',
+    category: 'general',
+    categoryLabel: 'Store & General',
+    description: 'Central departmental visual dashboard with live statistics and keyboard quick-links.',
+    keywords: ['navigation', 'hub', 'dashboard', 'compass', 'shortcuts', 'home'],
+  },
+  {
+    id: 'identifiers',
+    title: 'Barcode & SKU Catalog Visibility',
+    category: 'general',
+    categoryLabel: 'Store & General',
+    description: 'Toggle Barcode and SKU input visibility in catalog, bulk add, and stock updates.',
+    keywords: ['sku', 'barcode', 'catalog', 'stock keeping unit', 'identifiers', 'visibility'],
+  },
+  {
+    id: 'payment_accounts',
+    title: 'Payment Accounts & Methods (Cash, Bank, Easypaisa, Jazzcash)',
+    category: 'finance',
+    categoryLabel: 'Payments & Taxes',
+    description: 'Configure active accounts for POS checkout, quick pay (Ctrl+Enter), split payments, and ledgers.',
+    keywords: ['payment', 'accounts', 'easypaisa', 'jazzcash', 'bank', 'transfer', 'cash', 'split', 'mix', 'tender', 'ledger', 'meezan', 'sadapay'],
+  },
+  {
+    id: 'sales_tax',
+    title: 'Sales Tax Configuration',
+    category: 'finance',
+    categoryLabel: 'Payments & Taxes',
+    description: 'Enable automatic sales tax calculation and configure default percentage.',
+    keywords: ['tax', 'vat', 'gst', 'rate', 'percentage', 'sales tax', 'tax enabled'],
+  },
+  {
+    id: 'thermal_layout',
+    title: 'Thermal Receipt Layout Presets',
+    category: 'hardware',
+    subTab: 'receipts',
+    categoryLabel: 'Receipts & Hardware',
+    description: 'Classic POS, Modern Clean, Tabular Grid, Compact Paper-Saver, or Elegant Boutique.',
+    keywords: ['layout', 'thermal', 'receipt', 'classic', 'modern', 'tabular', 'compact', 'elegant', 'style', 'template'],
+  },
+  {
+    id: 'paper_width',
+    title: 'Thermal Paper Roll Width (80mm / 58mm)',
+    category: 'hardware',
+    subTab: 'receipts',
+    categoryLabel: 'Receipts & Hardware',
+    description: 'Switch between standard 80mm roll width or compact 58mm roll width.',
+    keywords: ['80mm', '58mm', 'paper', 'roll', 'width', 'receipt size', 'roll width', 'paper size'],
+  },
+  {
+    id: 'thermal_darkness',
+    title: 'Thermal Print Darkness & Heat Density',
+    category: 'hardware',
+    subTab: 'receipts',
+    categoryLabel: 'Receipts & Hardware',
+    description: 'Adjust heat burn density between Standard POS, High Density, and Maximum Dark.',
+    keywords: ['darkness', 'density', 'heat', 'burn', 'maximum', 'high', 'normal', 'fade', 'contrast'],
+  },
+  {
+    id: 'receipt_logo',
+    title: 'Thermal Receipt Monochrome Print Logo',
+    category: 'hardware',
+    subTab: 'receipts',
+    categoryLabel: 'Receipts & Hardware',
+    description: 'Upload high-contrast monochrome logo printed on receipt headers.',
+    keywords: ['receipt logo', 'thermal logo', 'monochrome', 'print logo', 'header logo'],
+  },
+  {
+    id: 'receipt_text',
+    title: 'Receipt Header & Footer Custom Text',
+    category: 'hardware',
+    subTab: 'receipts',
+    categoryLabel: 'Receipts & Hardware',
+    description: 'Custom greeting message and return policy printed on receipts.',
+    keywords: ['header', 'footer', 'greeting', 'policy', 'thank you', 'receipt message'],
+  },
+  {
+    id: 'feed_cut',
+    title: 'Paper Feed Lines & Auto-Cutter Mode',
+    category: 'hardware',
+    subTab: 'receipts',
+    categoryLabel: 'Receipts & Hardware',
+    description: 'Adjust feed lines after receipt and set Partial Cut, Full Cut, or Tear-only bar.',
+    keywords: ['feed', 'cut', 'cutter', 'auto cut', 'margins', 'tear', 'feed lines', 'scissors'],
+  },
+  {
+    id: 'receipt_preview',
+    title: 'Live Interactive Thermal Receipt Preview',
+    category: 'hardware',
+    subTab: 'receipts',
+    categoryLabel: 'Receipts & Hardware',
+    description: 'Real-time interactive preview of thermal receipt matching your settings.',
+    keywords: ['preview', 'live preview', 'test receipt', 'receipt sample'],
+  },
+  {
+    id: 'assigned_printers',
+    title: 'Assigned Thermal & A4 Printers',
+    category: 'hardware',
+    subTab: 'printers',
+    categoryLabel: 'Receipts & Hardware',
+    description: 'Assign specific connected printers for thermal POS rolls and A4 documents.',
+    keywords: ['printer', 'assigned printer', 'thermal printer', 'a4 printer', 'cups', 'spooler', 'select printer', 'rescan'],
+  },
+  {
+    id: 'print_engine',
+    title: 'Direct ESC/POS vs Browser Print Engine',
+    category: 'hardware',
+    subTab: 'printers',
+    categoryLabel: 'Receipts & Hardware',
+    description: 'Direct raw hardware socket/CUPS bypass vs standard OS browser print dialog.',
+    keywords: ['esc/pos', 'direct print', 'engine', 'cups', 'postscript', 'raw print', 'browser print'],
+  },
+  {
+    id: 'auto_print',
+    title: '1-Click Auto-Print on POS Checkout (Skip Preview)',
+    category: 'hardware',
+    subTab: 'printers',
+    categoryLabel: 'Receipts & Hardware',
+    description: 'Automatically spool receipt immediately upon checkout without preview modal.',
+    keywords: ['auto print', 'skip preview', '1 click', 'instant print', 'auto'],
+  },
+  {
+    id: 'printer_diagnostics',
+    title: 'Printer Calibration, Test Print & Spooler Clear',
+    category: 'hardware',
+    subTab: 'printers',
+    categoryLabel: 'Receipts & Hardware',
+    description: 'Print test receipt, hardware calibration pattern, or clear hung printer queue.',
+    keywords: ['test print', 'diagnostic', 'calibration', 'clear queue', 'spooler', 'offline'],
+  },
+  {
+    id: 'a4_letterhead',
+    title: 'A4 Corporate Invoices & Letterhead Banner',
+    category: 'hardware',
+    subTab: 'invoices',
+    categoryLabel: 'Receipts & Hardware',
+    description: 'Upload branded letterhead banner graphic and set custom invoice heading title.',
+    keywords: ['letterhead', 'a4', 'invoice', 'banner', 'invoice title', 'pdf', 'corporate'],
+  },
+  {
+    id: 'invoice_terms',
+    title: 'Standard Invoice & Quotation Terms',
+    category: 'hardware',
+    subTab: 'invoices',
+    categoryLabel: 'Receipts & Hardware',
+    description: 'Set default terms, warranty clauses, and return policies on invoices and quotations.',
+    keywords: ['terms', 'conditions', 'warranty', 'return policy', 'notes', 'quotation terms'],
+  },
+  {
+    id: 'quotations_module',
+    title: 'Quotations & Estimates Module',
+    category: 'hardware',
+    subTab: 'invoices',
+    categoryLabel: 'Receipts & Hardware',
+    description: 'Enable or disable quotation creation and management in POS.',
+    keywords: ['quotations', 'estimates', 'quotes', 'enable quotations'],
+  },
+  {
+    id: 'barcode_scanner',
+    title: 'Barcode Scanner Support',
+    category: 'hardware',
+    subTab: 'barcodes',
+    categoryLabel: 'Receipts & Hardware',
+    description: 'Enable USB or wireless handheld barcode scanner input across POS and Catalog.',
+    keywords: ['scanner', 'barcode scanner', 'handheld', 'usb scanner', 'scan'],
+  },
+  {
+    id: 'barcode_printer',
+    title: 'Barcode Label Printer & Dimensions',
+    category: 'hardware',
+    subTab: 'barcodes',
+    categoryLabel: 'Receipts & Hardware',
+    description: 'Set label dimensions (50x25mm, 40x30mm, 60x40mm, custom) and label elements.',
+    keywords: ['barcode printer', 'label', 'sticker', '50x25mm', 'dimensions', 'barcode size', 'width', 'height'],
+  },
+  {
+    id: 'barcode_preview',
+    title: 'Live Barcode Label SVG Preview & Test Print',
+    category: 'hardware',
+    subTab: 'barcodes',
+    categoryLabel: 'Receipts & Hardware',
+    description: 'Live SVG label preview with price and SKU, plus test print dialog.',
+    keywords: ['barcode preview', 'label preview', 'test barcode', 'barcode test'],
+  },
+  {
+    id: 'themes_darkmode',
+    title: 'Display Theme & Dark Mode',
+    category: 'appearance',
+    categoryLabel: 'Appearance & Fields',
+    description: 'Switch between Light Mode, Dark Mode, or System Auto interface appearance.',
+    keywords: ['theme', 'dark mode', 'light mode', 'system', 'appearance', 'mode'],
+  },
+  {
+    id: 'accent_colors',
+    title: 'Brand Accent Color Theme',
+    category: 'appearance',
+    categoryLabel: 'Appearance & Fields',
+    description: 'Choose your preferred accent palette (Emerald, Blue, Violet, Amber, Rose, Slate).',
+    keywords: ['color', 'accent', 'palette', 'emerald', 'blue', 'violet', 'amber', 'rose', 'slate'],
+  },
+  {
+    id: 'custom_fields',
+    title: 'Custom Product Fields & Attributes',
+    category: 'appearance',
+    categoryLabel: 'Appearance & Fields',
+    description: 'Define custom product specifications like expiry, batch, size, material, warranty.',
+    keywords: ['custom fields', 'schema', 'attributes', 'specifications', 'columns', 'product fields'],
+  },
+  {
+    id: 'staff_management',
+    title: 'Staff Accounts, Roles & Device Terminals',
+    category: 'security',
+    categoryLabel: 'Staff & Security',
+    description: 'Multi-user staff accounts, cashier permissions, and registered client terminals.',
+    keywords: ['staff', 'users', 'roles', 'permissions', 'cashiers', 'terminals', 'devices', 'employees'],
+  },
+  {
+    id: 'admin_password',
+    title: 'Change Admin Login Password',
+    category: 'security',
+    categoryLabel: 'Staff & Security',
+    description: 'Update the master administrator login password.',
+    keywords: ['password', 'admin password', 'change password', 'login'],
+  },
+  {
+    id: 'configuration_pin',
+    title: 'Change Configuration Master PIN',
+    category: 'security',
+    categoryLabel: 'Staff & Security',
+    description: 'Update the 4-digit PIN used to protect business settings.',
+    keywords: ['pin', 'master pin', 'security pin', 'settings pin', 'change pin'],
+  },
+  {
+    id: 'dashboard_privacy',
+    title: 'Dashboard Financial Privacy Lock',
+    category: 'security',
+    categoryLabel: 'Staff & Security',
+    description: 'Mask daily revenue and gross profit on dashboard behind a PIN or password.',
+    keywords: ['dashboard lock', 'hide revenue', 'hide profit', 'privacy', 'financial lock', 'mask'],
+  },
+  {
+    id: 'cloud_backup',
+    title: 'Google Drive Cloud Backup',
+    category: 'maintenance',
+    categoryLabel: 'Backup & Maintenance',
+    description: 'Automated and on-demand cloud sync to your Google Drive account.',
+    keywords: ['google drive', 'cloud', 'backup', 'drive sync', 'cloud backup', 'restore cloud'],
+  },
+  {
+    id: 'local_backups',
+    title: 'Local Database Snapshots & Restore',
+    category: 'maintenance',
+    categoryLabel: 'Backup & Maintenance',
+    description: 'Create manual SQLite snapshots, download, import .db file, or restore backup.',
+    keywords: ['backup', 'snapshots', 'local backup', 'restore', 'upload db', 'download backup', 'sqlite'],
+  },
+  {
+    id: 'danger_zone',
+    title: 'Data Reset & Inventory Wipe Zone',
+    category: 'maintenance',
+    categoryLabel: 'Backup & Maintenance',
+    description: 'Reset sales records, wipe inventory and test products, or perform factory data reset.',
+    keywords: ['reset', 'wipe', 'danger zone', 'delete data', 'factory reset', 'clear sales', 'clear inventory'],
+  },
+];
+
 export const SettingsPage: React.FC<SettingsPageProps> = ({
   settings,
   onSettingsUpdated,
@@ -157,10 +477,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
   const { themeMode, colorTheme, effectiveMode, setThemeMode, setColorTheme } = useTheme();
 
-  // Settings tab
-  const [activeTab, setActiveTab] = useState<
-    'business' | 'payments' | 'appearance' | 'tax' | 'custom_fields' | 'printer' | 'barcode' | 'backup' | 'users' | 'security' | 'danger_zone'
-  >('business');
+  // Reorganized Master Categories & Quick-Find
+  const [activeCategory, setActiveCategory] = useState<
+    'general' | 'finance' | 'hardware' | 'appearance' | 'security' | 'maintenance'
+  >('general');
+
+  const [hardwareSubTab, setHardwareSubTab] = useState<
+    'receipts' | 'printers' | 'invoices' | 'barcodes'
+  >('receipts');
+
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Business Form State
   const [bizName, setBizName] = useState(settings?.business_name || '');
@@ -448,10 +774,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   };
 
   useEffect(() => {
-    if (isUnlocked && activeTab === 'printer') {
+    if (isUnlocked && activeCategory === 'hardware') {
       loadPrinters();
     }
-  }, [isUnlocked, activeTab]);
+  }, [isUnlocked, activeCategory]);
 
   const loadCustomFields = async () => {
     try {
@@ -1124,6 +1450,26 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     }
   };
 
+  // Quick-Find Filter Logic
+  const filteredSearchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return SETTINGS_SEARCH_INDEX.filter((item) => {
+      if (item.title.toLowerCase().includes(q)) return true;
+      if (item.description.toLowerCase().includes(q)) return true;
+      if (item.categoryLabel.toLowerCase().includes(q)) return true;
+      return item.keywords.some((k) => k.toLowerCase().includes(q));
+    });
+  }, [searchQuery]);
+
+  const handleSelectSearchResult = (item: SettingSearchItem) => {
+    setActiveCategory(item.category);
+    if (item.subTab) {
+      setHardwareSubTab(item.subTab);
+    }
+    setSearchQuery('');
+  };
+
   if (!isUnlocked) {
     return (
       <div className="max-w-md mx-auto my-12 bg-white rounded-3xl border border-slate-200 p-8 shadow-sm text-center">
@@ -1214,39 +1560,204 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </div>
       )}
 
-      {/* Navigation Tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-slate-200 dark:border-slate-800">
-        {[
-          { id: 'business', label: 'Business Profile', icon: <Store className="h-4 w-4" /> },
-          { id: 'payments', label: 'Payment Accounts', icon: <CreditCard className="h-4 w-4" /> },
-          { id: 'appearance', label: 'Appearance & Themes', icon: <Palette className="h-4 w-4" /> },
-          { id: 'tax', label: 'Tax Settings', icon: <Percent className="h-4 w-4" /> },
-          { id: 'custom_fields', label: 'Custom Product Fields', icon: <Sliders className="h-4 w-4" /> },
-          { id: 'printer', label: 'Receipt & Printer', icon: <Printer className="h-4 w-4" /> },
-          { id: 'barcode', label: 'Barcodes & Scanners', icon: <Barcode className="h-4 w-4" /> },
-          { id: 'backup', label: 'Backup & Cloud Sync', icon: <Database className="h-4 w-4" /> },
-          { id: 'users', label: 'Staff & Devices', icon: <Users className="h-4 w-4" /> },
-          { id: 'security', label: 'Security & PIN', icon: <KeyRound className="h-4 w-4" /> },
-          { id: 'danger_zone', label: 'Wipe / Reset Data', icon: <Trash2 className="h-4 w-4 text-rose-500" /> },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${
-              activeTab === tab.id
-                ? 'bg-slate-900 dark:bg-slate-800 text-white shadow-sm'
-                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/80'
-            }`}
-          >
-            {tab.icon}
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* Category Definitions & Modern Layout */}
+      {(() => {
+        const CATEGORIES = [
+          {
+            id: 'general' as const,
+            label: 'Store & General',
+            subtitle: 'Profile, currency & app options',
+            icon: <Store className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />,
+            activeColor: 'border-emerald-600 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-100',
+          },
+          {
+            id: 'finance' as const,
+            label: 'Payments & Taxes',
+            subtitle: 'Accounts, tender & sales tax',
+            icon: <CreditCard className="h-5 w-5 text-blue-600 dark:text-blue-400" />,
+            activeColor: 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/40 text-blue-900 dark:text-blue-100',
+          },
+          {
+            id: 'hardware' as const,
+            label: 'Receipts & Hardware',
+            subtitle: 'Thermal rolls, A4 & barcodes',
+            icon: <Printer className="h-5 w-5 text-purple-600 dark:text-purple-400" />,
+            activeColor: 'border-purple-600 bg-purple-50/70 dark:bg-purple-950/40 text-purple-900 dark:text-purple-100',
+          },
+          {
+            id: 'appearance' as const,
+            label: 'Appearance & Fields',
+            subtitle: 'Themes, dark mode & attributes',
+            icon: <Palette className="h-5 w-5 text-amber-600 dark:text-amber-400" />,
+            activeColor: 'border-amber-600 bg-amber-50/70 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100',
+          },
+          {
+            id: 'security' as const,
+            label: 'Staff & Security',
+            subtitle: 'Team roles, PINs & privacy',
+            icon: <Users className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />,
+            activeColor: 'border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-100',
+          },
+          {
+            id: 'maintenance' as const,
+            label: 'Backup & Data',
+            subtitle: 'Cloud sync & reset options',
+            icon: <Database className="h-5 w-5 text-rose-600 dark:text-rose-400" />,
+            activeColor: 'border-rose-600 bg-rose-50/70 dark:bg-rose-950/40 text-rose-900 dark:text-rose-100',
+          },
+        ];
 
-      {/* Tab: Business Profile */}
-      {activeTab === 'business' && (
-        <div className="max-w-3xl space-y-6">
+        const HARDWARE_SUBTABS = [
+          { id: 'receipts' as const, label: 'Thermal Receipts', icon: <Receipt className="h-4 w-4" /> },
+          { id: 'printers' as const, label: 'Printers & Diagnostics', icon: <Printer className="h-4 w-4" /> },
+          { id: 'invoices' as const, label: 'A4 Invoices & Quotations', icon: <FileText className="h-4 w-4" /> },
+          { id: 'barcodes' as const, label: 'Barcodes & Scanners', icon: <Barcode className="h-4 w-4" /> },
+        ];
+
+        return (
+          <>
+            {/* 1. Global Quick-Find Search Bar */}
+            <div className="relative">
+              <div className="relative flex items-center">
+                <Search className="absolute left-4 h-4 w-4 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search all settings (e.g. tax, currency, easypaisa, 80mm, direct print, logo, dark mode, pin, backup)..."
+                  className="w-full pl-11 pr-10 py-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-medium text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3.5 p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
+                    title="Clear search"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Live Search Results Dropdown Overlay */}
+              {searchQuery.trim() && (
+                <div className="absolute top-full left-0 right-0 mt-2 p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl max-h-96 overflow-y-auto space-y-1 z-30">
+                  {filteredSearchResults.length > 0 ? (
+                    filteredSearchResults.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleSelectSearchResult(item)}
+                        className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/80 transition text-left group"
+                      >
+                        <div className="space-y-0.5">
+                          <div className="font-bold text-xs text-slate-800 dark:text-slate-100 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition flex items-center gap-2">
+                            <span>{item.title}</span>
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                              {item.categoryLabel}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 dark:text-slate-500 leading-snug">
+                            {item.description}
+                          </p>
+                        </div>
+                        <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 opacity-0 group-hover:opacity-100 transition shrink-0 pl-2">
+                          Go →
+                        </span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="py-6 text-center text-xs text-slate-400 dark:text-slate-500">
+                      No matching settings found for "{searchQuery}". Try searching for <span className="font-semibold text-emerald-600">currency</span>, <span className="font-semibold text-emerald-600">tax</span>, <span className="font-semibold text-emerald-600">easypaisa</span>, or <span className="font-semibold text-emerald-600">printer</span>.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* 2. Main 2-Column Responsive Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Left Sidebar: 6 Master Categories (3 cols on lg+) */}
+              <div className="lg:col-span-3 xl:col-span-3 space-y-2 sticky top-6">
+                <div className="hidden lg:block text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 pb-1">
+                  Configuration Sections
+                </div>
+
+                {/* Desktop/Tablet Vertical Buttons */}
+                <div className="hidden lg:flex flex-col space-y-1.5">
+                  {CATEGORIES.map((cat) => {
+                    const isActive = activeCategory === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveCategory(cat.id);
+                          setSearchQuery('');
+                        }}
+                        className={`flex items-start gap-3 p-3.5 rounded-2xl border-2 text-left transition-all ${
+                          isActive
+                            ? cat.activeColor + ' shadow-xs ring-1 ring-black/5 dark:ring-white/10'
+                            : 'border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                        }`}
+                      >
+                        <div className="mt-0.5 p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 shadow-2xs shrink-0">
+                          {cat.icon}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="font-bold text-xs block leading-tight">
+                            {cat.label}
+                          </span>
+                          <span className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 block leading-tight truncate">
+                            {cat.subtitle}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Mobile Horizontal Pills (Visible only on < lg) */}
+                <div className="flex lg:hidden items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+                  {CATEGORIES.map((cat) => {
+                    const isActive = activeCategory === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveCategory(cat.id);
+                          setSearchQuery('');
+                        }}
+                        className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition border ${
+                          isActive
+                            ? 'bg-slate-900 dark:bg-slate-800 text-white border-slate-900 dark:border-slate-700 shadow-xs'
+                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300'
+                        }`}
+                      >
+                        {cat.icon}
+                        <span>{cat.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Right Content Area (9 cols on lg+) */}
+              <div className="lg:col-span-9 xl:col-span-9 space-y-6">
+                {/* CATEGORY 1: STORE & GENERAL */}
+                {activeCategory === 'general' && (
+                  <div className="space-y-6">
+                    <div className="p-4 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/40 flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300">
+                        <Store className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h2 className="font-black text-sm text-slate-900 dark:text-white">Store Profile & General Preferences</h2>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Manage business contact information, shop logo, store currency, and POS behavior.</p>
+                      </div>
+                    </div>
+
+                            <div className="max-w-3xl space-y-6">
           <form onSubmit={handleSaveSettings} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
             <h3 className="font-bold text-slate-800 text-base mb-2">Business Profile</h3>
             <Input
@@ -1575,11 +2086,23 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             </div>
           </div>
         </div>
-      )}
+                  </div>
+                )}
 
-      {/* Tab: Payment Accounts */}
-      {activeTab === 'payments' && (
-        <div className="max-w-3xl space-y-6">
+                {/* CATEGORY 2: PAYMENTS & TAXES */}
+                {activeCategory === 'finance' && (
+                  <div className="space-y-6">
+                    <div className="p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40 flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
+                        <CreditCard className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h2 className="font-black text-sm text-slate-900 dark:text-white">Payments & Financial Settings</h2>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Configure payment accounts, split checkout tender, and automatic sales tax rates.</p>
+                      </div>
+                    </div>
+
+                            <div className="max-w-3xl space-y-6">
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
               <div>
@@ -1694,236 +2217,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             </div>
           </div>
         </div>
-      )}
 
-      {/* Tab: Appearance & Themes */}
-      {activeTab === 'appearance' && (
-        <div className="max-w-3xl space-y-6">
-          {/* Display Mode (Light / Dark / System) */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-5">
-            <div>
-              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base flex items-center gap-2">
-                <Palette className="h-5 w-5 text-brand-600" />
-                Display Theme & Mode
-              </h3>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                Customize your display mode to reduce eye strain or match your operating system theme.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {[
-                {
-                  id: 'light',
-                  title: 'Light Mode',
-                  desc: 'Crisp daylight interface',
-                  icon: <Sun className="h-5 w-5 text-amber-500" />,
-                },
-                {
-                  id: 'dark',
-                  title: 'Dark Mode',
-                  desc: 'Deep slate & charcoal palette',
-                  icon: <Moon className="h-5 w-5 text-indigo-400" />,
-                },
-                {
-                  id: 'system',
-                  title: 'System Auto',
-                  desc: 'Matches device OS setting',
-                  icon: <Monitor className="h-5 w-5 text-slate-400" />,
-                },
-              ].map((m) => {
-                const isSelected = themeMode === m.id;
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => setThemeMode(m.id as ThemeMode)}
-                    className={`flex flex-col text-left p-4 rounded-2xl border-2 transition-all relative ${
-                      isSelected
-                        ? 'border-brand-600 bg-brand-50/50 dark:bg-brand-950/30 ring-2 ring-brand-500/20 shadow-sm'
-                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/40 dark:bg-slate-800/40'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between w-full mb-2">
-                      <div className="p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shadow-2xs">
-                        {m.icon}
-                      </div>
-                      {isSelected && (
-                        <div className="h-5 w-5 rounded-full bg-brand-600 text-white flex items-center justify-center">
-                          <Check className="h-3 w-3 stroke-[3]" />
-                        </div>
-                      )}
-                    </div>
-                    <span className="font-bold text-sm text-slate-800 dark:text-slate-100">{m.title}</span>
-                    <span className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 leading-snug">{m.desc}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Color Themes */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-5">
-            <div>
-              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base">Brand Accent Color</h3>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                Choose the primary accent color applied across buttons, highlights, badges, and POS controls.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {COLOR_THEME_OPTIONS.map((c) => {
-                const isSelected = colorTheme === c.id;
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => setColorTheme(c.id)}
-                    className={`flex items-start gap-3.5 p-4 rounded-2xl border-2 transition-all text-left relative ${
-                      isSelected
-                        ? 'border-brand-600 bg-brand-50/40 dark:bg-brand-950/20 ring-2 ring-brand-500/20 shadow-sm'
-                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/30 dark:bg-slate-800/30'
-                    }`}
-                  >
-                    <div
-                      className={`h-9 w-9 rounded-xl ${c.previewClass} flex items-center justify-center text-white shadow-sm shrink-0`}
-                    >
-                      {isSelected ? <Check className="h-4 w-4 stroke-[3]" /> : null}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-sm text-slate-800 dark:text-slate-100">{c.name}</span>
-                        {isSelected && (
-                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-100 text-brand-800 dark:bg-brand-900/60 dark:text-brand-300">
-                            Active
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 leading-snug">{c.description}</p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Live Component Preview */}
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
-              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
-                Live Component Preview
-              </span>
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700 flex flex-wrap items-center gap-3">
-                <Button variant="primary" size="sm">
-                  Primary Action
-                </Button>
-                <button
-                  type="button"
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-brand-50 text-brand-700 dark:bg-brand-950/60 dark:text-brand-300 border border-brand-200 dark:border-brand-800"
-                >
-                  Active Tag
-                </button>
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-brand-600 dark:text-brand-400">
-                  <span className="h-2 w-2 rounded-full bg-brand-500 animate-pulse"></span>
-                  Live Indicator
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Thermal Receipt Layout & Styling (Near Themes) */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base flex items-center gap-2">
-                  <Receipt className="h-5 w-5 text-brand-600" />
-                  Thermal Receipt Layout & Styling
-                </h3>
-                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                  Select a popular visual layout for your printed thermal receipts and checkout preview.
-                </p>
-              </div>
-              <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 self-start sm:self-auto">
-                Auto-saves instantly
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-              {THERMAL_LAYOUT_OPTIONS.map((lo) => {
-                const isSelected = thermalLayout === lo.id;
-                return (
-                  <button
-                    key={lo.id}
-                    type="button"
-                    onClick={() => handleChangeThermalLayout(lo.id)}
-                    className={`flex flex-col text-left p-4 rounded-2xl border-2 transition-all relative ${
-                      isSelected
-                        ? 'border-brand-600 bg-brand-50/50 dark:bg-brand-950/30 ring-2 ring-brand-500/20 shadow-sm'
-                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/40 dark:bg-slate-800/40'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between w-full mb-2">
-                      <div
-                        className={`p-2 rounded-xl border shadow-2xs ${
-                          isSelected
-                            ? 'bg-brand-600 text-white border-brand-500'
-                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
-                        }`}
-                      >
-                        {renderLayoutIcon(lo.iconName)}
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        {lo.badge && (
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${lo.badgeColor}`}>
-                            {lo.badge}
-                          </span>
-                        )}
-                        {isSelected && (
-                          <div className="h-5 w-5 rounded-full bg-brand-600 text-white flex items-center justify-center">
-                            <Check className="h-3 w-3 stroke-[3]" />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <span className="font-bold text-sm text-slate-800 dark:text-slate-100">{lo.title}</span>
-                    <span className="text-[11px] font-semibold text-brand-600 dark:text-brand-400 mt-0.5">{lo.subtitle}</span>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 leading-snug">{lo.desc}</p>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Receipt Print Protection Banner */}
-          <div className="p-4 rounded-2xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800 flex items-start gap-3">
-            <Info className="h-5 w-5 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
-            <div className="text-xs">
-              <span className="font-bold text-sky-900 dark:text-sky-200 block">Print & Thermal Immunity</span>
-              <span className="text-sky-700 dark:text-sky-300 leading-relaxed block mt-0.5">
-                Regardless of the selected theme or dark mode, thermal receipts and A4 invoices always print with crisp black text on pure white paper to conserve printer ink and ensure professional legal compliance.
-              </span>
-            </div>
-          </div>
-
-          {/* Save Button */}
-          <div className="pt-1 flex items-center gap-3">
-            <Button
-              type="button"
-              variant="primary"
-              loading={saving}
-              onClick={handleSaveSettings}
-            >
-              Save Appearance
-            </Button>
-            <span className="text-xs text-slate-400 dark:text-slate-500">
-              Settings persist across restarts and browser sessions.
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Tab: Tax Settings */}
-      {activeTab === 'tax' && (
-        <form onSubmit={handleSaveSettings} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm max-w-2xl space-y-5">
+                            <form onSubmit={handleSaveSettings} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm max-w-2xl space-y-5">
           <h3 className="font-bold text-slate-800 text-base">Tax Configuration</h3>
           
           <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
@@ -1955,220 +2250,63 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             Save Tax Settings
           </Button>
         </form>
-      )}
-
-      {/* Tab: Custom Product Fields & Schema Customizer */}
-      {activeTab === 'custom_fields' && (
-        <SchemaBuilder
-          onSchemaUpdated={onSettingsUpdated}
-          onOpenWizard={onOpenWizard}
-        />
-      )}
-
-      {/* Tab: Receipt & Printer */}
-      {activeTab === 'printer' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-            {/* Left Column: Configuration Forms (7 cols on XL) */}
-            <div className="xl:col-span-7 space-y-6">
-              <form onSubmit={handleSaveSettings} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <h3 className="font-bold text-slate-800 text-base">Receipt & Invoice Formatting</h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Configure thermal receipt printing, raw ESC/POS hardware spooling, and corporate PDF/A4 letterheads.
-                    </p>
                   </div>
-                  <Button type="submit" variant="primary" loading={saving} size="sm" className="font-bold shrink-0 shadow-sm">
-                    Save Receipt Settings
-                  </Button>
-                </div>
+                )}
 
-                {/* Receipt Format Selector Cards */}
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-500 mb-2">
-                    Default Receipt Format
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setReceiptType('thermal')}
-                      className={`p-4 rounded-2xl border-2 text-left transition-all flex items-start gap-3.5 ${
-                        receiptType === 'thermal'
-                          ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
-                          : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
-                      }`}
-                    >
-                      <div className={`p-2.5 rounded-xl mt-0.5 ${receiptType === 'thermal' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                {/* CATEGORY 3: RECEIPTS & HARDWARE */}
+                {activeCategory === 'hardware' && (
+                  <div className="space-y-6">
+                    <div className="p-4 rounded-2xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-800/40 flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300">
                         <Printer className="h-5 w-5" />
                       </div>
                       <div>
-                        <div className="font-bold text-sm flex items-center gap-1.5">
-                          Thermal Receipt Roll
-                          {receiptType === 'thermal' && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-200 text-emerald-800 rounded-md">Active</span>
-                          )}
-                        </div>
-                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                          Optimized for 80mm & 58mm thermal printers. Fast checkout, compact footprint, fast cuts.
-                        </p>
+                        <h2 className="font-black text-sm text-slate-900 dark:text-white">Receipts, Printing & Hardware</h2>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Thermal receipts layout, printer drivers, corporate A4 invoices, and barcode label printing.</p>
                       </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setReceiptType('pdf')}
-                      className={`p-4 rounded-2xl border-2 text-left transition-all flex items-start gap-3.5 ${
-                        receiptType === 'pdf'
-                          ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
-                          : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
-                      }`}
-                    >
-                      <div className={`p-2.5 rounded-xl mt-0.5 ${receiptType === 'pdf' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                        <FileText className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <div className="font-bold text-sm flex items-center gap-1.5">
-                          Standard PDF / A4 Invoice
-                          {receiptType === 'pdf' && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-200 text-emerald-800 rounded-md">Active</span>
-                          )}
-                        </div>
-                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                          Full-page corporate layout. Supports custom letterhead graphics, detailed tables & signature blocks.
-                        </p>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-
-                {/* POS Checkout Receipt Preview Modal & 1-Click Print Checkbox */}
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start justify-between gap-4">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <Zap className="h-4 w-4 text-emerald-600" />
-                      <span className="text-sm font-bold text-slate-800">
-                        Receipt Preview Pop-up Modal
-                      </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${!skipReceiptPreview ? 'bg-indigo-100 text-indigo-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                        {!skipReceiptPreview ? 'Preview Modal Active' : '1-Click Silent Print'}
-                      </span>
-                    </div>
-                    <label className="flex items-center gap-2.5 cursor-pointer pt-1">
-                      <input
-                        type="checkbox"
-                        checked={!skipReceiptPreview}
-                        onChange={(e) => handleToggleSkipReceiptPreview(!e.target.checked)}
-                        className="h-4 w-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
-                      />
-                      <span className="text-xs font-bold text-slate-700">
-                        Show receipt preview pop-up modal before printing
-                      </span>
-                    </label>
-                    <p className="text-xs text-slate-500 leading-relaxed max-w-xl pl-6.5">
-                      Keep this checked to review receipts in the interactive pop-up before printing. Uncheck it to enable fast <strong>1-Click Silent Print</strong> directly to your assigned printer on sale confirmation.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Dual Hardware Printer Devices (Avoid Hardware Conflicts) */}
-                <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                        <Printer className="h-4 w-4 text-emerald-600" />
-                        Hardware Printer Device Assignments
-                      </h4>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Assign independent physical printers for POS receipts vs A4 invoices/reports to prevent device conflicts.
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handleClearPrinterQueue}
-                        disabled={clearingQueue}
-                        className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-rose-700 flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-rose-50 transition"
-                        title="Cancel all pending/stuck print jobs in the printer queue"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-rose-500" />
-                        <span>{clearingQueue ? 'Clearing...' : 'Clear Queue'}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={loadPrinters}
-                        disabled={loadingPrinters}
-                        className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-emerald-700 flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition"
-                        title="Rescan connected printers"
-                      >
-                        <RefreshCw className={`h-3.5 w-3.5 ${loadingPrinters ? 'animate-spin text-emerald-600' : ''}`} />
-                        <span>Rescan</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Device 1: Thermal Receipt Printer */}
-                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                          <Receipt className="h-3.5 w-3.5 text-emerald-600" />
-                          POS Thermal Receipt Printer
-                        </label>
-                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60">
-                          POS Rolls
-                        </span>
-                      </div>
-                      <select
-                        value={selectedThermalPrinter}
-                        onChange={(e) => handleChangeThermalPrinter(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 shadow-xs"
-                      >
-                        <option value="">-- Auto-detect Thermal Printer --</option>
-                        {systemPrinters.map((p) => (
-                          <option key={p.name} value={p.name}>
-                            {p.name} {p.is_online === false ? '● [Offline / Powered Off]' : '● [Online]'} {p.is_thermal ? '★ (Detected Thermal POS)' : ''} {p.is_default ? '(Default)' : ''}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-[11px] text-slate-500">
-                        Assigned to: <strong className="text-slate-800 font-mono">{selectedThermalPrinter || 'Auto-detect'}</strong>
-                      </p>
                     </div>
 
-                    {/* Device 2: Document / A4 Invoice Printer */}
-                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                          <FileText className="h-3.5 w-3.5 text-blue-600" />
-                          Document & A4 Invoice Printer
-                        </label>
-                        <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/60">
-                          A4 Invoices & Reports
-                        </span>
-                      </div>
-                      <select
-                        value={selectedA4Printer}
-                        onChange={(e) => handleChangeA4Printer(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500 shadow-xs"
-                      >
-                        <option value="">-- System Default A4 Printer --</option>
-                        {systemPrinters.map((p) => (
-                          <option key={p.name} value={p.name}>
-                            {p.name} {p.is_online === false ? '● [Offline / Powered Off]' : '● [Online]'} {!p.is_thermal ? '★ (Standard A4 / Laser)' : ''} {p.is_default ? '(Default)' : ''}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-[11px] text-slate-500">
-                        Assigned to: <strong className="text-slate-800 font-mono">{selectedA4Printer || 'System Default'}</strong>
-                      </p>
+                    {/* Sub-tab Navigation */}
+                    <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-slate-200 dark:border-slate-800">
+                      {HARDWARE_SUBTABS.map((sub) => {
+                        const isSubActive = hardwareSubTab === sub.id;
+                        return (
+                          <button
+                            key={sub.id}
+                            type="button"
+                            onClick={() => setHardwareSubTab(sub.id)}
+                            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition ${
+                              isSubActive
+                                ? 'bg-purple-600 text-white shadow-xs'
+                                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                            }`}
+                          >
+                            {sub.icon}
+                            <span>{sub.label}</span>
+                          </button>
+                        );
+                      })}
                     </div>
-                  </div>
-                </div>
 
-                {/* Conditional Options for Thermal */}
-                {receiptType === 'thermal' && (
-                  <div className="space-y-5 pt-3 border-t border-slate-100">
+                    {/* Sub-tab 1: Thermal Receipts */}
+                    {hardwareSubTab === 'receipts' && (
+                      <div className="space-y-6">
+                        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+                          <div className="xl:col-span-7 space-y-6">
+                            <form onSubmit={handleSaveSettings} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div>
+                                  <h3 className="font-bold text-slate-800 text-base">Thermal Receipt Styling & Layout</h3>
+                                  <p className="text-xs text-slate-400 mt-0.5">
+                                    Configure roll width (80mm / 58mm), font density, and layout presets.
+                                  </p>
+                                </div>
+                                <Button type="submit" variant="primary" loading={saving} size="sm" className="font-bold shrink-0 shadow-sm">
+                                  Save Receipt Settings
+                                </Button>
+                              </div>
+
+                                                <div className="space-y-5 pt-3 border-t border-slate-100">
                     {/* Thermal Print Engine Mode Selection */}
                     <div>
                       <div className="flex items-center justify-between mb-2">
@@ -2642,183 +2780,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       </div>
                     </div>
                   </div>
-                )}
 
-                {/* Conditional Options for PDF / A4 */}
-                {receiptType === 'pdf' && (
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-sm font-bold text-slate-800 block">Custom / Pre-printed Letterhead</span>
-                        <span className="text-xs text-slate-500">Enable custom full-width branding banner or pre-printed letterhead alignment</span>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={showLetterhead}
-                          onChange={(e) => setShowLetterhead(e.target.checked)}
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-                      </label>
-                    </div>
+                              <div className="pt-2">
+                                <Button type="submit" variant="primary" loading={saving}>
+                                  Save Receipt Settings
+                                </Button>
+                              </div>
+                            </form>
 
-                    {showLetterhead && (
-                      <div className="pt-3 border-t border-slate-200/80 space-y-3">
-                        <label className="flex items-start gap-2.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={hideHeaderTextWithLetterhead}
-                            onChange={(e) => setHideHeaderTextWithLetterhead(e.target.checked)}
-                            className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 mt-0.5"
-                          />
-                          <div>
-                            <span className="text-xs font-semibold text-slate-800 block">
-                              Hide Computer-Generated Business Header Text
-                            </span>
-                            <span className="text-[11px] text-slate-400">
-                              Check this if your physical stationary or uploaded letterhead graphic already contains your business name, address, and phone number.
-                            </span>
-                          </div>
-                        </label>
-                      </div>
-                    )}
-
-                    <div className="pt-2">
-                      <Input
-                        label="A4 Invoice Document Heading Text"
-                        placeholder="e.g. TAX INVOICE, COMMERCIAL INVOICE, SALES INVOICE, BILL OF SALE, RECEIPT"
-                        value={invoiceTitle}
-                        onChange={(e) => setInvoiceTitle(e.target.value)}
-                        hint="Customize the main title text printed in bold capital letters at the top of A4/PDF invoices (Default: TAX INVOICE)."
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Quotations Feature Optional Toggle Card */}
-                <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-200 flex items-start justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-indigo-600" />
-                      <span className="text-sm font-bold text-slate-800">
-                        Customer Quotations & Estimates
-                      </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${enableQuotations ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}`}>
-                        {enableQuotations ? 'Enabled' : 'Disabled'}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 leading-relaxed max-w-xl">
-                      Allow cashiers to prepare non-binding quotation estimates in POS without deducting stock or money, and manage active offers in the sidebar. Turn off if your business does not require quotations.
-                    </p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
-                    <input
-                      type="checkbox"
-                      checked={enableQuotations}
-                      onChange={(e) => setEnableQuotations(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                  </label>
-                </div>
-
-                {/* Customizable Terms & Conditions (T&Cs) */}
-                <div className="space-y-4 pt-2 border-t border-slate-100">
-                  <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-emerald-600" />
-                    Customizable Terms & Conditions (T&Cs)
-                  </h4>
-
-                  <div className="grid grid-cols-1 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold uppercase text-slate-600 mb-1.5">
-                        A4 / PDF Invoice Terms & Conditions
-                      </label>
-                      <textarea
-                        rows={3}
-                        value={invoiceTerms}
-                        onChange={(e) => setInvoiceTerms(e.target.value)}
-                        placeholder="Enter invoice terms and conditions to print at the bottom of standard A4 invoices..."
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800 focus:outline-none focus:border-emerald-500 leading-relaxed"
-                      />
-                      <span className="text-[11px] text-slate-400 block mt-1">
-                        Printed at the bottom of all corporate A4 invoices (warranty, return policies, customer notice).
-                      </span>
-                    </div>
-
-                    {enableQuotations && (
-                      <div>
-                        <label className="block text-xs font-bold uppercase text-slate-600 mb-1.5">
-                          Quotation Terms & Conditions
-                        </label>
-                        <textarea
-                          rows={3}
-                          value={quotationTerms}
-                          onChange={(e) => setQuotationTerms(e.target.value)}
-                          placeholder="Enter quotation terms and conditions to print on customer quotation documents..."
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800 focus:outline-none focus:border-emerald-500 leading-relaxed"
-                        />
-                        <span className="text-[11px] text-slate-400 block mt-1">
-                          Printed on commercial quotation documents (validity period, stock availability clause, acceptance terms).
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <Input
-                      label="Receipt Header Subtitle"
-                      placeholder="e.g. Welcome to our store / ~ Boutique Guest Receipt ~"
-                      value={receiptHeader}
-                      onChange={(e) => setReceiptHeader(e.target.value)}
-                    />
-                    <div className="flex items-center justify-between mt-1 text-[11px] text-slate-500">
-                      <span>Controls subtitle below shop name. Clear to remove completely.</span>
-                      {receiptHeader && (
-                        <button
-                          type="button"
-                          onClick={() => setReceiptHeader('')}
-                          className="text-rose-600 hover:text-rose-700 font-semibold cursor-pointer underline text-[10.5px]"
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <Input
-                      label="Receipt Footer Note"
-                      placeholder="e.g. Thank you for your business!"
-                      value={receiptFooter}
-                      onChange={(e) => setReceiptFooter(e.target.value)}
-                    />
-                    <div className="flex items-center justify-between mt-1 text-[11px] text-slate-500">
-                      <span>Printed at receipt bottom. Clear to remove completely.</span>
-                      {receiptFooter && (
-                        <button
-                          type="button"
-                          onClick={() => setReceiptFooter('')}
-                          className="text-rose-600 hover:text-rose-700 font-semibold cursor-pointer underline text-[10.5px]"
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                  <Button type="submit" variant="primary" loading={saving}>
-                    Save Receipt & Printer Settings
-                  </Button>
-                </div>
-              </form>
-
-              {/* 1-Click Thermal Receipt Print Logo Uploader */}
+                            {/* 1-Click Thermal Receipt Print Logo Uploader */}
               <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
@@ -2906,85 +2876,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 </div>
               </div>
 
-              {/* Custom PDF / A4 Letterhead Banner Uploader */}
-              <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-slate-800 text-base">Corporate A4 Letterhead Banner</h3>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">PDF / A4 Format</span>
-                    </div>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Upload an official high-resolution corporate header banner to print across the top of all PDF invoices.
-                    </p>
-                  </div>
+              
+                          </div>
 
-                  <div className="flex items-center gap-2">
-                    <label className="cursor-pointer">
-                      <input
-                        type="file"
-                        accept="image/png, image/jpeg, image/webp"
-                        onChange={handleLetterheadFileUpload}
-                        className="hidden"
-                      />
-                      <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition">
-                        <Upload className="h-4 w-4" />
-                        Upload Letterhead
-                      </span>
-                    </label>
-
-                    {(letterheadImage || settings?.receipt_letterhead_path) && (
-                      <button
-                        type="button"
-                        onClick={handleResetLetterhead}
-                        className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 font-semibold text-xs transition"
-                        title="Remove custom letterhead"
-                      >
-                        Remove Letterhead
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Live Letterhead Preview */}
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
-                  {(letterheadImage || settings?.receipt_letterhead_path) ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-emerald-700 flex items-center gap-1.5">
-                          <CheckCircle2 className="h-4 w-4" /> Custom Letterhead Active
-                        </span>
-                        <span className="text-[11px] text-slate-400">Preview scaled to fit container</span>
-                      </div>
-                      <div className="w-full bg-white border border-slate-200 rounded-xl p-2 overflow-hidden shadow-sm max-h-36 flex items-center justify-center">
-                        <img
-                          src={letterheadImage || settings?.receipt_letterhead_path}
-                          alt="Uploaded Letterhead Banner"
-                          className="w-full max-h-32 object-contain"
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="py-6 flex flex-col items-center justify-center text-center text-slate-400">
-                      <Image className="h-10 w-10 stroke-1 text-slate-300 mb-2" />
-                      <p className="text-xs font-semibold text-slate-600">No custom letterhead uploaded</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        Standard business name, phone, address, and logo will be automatically rendered as the header.
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-200/60 gap-1">
-                    <span>Recommended Aspect Ratio: <strong>6:1 to 8:1</strong> (e.g. 1200×180px or 1600×220px)</span>
-                    <span>Supported: PNG, JPEG, WebP (Max 2.5MB)</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Right Column: Live Interactive Thermal Receipt Preview (5 cols on XL) */}
-            <div className="xl:col-span-5 space-y-4">
-              <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-4 sticky top-6">
+                          <div className="xl:col-span-5 space-y-4">
+                            <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-4 sticky top-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                   <div>
                     <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
@@ -3128,10 +3024,143 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   </button>
                 </div>
               </div>
-            </div>
-          </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
-          {/* OS Driver Advisory: macOS CUPS vs Windows */}
+                    {/* Sub-tab 2: Printers & Diagnostics */}
+                    {hardwareSubTab === 'printers' && (
+                      <div className="space-y-6 max-w-4xl">
+                        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
+                          {/* Dual Hardware Printer Devices (Avoid Hardware Conflicts) */}
+                <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <Printer className="h-4 w-4 text-emerald-600" />
+                        Hardware Printer Device Assignments
+                      </h4>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Assign independent physical printers for POS receipts vs A4 invoices/reports to prevent device conflicts.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleClearPrinterQueue}
+                        disabled={clearingQueue}
+                        className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-rose-700 flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-rose-50 transition"
+                        title="Cancel all pending/stuck print jobs in the printer queue"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+                        <span>{clearingQueue ? 'Clearing...' : 'Clear Queue'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={loadPrinters}
+                        disabled={loadingPrinters}
+                        className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-emerald-700 flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition"
+                        title="Rescan connected printers"
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${loadingPrinters ? 'animate-spin text-emerald-600' : ''}`} />
+                        <span>Rescan</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Device 1: Thermal Receipt Printer */}
+                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                          <Receipt className="h-3.5 w-3.5 text-emerald-600" />
+                          POS Thermal Receipt Printer
+                        </label>
+                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60">
+                          POS Rolls
+                        </span>
+                      </div>
+                      <select
+                        value={selectedThermalPrinter}
+                        onChange={(e) => handleChangeThermalPrinter(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 shadow-xs"
+                      >
+                        <option value="">-- Auto-detect Thermal Printer --</option>
+                        {systemPrinters.map((p) => (
+                          <option key={p.name} value={p.name}>
+                            {p.name} {p.is_online === false ? '● [Offline / Powered Off]' : '● [Online]'} {p.is_thermal ? '★ (Detected Thermal POS)' : ''} {p.is_default ? '(Default)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[11px] text-slate-500">
+                        Assigned to: <strong className="text-slate-800 font-mono">{selectedThermalPrinter || 'Auto-detect'}</strong>
+                      </p>
+                    </div>
+
+                    {/* Device 2: Document / A4 Invoice Printer */}
+                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                          <FileText className="h-3.5 w-3.5 text-blue-600" />
+                          Document & A4 Invoice Printer
+                        </label>
+                        <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/60">
+                          A4 Invoices & Reports
+                        </span>
+                      </div>
+                      <select
+                        value={selectedA4Printer}
+                        onChange={(e) => handleChangeA4Printer(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500 shadow-xs"
+                      >
+                        <option value="">-- System Default A4 Printer --</option>
+                        {systemPrinters.map((p) => (
+                          <option key={p.name} value={p.name}>
+                            {p.name} {p.is_online === false ? '● [Offline / Powered Off]' : '● [Online]'} {!p.is_thermal ? '★ (Standard A4 / Laser)' : ''} {p.is_default ? '(Default)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[11px] text-slate-500">
+                        Assigned to: <strong className="text-slate-800 font-mono">{selectedA4Printer || 'System Default'}</strong>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                
+                          {/* POS Checkout Receipt Preview Modal & 1-Click Print Checkbox */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start justify-between gap-4">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-emerald-600" />
+                      <span className="text-sm font-bold text-slate-800">
+                        Receipt Preview Pop-up Modal
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${!skipReceiptPreview ? 'bg-indigo-100 text-indigo-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                        {!skipReceiptPreview ? 'Preview Modal Active' : '1-Click Silent Print'}
+                      </span>
+                    </div>
+                    <label className="flex items-center gap-2.5 cursor-pointer pt-1">
+                      <input
+                        type="checkbox"
+                        checked={!skipReceiptPreview}
+                        onChange={(e) => handleToggleSkipReceiptPreview(!e.target.checked)}
+                        className="h-4 w-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
+                      />
+                      <span className="text-xs font-bold text-slate-700">
+                        Show receipt preview pop-up modal before printing
+                      </span>
+                    </label>
+                    <p className="text-xs text-slate-500 leading-relaxed max-w-xl pl-6.5">
+                      Keep this checked to review receipts in the interactive pop-up before printing. Uncheck it to enable fast <strong>1-Click Silent Print</strong> directly to your assigned printer on sale confirmation.
+                    </p>
+                  </div>
+                </div>
+
+                
+                        </div>
+                        {/* OS Driver Advisory: macOS CUPS vs Windows */}
           <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
             <div className="flex items-start gap-3">
               <div className="p-2.5 rounded-2xl bg-amber-50 text-amber-600 mt-0.5 shrink-0">
@@ -3175,12 +3204,340 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               </div>
             </div>
           </div>
-        </div>
-      )}
+                      </div>
+                    )}
 
-      {/* Tab: Barcodes & Scanners */}
-      {activeTab === 'barcode' && (
-        <div className="max-w-4xl space-y-6">
+                    {/* Sub-tab 3: A4 Invoices & Quotations */}
+                    {hardwareSubTab === 'invoices' && (
+                      <div className="space-y-6 max-w-4xl">
+                        <form onSubmit={handleSaveSettings} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                              <h3 className="font-bold text-slate-800 text-base">Corporate A4 Invoices & Quotations</h3>
+                              <p className="text-xs text-slate-400 mt-0.5">
+                                Configure full-page document headings, terms, return policies, and quotations.
+                              </p>
+                            </div>
+                            <Button type="submit" variant="primary" loading={saving} size="sm" className="font-bold shrink-0 shadow-sm">
+                              Save Invoices Settings
+                            </Button>
+                          </div>
+
+                          {/* Receipt Format Selector Cards */}
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-500 mb-2">
+                    Default Receipt Format
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setReceiptType('thermal')}
+                      className={`p-4 rounded-2xl border-2 text-left transition-all flex items-start gap-3.5 ${
+                        receiptType === 'thermal'
+                          ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
+                          : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                      }`}
+                    >
+                      <div className={`p-2.5 rounded-xl mt-0.5 ${receiptType === 'thermal' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                        <Printer className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm flex items-center gap-1.5">
+                          Thermal Receipt Roll
+                          {receiptType === 'thermal' && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-200 text-emerald-800 rounded-md">Active</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                          Optimized for 80mm & 58mm thermal printers. Fast checkout, compact footprint, fast cuts.
+                        </p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setReceiptType('pdf')}
+                      className={`p-4 rounded-2xl border-2 text-left transition-all flex items-start gap-3.5 ${
+                        receiptType === 'pdf'
+                          ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
+                          : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                      }`}
+                    >
+                      <div className={`p-2.5 rounded-xl mt-0.5 ${receiptType === 'pdf' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                        <FileText className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm flex items-center gap-1.5">
+                          Standard PDF / A4 Invoice
+                          {receiptType === 'pdf' && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-200 text-emerald-800 rounded-md">Active</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                          Full-page corporate layout. Supports custom letterhead graphics, detailed tables & signature blocks.
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                
+                          {/* Conditional Options for PDF / A4 */}
+                {receiptType === 'pdf' && (
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-sm font-bold text-slate-800 block">Custom / Pre-printed Letterhead</span>
+                        <span className="text-xs text-slate-500">Enable custom full-width branding banner or pre-printed letterhead alignment</span>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={showLetterhead}
+                          onChange={(e) => setShowLetterhead(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                      </label>
+                    </div>
+
+                    {showLetterhead && (
+                      <div className="pt-3 border-t border-slate-200/80 space-y-3">
+                        <label className="flex items-start gap-2.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={hideHeaderTextWithLetterhead}
+                            onChange={(e) => setHideHeaderTextWithLetterhead(e.target.checked)}
+                            className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 mt-0.5"
+                          />
+                          <div>
+                            <span className="text-xs font-semibold text-slate-800 block">
+                              Hide Computer-Generated Business Header Text
+                            </span>
+                            <span className="text-[11px] text-slate-400">
+                              Check this if your physical stationary or uploaded letterhead graphic already contains your business name, address, and phone number.
+                            </span>
+                          </div>
+                        </label>
+                      </div>
+                    )}
+
+                    <div className="pt-2">
+                      <Input
+                        label="A4 Invoice Document Heading Text"
+                        placeholder="e.g. TAX INVOICE, COMMERCIAL INVOICE, SALES INVOICE, BILL OF SALE, RECEIPT"
+                        value={invoiceTitle}
+                        onChange={(e) => setInvoiceTitle(e.target.value)}
+                        hint="Customize the main title text printed in bold capital letters at the top of A4/PDF invoices (Default: TAX INVOICE)."
+                      />
+                    </div>
+                  </div>
+                )}
+
+                
+                          {/* Quotations Feature Optional Toggle Card */}
+                <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-200 flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-indigo-600" />
+                      <span className="text-sm font-bold text-slate-800">
+                        Customer Quotations & Estimates
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${enableQuotations ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}`}>
+                        {enableQuotations ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed max-w-xl">
+                      Allow cashiers to prepare non-binding quotation estimates in POS without deducting stock or money, and manage active offers in the sidebar. Turn off if your business does not require quotations.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
+                    <input
+                      type="checkbox"
+                      checked={enableQuotations}
+                      onChange={(e) => setEnableQuotations(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                  </label>
+                </div>
+
+                
+                          {/* Customizable Terms & Conditions (T&Cs) */}
+                <div className="space-y-4 pt-2 border-t border-slate-100">
+                  <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-emerald-600" />
+                    Customizable Terms & Conditions (T&Cs)
+                  </h4>
+
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold uppercase text-slate-600 mb-1.5">
+                        A4 / PDF Invoice Terms & Conditions
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={invoiceTerms}
+                        onChange={(e) => setInvoiceTerms(e.target.value)}
+                        placeholder="Enter invoice terms and conditions to print at the bottom of standard A4 invoices..."
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800 focus:outline-none focus:border-emerald-500 leading-relaxed"
+                      />
+                      <span className="text-[11px] text-slate-400 block mt-1">
+                        Printed at the bottom of all corporate A4 invoices (warranty, return policies, customer notice).
+                      </span>
+                    </div>
+
+                    {enableQuotations && (
+                      <div>
+                        <label className="block text-xs font-bold uppercase text-slate-600 mb-1.5">
+                          Quotation Terms & Conditions
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={quotationTerms}
+                          onChange={(e) => setQuotationTerms(e.target.value)}
+                          placeholder="Enter quotation terms and conditions to print on customer quotation documents..."
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800 focus:outline-none focus:border-emerald-500 leading-relaxed"
+                        />
+                        <span className="text-[11px] text-slate-400 block mt-1">
+                          Printed on commercial quotation documents (validity period, stock availability clause, acceptance terms).
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Input
+                      label="Receipt Header Subtitle"
+                      placeholder="e.g. Welcome to our store / ~ Boutique Guest Receipt ~"
+                      value={receiptHeader}
+                      onChange={(e) => setReceiptHeader(e.target.value)}
+                    />
+                    <div className="flex items-center justify-between mt-1 text-[11px] text-slate-500">
+                      <span>Controls subtitle below shop name. Clear to remove completely.</span>
+                      {receiptHeader && (
+                        <button
+                          type="button"
+                          onClick={() => setReceiptHeader('')}
+                          className="text-rose-600 hover:text-rose-700 font-semibold cursor-pointer underline text-[10.5px]"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <Input
+                      label="Receipt Footer Note"
+                      placeholder="e.g. Thank you for your business!"
+                      value={receiptFooter}
+                      onChange={(e) => setReceiptFooter(e.target.value)}
+                    />
+                    <div className="flex items-center justify-between mt-1 text-[11px] text-slate-500">
+                      <span>Printed at receipt bottom. Clear to remove completely.</span>
+                      {receiptFooter && (
+                        <button
+                          type="button"
+                          onClick={() => setReceiptFooter('')}
+                          className="text-rose-600 hover:text-rose-700 font-semibold cursor-pointer underline text-[10.5px]"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                          <div className="pt-2">
+                            <Button type="submit" variant="primary" loading={saving}>
+                              Save Invoices Settings
+                            </Button>
+                          </div>
+                        </form>
+
+                        {/* Custom PDF / A4 Letterhead Banner Uploader */}
+              <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-slate-800 text-base">Corporate A4 Letterhead Banner</h3>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">PDF / A4 Format</span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Upload an official high-resolution corporate header banner to print across the top of all PDF invoices.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        accept="image/png, image/jpeg, image/webp"
+                        onChange={handleLetterheadFileUpload}
+                        className="hidden"
+                      />
+                      <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition">
+                        <Upload className="h-4 w-4" />
+                        Upload Letterhead
+                      </span>
+                    </label>
+
+                    {(letterheadImage || settings?.receipt_letterhead_path) && (
+                      <button
+                        type="button"
+                        onClick={handleResetLetterhead}
+                        className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 font-semibold text-xs transition"
+                        title="Remove custom letterhead"
+                      >
+                        Remove Letterhead
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Live Letterhead Preview */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+                  {(letterheadImage || settings?.receipt_letterhead_path) ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-emerald-700 flex items-center gap-1.5">
+                          <CheckCircle2 className="h-4 w-4" /> Custom Letterhead Active
+                        </span>
+                        <span className="text-[11px] text-slate-400">Preview scaled to fit container</span>
+                      </div>
+                      <div className="w-full bg-white border border-slate-200 rounded-xl p-2 overflow-hidden shadow-sm max-h-36 flex items-center justify-center">
+                        <img
+                          src={letterheadImage || settings?.receipt_letterhead_path}
+                          alt="Uploaded Letterhead Banner"
+                          className="w-full max-h-32 object-contain"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="py-6 flex flex-col items-center justify-center text-center text-slate-400">
+                      <Image className="h-10 w-10 stroke-1 text-slate-300 mb-2" />
+                      <p className="text-xs font-semibold text-slate-600">No custom letterhead uploaded</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Standard business name, phone, address, and logo will be automatically rendered as the header.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-200/60 gap-1">
+                    <span>Recommended Aspect Ratio: <strong>6:1 to 8:1</strong> (e.g. 1200×180px or 1600×220px)</span>
+                    <span>Supported: PNG, JPEG, WebP (Max 2.5MB)</span>
+                  </div>
+                </div>
+              </div>
+                      </div>
+                    )}
+
+                    {/* Sub-tab 4: Barcodes & Scanners */}
+                    {hardwareSubTab === 'barcodes' && (
+                              <div className="max-w-4xl space-y-6">
           <form onSubmit={handleSaveSettings} className="space-y-6">
             {/* 1. Barcode Scanner Configuration Card */}
             <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
@@ -3462,126 +3819,229 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             </div>
           </form>
         </div>
-      )}
-
-      {/* Tab: Backup & Restore */}
-      {activeTab === 'backup' && (
-        <div className="max-w-3xl space-y-6">
-          {/* Cloud Backup (WhatsApp-Style Google Drive) */}
-          <GoogleBackupCard
-            onSuccess={(msg) => setSuccessMsg(msg)}
-            onError={(err) => setErrorMsg(err)}
-          />
-
-          {/* Local Database Backup & Recovery */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="font-bold text-slate-800 text-base">Local Database Snapshots</h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Create offline snapshots of your database in the local Backups folder or import .db files
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  accept=".db"
-                  className="hidden"
-                  onChange={handleUploadBackup}
-                />
-                <Button
-                  variant="outline"
-                  size="md"
-                  icon={<Upload className="h-4 w-4" />}
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingBackup}
-                >
-                  {uploadingBackup ? 'Importing...' : 'Import Backup (.db)'}
-                </Button>
-                <Button
-                  variant="primary"
-                  size="md"
-                  icon={<Database className="h-4 w-4" />}
-                  onClick={handleCreateBackup}
-                >
-                  Backup Now
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Saved Local Backups ({backups.length})
-                </h4>
-                <button
-                  onClick={loadBackups}
-                  className="text-xs text-emerald-600 hover:underline flex items-center gap-1 font-semibold"
-                >
-                  <RefreshCw className="h-3 w-3" /> Refresh List
-                </button>
-              </div>
-
-              <div className="divide-y divide-slate-100 border border-slate-100 rounded-2xl overflow-hidden">
-                {loadingBackups ? (
-                  <div className="p-8 text-center text-slate-400 text-xs">Scanning backups folder...</div>
-                ) : backups.length === 0 ? (
-                  <div className="p-8 text-center text-slate-400 text-xs">
-                    No local backups found. Click "Backup Now" or "Import Backup (.db)" to manage backups.
+                    )}
                   </div>
-                ) : (
-                  backups.map((b) => (
-                    <div key={b.filename} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white hover:bg-slate-50">
-                      <div>
-                        <div className="font-mono font-bold text-slate-800 text-xs">{b.filename}</div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">
-                          {new Date(b.created_at).toLocaleString()} • {b.size_formatted}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <a
-                          href={api.downloadBackupUrl(b.filename)}
-                          download={b.filename}
-                          className="inline-flex items-center gap-1.5 text-xs py-1.5 px-3 font-semibold text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-xl transition"
-                          title="Download backup file to USB or disk"
-                        >
-                          <Download className="h-3.5 w-3.5 text-slate-500" />
-                          <span>Download</span>
-                        </a>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedRestoreBackup(b.filename);
-                            setRestoreLocalPin('');
-                            setRestoreLocalError(null);
-                          }}
-                          className="text-xs py-1 px-3 font-semibold text-rose-700 hover:bg-rose-50 border-rose-200"
-                        >
-                          Restore This Backup
-                        </Button>
+                )}
 
+                {/* CATEGORY 4: APPEARANCE & FIELDS */}
+                {activeCategory === 'appearance' && (
+                  <div className="space-y-6">
+                    <div className="p-4 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-800/40 flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300">
+                        <Palette className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h2 className="font-black text-sm text-slate-900 dark:text-white">Appearance & Custom Fields</h2>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Choose display themes, interface accent colors, and custom product specifications.</p>
                       </div>
                     </div>
-                  ))
-                )}
+
+                            <div className="max-w-3xl space-y-6">
+          {/* Display Mode (Light / Dark / System) */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-5">
+            <div>
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base flex items-center gap-2">
+                <Palette className="h-5 w-5 text-brand-600" />
+                Display Theme & Mode
+              </h3>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                Customize your display mode to reduce eye strain or match your operating system theme.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                {
+                  id: 'light',
+                  title: 'Light Mode',
+                  desc: 'Crisp daylight interface',
+                  icon: <Sun className="h-5 w-5 text-amber-500" />,
+                },
+                {
+                  id: 'dark',
+                  title: 'Dark Mode',
+                  desc: 'Deep slate & charcoal palette',
+                  icon: <Moon className="h-5 w-5 text-indigo-400" />,
+                },
+                {
+                  id: 'system',
+                  title: 'System Auto',
+                  desc: 'Matches device OS setting',
+                  icon: <Monitor className="h-5 w-5 text-slate-400" />,
+                },
+              ].map((m) => {
+                const isSelected = themeMode === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setThemeMode(m.id as ThemeMode)}
+                    className={`flex flex-col text-left p-4 rounded-2xl border-2 transition-all relative ${
+                      isSelected
+                        ? 'border-brand-600 bg-brand-50/50 dark:bg-brand-950/30 ring-2 ring-brand-500/20 shadow-sm'
+                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/40 dark:bg-slate-800/40'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full mb-2">
+                      <div className="p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shadow-2xs">
+                        {m.icon}
+                      </div>
+                      {isSelected && (
+                        <div className="h-5 w-5 rounded-full bg-brand-600 text-white flex items-center justify-center">
+                          <Check className="h-3 w-3 stroke-[3]" />
+                        </div>
+                      )}
+                    </div>
+                    <span className="font-bold text-sm text-slate-800 dark:text-slate-100">{m.title}</span>
+                    <span className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 leading-snug">{m.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Color Themes */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-5">
+            <div>
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base">Brand Accent Color</h3>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                Choose the primary accent color applied across buttons, highlights, badges, and POS controls.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {COLOR_THEME_OPTIONS.map((c) => {
+                const isSelected = colorTheme === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setColorTheme(c.id)}
+                    className={`flex items-start gap-3.5 p-4 rounded-2xl border-2 transition-all text-left relative ${
+                      isSelected
+                        ? 'border-brand-600 bg-brand-50/40 dark:bg-brand-950/20 ring-2 ring-brand-500/20 shadow-sm'
+                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/30 dark:bg-slate-800/30'
+                    }`}
+                  >
+                    <div
+                      className={`h-9 w-9 rounded-xl ${c.previewClass} flex items-center justify-center text-white shadow-sm shrink-0`}
+                    >
+                      {isSelected ? <Check className="h-4 w-4 stroke-[3]" /> : null}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-sm text-slate-800 dark:text-slate-100">{c.name}</span>
+                        {isSelected && (
+                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-100 text-brand-800 dark:bg-brand-900/60 dark:text-brand-300">
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 leading-snug">{c.description}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Live Component Preview */}
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                Live Component Preview
+              </span>
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700 flex flex-wrap items-center gap-3">
+                <Button variant="primary" size="sm">
+                  Primary Action
+                </Button>
+                <button
+                  type="button"
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-brand-50 text-brand-700 dark:bg-brand-950/60 dark:text-brand-300 border border-brand-200 dark:border-brand-800"
+                >
+                  Active Tag
+                </button>
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-brand-600 dark:text-brand-400">
+                  <span className="h-2 w-2 rounded-full bg-brand-500 animate-pulse"></span>
+                  Live Indicator
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Tab: Users & Terminals */}
-      {activeTab === 'users' && (
-        <div className="max-w-4xl">
-          <UsersManagementTab />
-        </div>
-      )}
+          {/* Receipt Print Protection Banner */}
+          <div className="p-4 rounded-2xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800 flex items-start gap-3">
+            <Info className="h-5 w-5 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
+            <div className="text-xs">
+              <span className="font-bold text-sky-900 dark:text-sky-200 block">Print & Thermal Immunity</span>
+              <span className="text-sky-700 dark:text-sky-300 leading-relaxed block mt-0.5">
+                Regardless of the selected theme or dark mode, thermal receipts and A4 invoices always print with crisp black text on pure white paper to conserve printer ink and ensure professional legal compliance.
+              </span>
+            </div>
+          </div>
 
-      {/* Tab: Security */}
-      {activeTab === 'security' && (
-        <div className="space-y-6 max-w-4xl">
+          {/* Save Button */}
+          <div className="pt-1 flex items-center gap-3">
+            <Button
+              type="button"
+              variant="primary"
+              loading={saving}
+              onClick={handleSaveSettings}
+            >
+              Save Appearance
+            </Button>
+            <span className="text-xs text-slate-400 dark:text-slate-500">
+              Settings persist across restarts and browser sessions.
+            </span>
+          </div>
+        </div>
+
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-4">
+                      <div>
+                        <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base flex items-center gap-2">
+                          <Sliders className="h-5 w-5 text-amber-600" />
+                          Custom Product Inventory Specifications
+                        </h3>
+                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                          Define custom product attributes (e.g. Size, Batch, Expiry, Material, Warranty) to track with inventory items.
+                        </p>
+                      </div>
+
+                      <SchemaBuilder
+                        onSchemaUpdated={onSettingsUpdated}
+                        onOpenWizard={onOpenWizard}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* CATEGORY 5: STAFF & SECURITY */}
+                {activeCategory === 'security' && (
+                  <div className="space-y-6">
+                    <div className="p-4 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-200/60 dark:border-indigo-800/40 flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
+                        <Users className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h2 className="font-black text-sm text-slate-900 dark:text-white">Staff, Security & Access Control</h2>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Manage cashier team accounts, passwords, master PIN, and dashboard financial privacy.</p>
+                      </div>
+                    </div>
+
+                    {/* Staff Accounts & Terminals */}
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-4">
+                      <div>
+                        <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base flex items-center gap-2">
+                          <Users className="h-5 w-5 text-indigo-600" />
+                          Staff Accounts & Connected Device Terminals
+                        </h3>
+                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                          Assign roles, PINs, and cashier permissions across client devices on your local network.
+                        </p>
+                      </div>
+                      <UsersManagementTab />
+                    </div>
+
+                            <div className="space-y-6 max-w-4xl">
           {/* Dashboard Financial Privacy Card */}
           <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
             <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-100">
@@ -3720,11 +4180,128 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             </form>
           </div>
         </div>
-      )}
+                  </div>
+                )}
 
-      {/* Tab: Danger Zone / Reset & Wipe Data */}
-      {activeTab === 'danger_zone' && (
-        <div className="space-y-6 max-w-4xl">
+                {/* CATEGORY 6: BACKUP & DATA */}
+                {activeCategory === 'maintenance' && (
+                  <div className="space-y-6">
+                    <div className="p-4 rounded-2xl bg-rose-50/60 dark:bg-rose-950/20 border border-rose-200/60 dark:border-rose-800/40 flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-rose-100 dark:bg-rose-900/60 text-rose-700 dark:text-rose-300">
+                        <Database className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h2 className="font-black text-sm text-slate-900 dark:text-white">Backup, Cloud Sync & Data Management</h2>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Google Drive cloud sync, local SQLite database snapshots, and testing data reset tools.</p>
+                      </div>
+                    </div>
+
+                            <div className="max-w-3xl space-y-6">
+          {/* Cloud Backup (WhatsApp-Style Google Drive) */}
+          <GoogleBackupCard
+            onSuccess={(msg) => setSuccessMsg(msg)}
+            onError={(err) => setErrorMsg(err)}
+          />
+
+          {/* Local Database Backup & Recovery */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="font-bold text-slate-800 text-base">Local Database Snapshots</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Create offline snapshots of your database in the local Backups folder or import .db files
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept=".db"
+                  className="hidden"
+                  onChange={handleUploadBackup}
+                />
+                <Button
+                  variant="outline"
+                  size="md"
+                  icon={<Upload className="h-4 w-4" />}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingBackup}
+                >
+                  {uploadingBackup ? 'Importing...' : 'Import Backup (.db)'}
+                </Button>
+                <Button
+                  variant="primary"
+                  size="md"
+                  icon={<Database className="h-4 w-4" />}
+                  onClick={handleCreateBackup}
+                >
+                  Backup Now
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  Saved Local Backups ({backups.length})
+                </h4>
+                <button
+                  onClick={loadBackups}
+                  className="text-xs text-emerald-600 hover:underline flex items-center gap-1 font-semibold"
+                >
+                  <RefreshCw className="h-3 w-3" /> Refresh List
+                </button>
+              </div>
+
+              <div className="divide-y divide-slate-100 border border-slate-100 rounded-2xl overflow-hidden">
+                {loadingBackups ? (
+                  <div className="p-8 text-center text-slate-400 text-xs">Scanning backups folder...</div>
+                ) : backups.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400 text-xs">
+                    No local backups found. Click "Backup Now" or "Import Backup (.db)" to manage backups.
+                  </div>
+                ) : (
+                  backups.map((b) => (
+                    <div key={b.filename} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white hover:bg-slate-50">
+                      <div>
+                        <div className="font-mono font-bold text-slate-800 text-xs">{b.filename}</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">
+                          {new Date(b.created_at).toLocaleString()} • {b.size_formatted}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={api.downloadBackupUrl(b.filename)}
+                          download={b.filename}
+                          className="inline-flex items-center gap-1.5 text-xs py-1.5 px-3 font-semibold text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-xl transition"
+                          title="Download backup file to USB or disk"
+                        >
+                          <Download className="h-3.5 w-3.5 text-slate-500" />
+                          <span>Download</span>
+                        </a>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedRestoreBackup(b.filename);
+                            setRestoreLocalPin('');
+                            setRestoreLocalError(null);
+                          }}
+                          className="text-xs py-1 px-3 font-semibold text-rose-700 hover:bg-rose-50 border-rose-200"
+                        >
+                          Restore This Backup
+                        </Button>
+
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+                            <div className="space-y-6 max-w-4xl">
           <div className="p-6 bg-gradient-to-r from-rose-900 to-slate-900 rounded-3xl text-white shadow-lg space-y-2">
             <div className="flex items-center gap-3">
               <div className="p-3 bg-rose-500/20 rounded-2xl border border-rose-400/30 text-rose-400">
@@ -3831,9 +4408,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             </div>
           </div>
         </div>
-      )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
-      {/* Reset Confirmation Modal */}
+
+{/* Reset Confirmation Modal */}
       <Modal
         isOpen={showResetModal}
         onClose={() => setShowResetModal(false)}
