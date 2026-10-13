@@ -525,31 +525,23 @@ def image_to_escpos_raster(
 
         raw_img_bytes = bw.tobytes()
 
-        # Emit in buffer-safe vertical bands (max 24 dots height per chunk)
-        # Prevents receive buffer overflow on POS-80 / POS-58 hardware with 2KB-4KB RAM
-        band_h_limit = 24
-        raster_chunks = bytearray()
+        # Emit logo in a single continuous GS v 0 block (no band slicing, preventing motor jitter / horizontal shear)
+        chunk_data = bytearray()
+        for r in range(new_h):
+            r_slice = raw_img_bytes[r * img_bytes_per_row : (r + 1) * img_bytes_per_row]
+            chunk_data.extend(b"\x00" * left_pad)
+            for b in r_slice:
+                chunk_data.append(~b & 0xFF)
+            chunk_data.extend(b"\x00" * right_pad)
 
-        for start_row in range(0, new_h, band_h_limit):
-            chunk_h = min(band_h_limit, new_h - start_row)
-            chunk_data = bytearray()
-            for r in range(start_row, start_row + chunk_h):
-                r_slice = raw_img_bytes[r * img_bytes_per_row : (r + 1) * img_bytes_per_row]
-                chunk_data.extend(b"\x00" * left_pad)
-                for b in r_slice:
-                    chunk_data.append(~b & 0xFF)
-                chunk_data.extend(b"\x00" * right_pad)
+        xL = total_bytes_per_row & 0xFF
+        xH = (total_bytes_per_row >> 8) & 0xFF
+        yL = new_h & 0xFF
+        yH = (new_h >> 8) & 0xFF
 
-            xL = total_bytes_per_row & 0xFF
-            xH = (total_bytes_per_row >> 8) & 0xFF
-            yL = chunk_h & 0xFF
-            yH = (chunk_h >> 8) & 0xFF
-
-            # GS v 0 0 xL xH yL yH <chunk_data>
-            header = bytes([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH])
-            raster_chunks.extend(header + chunk_data)
-
-        return bytes(raster_chunks)
+        # GS v 0 0 xL xH yL yH <chunk_data>
+        header = bytes([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH])
+        return header + bytes(chunk_data)
 
     except Exception as ex:
         logger.warning(f"Failed to generate ESC/POS raster image logo: {ex}")
@@ -586,7 +578,7 @@ def raster_image_to_escpos(
 
     bytes_per_row = target_dots_w // 8
 
-    # --- FAST-PATH 1: Pre-quantized 1-Bit Client Bitmap (0ms latency, no Pillow required) ---
+    # --- FAST-PATH 1: Pre-quantized 1-Bit Client Bitmap (0ms latency, single-block hardware speed) ---
     if compact_bitmap:
         try:
             raw_data = base64.b64decode(compact_bitmap)
@@ -601,13 +593,12 @@ def raster_image_to_escpos(
             if not has_content:
                 raise ValueError("Receipt image is completely blank. Print aborted to prevent empty paper feed.")
 
-            band_h_limit = 24
+            # Continuous hardware rastering: Use large band limit (2048 dots) to eliminate micro-stepping pauses
+            band_h_limit = 2048
             raster_chunks = bytearray()
             for start_row in range(0, total_h, band_h_limit):
                 chunk_h = min(band_h_limit, total_h - start_row)
-                chunk_data = bytearray()
-                for r in range(start_row, start_row + chunk_h):
-                    chunk_data.extend(raw_data[r * bytes_row : (r + 1) * bytes_row])
+                chunk_data = raw_data[start_row * bytes_row : (start_row + chunk_h) * bytes_row]
 
                 xL = bytes_row & 0xFF
                 xH = (bytes_row >> 8) & 0xFF
@@ -708,7 +699,7 @@ def raster_image_to_escpos(
     if not has_content:
         raise ValueError("Image data is 100% blank white. Raster print aborted to prevent empty paper feed.")
 
-    band_h_limit = 24
+    band_h_limit = 2048
     raster_chunks = bytearray()
 
     for start_row in range(0, new_h, band_h_limit):

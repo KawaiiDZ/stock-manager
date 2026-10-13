@@ -65,7 +65,7 @@ import { printElement } from '../../utils/print';
 import { STANDARD_LABEL_SIZES, generateBarcodeSvg, parseLabelDimensions } from '../../utils/barcode';
 import { STANDARD_DATE_FORMATS, setGlobalFormattingPreferences, formatDate, formatCurrency } from '../../utils/format';
 import { GoogleBackupCard } from '../../components/settings/GoogleBackupCard';
-import { rasterizeReceiptElement } from '../../utils/receiptRasterizer';
+import { rasterizeReceiptElementFast, rasterizeReceiptFast, AcceleratedRasterResult } from '../../utils/receiptRasterizer';
 import { UsersManagementTab } from '../../components/settings/UsersManagementTab';
 
 export interface ThermalLayoutOption {
@@ -1397,8 +1397,40 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     setDirectPrintingTest(true);
     setTestPrintFeedback(null);
     try {
-      // Snapshot the live preview receipt in settings for 100% exact visual parity
-      const rasterImage = await rasterizeReceiptElement('settings-preview-thermal-receipt');
+      const activeSettingsObj: BusinessSettings = {
+        ...(settings || {}),
+        business_name: bizName,
+        phone: bizPhone,
+        address: bizAddress,
+        currency,
+        receipt_header: receiptHeader,
+        receipt_footer: receiptFooter,
+        receipt_printer_type: printerType,
+        thermal_layout: thermalLayout,
+        thermal_header_style: thermalHeaderStyle,
+        show_barcode: showBarcode,
+        thermal_darkness: thermalDarkness,
+        thermal_printer_profile: thermalPrinterProfile,
+        thermal_cut_mode: thermalCutMode,
+        thermal_feed_lines: thermalFeedLines,
+        selected_thermal_printer: selectedThermalPrinter,
+      } as BusinessSettings;
+
+      const pWidth = printerType === '58mm' ? '58mm' : '80mm';
+
+      // 1. Snapshot the live preview receipt in settings if mounted, or offscreen raster
+      let rasterRes: AcceleratedRasterResult | null = null;
+      if (document.getElementById('settings-preview-thermal-receipt')) {
+        rasterRes = await rasterizeReceiptElementFast('settings-preview-thermal-receipt', {
+          paperWidth: pWidth,
+        });
+      }
+      if (!rasterRes) {
+        rasterRes = await rasterizeReceiptFast(sampleTestSale, activeSettingsObj, {
+          paperWidth: pWidth,
+          layout: thermalLayout,
+        });
+      }
 
       const res = await api.printThermalDirect({
         is_sample: true,
@@ -1411,7 +1443,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         printer_profile: thermalPrinterProfile,
         cut_mode: thermalCutMode,
         feed_lines: thermalFeedLines,
-        raster_image: rasterImage || undefined,
+        render_pipeline: 'raster_canvas',
+        compact_bitmap: rasterRes?.compactBitmap || undefined,
+        bitmap_width: rasterRes?.widthDots || undefined,
+        bitmap_height: rasterRes?.heightDots || undefined,
+        raster_image: rasterRes?.dataUrl || undefined,
       });
       if (res.is_online === false || res.warning) {
         setTestPrintFeedback({

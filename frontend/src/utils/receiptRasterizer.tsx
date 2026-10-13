@@ -86,45 +86,67 @@ export function quantizeCanvasTo1Bit(canvas: HTMLCanvasElement): {
 }
 
 /**
+ * Normalizes any canvas to an exact integer target width (e.g. 576 or 384 dots),
+ * scaling height proportionally and ensuring a pure white background.
+ */
+export function normalizeCanvasToWidth(srcCanvas: HTMLCanvasElement, targetWidth: number): HTMLCanvasElement {
+  if (srcCanvas.width === targetWidth) {
+    return srcCanvas;
+  }
+  const scale = targetWidth / srcCanvas.width;
+  const targetHeight = Math.round(srcCanvas.height * scale);
+  const normCanvas = document.createElement('canvas');
+  normCanvas.width = targetWidth;
+  normCanvas.height = targetHeight;
+  const ctx = normCanvas.getContext('2d');
+  if (ctx) {
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, targetWidth, targetHeight);
+    ctx.drawImage(srcCanvas, 0, 0, targetWidth, targetHeight);
+    return normCanvas;
+  }
+  return srcCanvas;
+}
+
+/**
  * Snapshots an already-mounted receipt DOM element (e.g. inside ReceiptModal or SettingsPage preview).
  */
-export async function rasterizeReceiptElement(elementId: string): Promise<string | null> {
-  const node = document.getElementById(elementId);
-  if (!node) {
-    console.warn(`[Rasterizer] Receipt element #${elementId} not found in DOM.`);
-    return null;
-  }
-
-  try {
-    const canvas = await toCanvas(node as HTMLElement, {
-      pixelRatio: 1,
-      backgroundColor: '#ffffff',
-      cacheBust: false,
-    });
-    return canvas.toDataURL('image/png');
-  } catch (err) {
-    console.error(`[Rasterizer] Failed to rasterize #${elementId}:`, err);
-    return null;
-  }
+export async function rasterizeReceiptElement(
+  elementId: string,
+  options?: { paperWidth?: '58mm' | '80mm' }
+): Promise<string | null> {
+  const res = await rasterizeReceiptElementFast(elementId, options);
+  return res?.dataUrl || null;
 }
 
 /**
  * Snapshots an already-mounted receipt DOM element (e.g. inside ReceiptModal or SettingsPage preview)
  * and quantizes to 1-bit monochrome byte stream.
  */
-export async function rasterizeReceiptElementFast(elementId: string): Promise<AcceleratedRasterResult | null> {
+export async function rasterizeReceiptElementFast(
+  elementId: string,
+  options?: { paperWidth?: '58mm' | '80mm' }
+): Promise<AcceleratedRasterResult | null> {
   const node = document.getElementById(elementId);
   if (!node) {
     console.warn(`[Rasterizer] Receipt element #${elementId} not found in DOM.`);
     return null;
   }
 
+  const is58mm = options?.paperWidth === '58mm';
+  const targetDotsWidth = is58mm ? 384 : 576;
+  const naturalWidth = (node as HTMLElement).offsetWidth || (is58mm ? 219 : 302);
+  const scale = targetDotsWidth / naturalWidth;
+
   try {
-    const canvas = await toCanvas(node as HTMLElement, {
-      pixelRatio: 1,
+    const rawCanvas = await toCanvas(node as HTMLElement, {
+      pixelRatio: scale,
       backgroundColor: '#ffffff',
       cacheBust: false,
     });
+    const canvas = normalizeCanvasToWidth(rawCanvas, targetDotsWidth);
     const { compactBitmap, widthDots, heightDots } = quantizeCanvasTo1Bit(canvas);
     return {
       dataUrl: canvas.toDataURL('image/png'),
@@ -140,8 +162,8 @@ export async function rasterizeReceiptElementFast(elementId: string): Promise<Ac
 
 /**
  * High-speed offscreen rasterization maintaining 100% exact CSS styling.
- * Renders in a dedicated container with exact thermal printer dot width (576px / 384px),
- * waits for fonts to settle, and packs pixels to 1-bit monochrome in ~80ms.
+ * Sized to natural preview CSS width (302px / 219px), rendered with proportional pixel ratio
+ * to produce razor-sharp 576 dots (80mm) or 384 dots (58mm) across 100% of the paper roll.
  */
 export async function rasterizeReceiptFast(
   sale: Sale,
@@ -154,6 +176,7 @@ export async function rasterizeReceiptFast(
   const is58mm = options?.paperWidth === '58mm' || settings?.receipt_printer_type === '58mm';
   const paperWidth = is58mm ? '58mm' : '80mm';
   const targetDotsWidth = is58mm ? 384 : 576;
+  const previewCssWidth = is58mm ? 219 : 302;
   const layout = (options?.layout || settings?.thermal_layout || 'classic') as any;
 
   const container = document.createElement('div');
@@ -161,7 +184,7 @@ export async function rasterizeReceiptFast(
   container.style.position = 'fixed';
   container.style.left = '-9999px';
   container.style.top = '0';
-  container.style.width = `${targetDotsWidth}px`;
+  container.style.width = `${previewCssWidth}px`;
   container.style.backgroundColor = '#ffffff';
   container.style.zIndex = '-99999';
   container.style.pointerEvents = 'none';
@@ -172,7 +195,7 @@ export async function rasterizeReceiptFast(
   return new Promise<AcceleratedRasterResult | null>((resolve) => {
     root.render(
       <React.StrictMode>
-        <div style={{ width: `${targetDotsWidth}px`, backgroundColor: '#ffffff' }}>
+        <div style={{ width: `${previewCssWidth}px`, backgroundColor: '#ffffff', margin: 0, padding: 0 }}>
           <ThermalReceipt
             sale={sale}
             settings={settings}
@@ -193,12 +216,15 @@ export async function rasterizeReceiptFast(
       requestAnimationFrame(async () => {
         try {
           const target = (container.firstElementChild as HTMLElement) || container;
-          const canvas = await toCanvas(target, {
-            pixelRatio: 1,
+          const nodeWidth = target.offsetWidth || previewCssWidth;
+          const scale = targetDotsWidth / nodeWidth;
+          const rawCanvas = await toCanvas(target, {
+            pixelRatio: scale,
             backgroundColor: '#ffffff',
             cacheBust: false,
           });
 
+          const canvas = normalizeCanvasToWidth(rawCanvas, targetDotsWidth);
           const { compactBitmap, widthDots, heightDots } = quantizeCanvasTo1Bit(canvas);
           const dataUrl = canvas.toDataURL('image/png');
 
@@ -214,7 +240,7 @@ export async function rasterizeReceiptFast(
           try {
             const fallbackTarget = (container.firstElementChild as HTMLElement) || container;
             const dataUrl = await toPng(fallbackTarget, {
-              pixelRatio: 1,
+              pixelRatio: targetDotsWidth / previewCssWidth,
               backgroundColor: '#ffffff',
               cacheBust: false,
             });
@@ -263,11 +289,12 @@ export async function captureReceiptRaster(params: {
   paperWidth?: '58mm' | '80mm';
   layout?: string;
 }): Promise<string | null> {
+  const pWidth = params.paperWidth || (params.settings?.receipt_printer_type === '58mm' ? '58mm' : '80mm');
   // 1. Try visible DOM node if provided
   if (params.elementId) {
     const existing = document.getElementById(params.elementId);
     if (existing) {
-      const dataUrl = await rasterizeReceiptElement(params.elementId);
+      const dataUrl = await rasterizeReceiptElement(params.elementId, { paperWidth: pWidth });
       if (dataUrl) return dataUrl;
     }
   }
@@ -275,7 +302,7 @@ export async function captureReceiptRaster(params: {
   // 2. Offscreen fallback if sale is provided
   if (params.sale) {
     return await rasterizeReceiptOffscreen(params.sale, params.settings || null, {
-      paperWidth: params.paperWidth,
+      paperWidth: pWidth,
       layout: params.layout as any,
     });
   }

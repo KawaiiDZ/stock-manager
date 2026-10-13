@@ -94,6 +94,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   const [warningToast, setWarningToast] = useState<string | null>(null);
   const [showDiagnosticsModal, setShowDiagnosticsModal] = useState(false);
   const [printDiagnosticError, setPrintDiagnosticError] = useState<string | null>(null);
+  const [isPrintingReceipt, setIsPrintingReceipt] = useState<{ receiptNumber: string } | null>(null);
 
   const [autoPrintEnabled, setAutoPrintEnabled] = useState<boolean>(Boolean(settings?.skip_receipt_preview));
   const isCompletingRef = useRef<boolean>(false);
@@ -679,6 +680,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
 
   // Trigger Quick-Pay Modal if enabled, or complete immediately
   const handleOpenQuickPayOrComplete = () => {
+    if (isPrintingReceipt) return;
     if (cart.length === 0) {
       setErrorMsg('Cannot complete an empty sale. Please add items to cart.');
       return;
@@ -710,7 +712,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
     overridePaymentMethod?: string,
     overridePaymentSplits?: PaymentSplit[]
   ) => {
-    if (completing || isCompletingRef.current) return;
+    if (completing || isCompletingRef.current || isPrintingReceipt) return;
     if (cart.length === 0) {
       setErrorMsg('Cannot complete an empty sale. Please add items to cart.');
       return;
@@ -788,6 +790,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
           // Play POS terminal confirmation chime immediately on silent checkout
           playCheckoutSuccessBeep();
 
+          setIsPrintingReceipt({ receiptNumber: res.receipt_number });
           const isRaster = settings?.thermal_render_pipeline === 'raster_canvas';
 
           const dispatchPrint = (rasterData?: { compactBitmap?: string; dataUrl?: string; widthDots?: number; heightDots?: number } | string) => {
@@ -834,17 +837,21 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
             const errDetail = err.detail || err.message || 'offline or timed out';
             setErrorMsg(`Could not send directly to printer (${errDetail}). Preview modal opened.`);
             setPrintDiagnosticError(errDetail);
+          }).finally(() => {
+            setIsPrintingReceipt(null);
           });
         } else {
           // Standard PDF / A4 format
+          setIsPrintingReceipt({ receiptNumber: res.receipt_number });
           const invoiceName = (settings?.invoice_title || 'Invoice').replace(/\s+/g, '_');
           setTimeout(() => {
             printElement('autoprint-pdf-invoice', {
               title: `${invoiceName}_${res.receipt_number}`,
               isThermal: false,
             });
+            setIsPrintingReceipt(null);
             setSuccessToast(`Sale #${res.receipt_number} completed & sent to document printer!`);
-          }, 100);
+          }, 200);
         }
       } else {
         setShowReceipt(true);
@@ -941,6 +948,20 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
 
   return (
     <div className="space-y-6 pb-12">
+      {/* Live Printing In-Flight Cue */}
+      {isPrintingReceipt && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl bg-slate-900/95 text-white shadow-2xl border border-slate-700 backdrop-blur-md animate-in fade-in slide-in-from-top-4 duration-200">
+          <Printer className="h-5 w-5 text-emerald-400 animate-pulse shrink-0" />
+          <div className="flex flex-col">
+            <span className="text-sm font-bold flex items-center gap-2">
+              Printing Receipt #{isPrintingReceipt.receiptNumber}...
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            </span>
+            <span className="text-xs text-slate-300">Sending commands to printer. Please wait before next checkout.</span>
+          </div>
+        </div>
+      )}
+
       {/* Instant Auto-Print Success Toast Notification */}
       {successToast && (
         <div className="flex items-center justify-between p-4 rounded-2xl bg-emerald-600 text-white shadow-xl shadow-emerald-950/20 border border-emerald-500 animate-in fade-in duration-200">
@@ -1553,8 +1574,8 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                 variant="primary"
                 size="lg"
                 onClick={() => handleCompleteSale()}
-                disabled={cart.length === 0 || completing || savingQuotation}
-                loading={completing}
+                disabled={cart.length === 0 || completing || savingQuotation || Boolean(isPrintingReceipt)}
+                loading={completing || Boolean(isPrintingReceipt)}
                 className="flex-1 py-3.5 text-base font-bold tracking-wide rounded-2xl shadow-lg shadow-brand-600/20 flex items-center justify-center gap-2"
               >
                 {autoPrintEnabled && <Zap className="h-4 w-4 text-emerald-200 shrink-0" />}
@@ -2199,6 +2220,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
               }}
               disabled={
                 completing ||
+                Boolean(isPrintingReceipt) ||
                 (isQuickPaySplit
                   ? quickPaySplits.reduce((sum, s) => sum + (Number(s.amount) || 0), 0) < grandTotal
                   : Number(quickPayAmount || 0) < grandTotal)

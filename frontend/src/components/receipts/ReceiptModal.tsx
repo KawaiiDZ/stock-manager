@@ -79,7 +79,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
 
       // Capture exact visible DOM element snapshot and quantize to 1-bit monochrome if raster canvas pipeline is requested
       const rasterRes = isRaster
-        ? await rasterizeReceiptElementFast('printable-thermal-receipt')
+        ? await rasterizeReceiptElementFast('printable-thermal-receipt', { paperWidth })
         : null;
 
       const res = await api.printThermalDirect({
@@ -281,6 +281,12 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
       </div>
 
       {/* Status Notifications */}
+      {directPrinting && (
+        <div className="px-6 py-2.5 bg-emerald-600 text-white text-xs font-bold flex items-center justify-center gap-2 border-t border-emerald-500 shadow-sm animate-pulse">
+          <Printer className="h-4 w-4 animate-bounce shrink-0" />
+          <span>Printing receipt directly to {settings?.selected_thermal_printer || 'printer'}... Please wait.</span>
+        </div>
+      )}
       {printSuccessMsg && (
         <div className="px-6 py-2 bg-emerald-50 border-t border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />

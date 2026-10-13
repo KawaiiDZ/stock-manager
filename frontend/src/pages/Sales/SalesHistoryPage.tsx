@@ -15,6 +15,7 @@ import {
   CreditCard,
   ArrowDownRight,
   RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -50,7 +51,8 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
   // Print & Details Modal
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
-  const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [printingSaleId, setPrintingSaleId] = useState<number | null>(null);
 
   useEffect(() => {
     if (toastMessage) {
@@ -60,8 +62,14 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
   }, [toastMessage]);
 
   const handleQuickPrint = async (sale: Sale) => {
+    if (printingSaleId !== null) return;
     if (settings?.skip_receipt_preview && settings?.thermal_print_mode === 'direct_escpos') {
       try {
+        setPrintingSaleId(sale.id);
+        setToastMessage({
+          type: 'info',
+          text: `Printing receipt #${sale.receipt_number}... Please wait.`,
+        });
         const pWidth = settings?.receipt_printer_type === '58mm' ? '58mm' : '80mm';
         const isRaster = settings?.thermal_render_pipeline === 'raster_canvas';
 
@@ -108,6 +116,8 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
           type: 'error',
           text: err.detail || 'Direct print failed. Opening preview modal...',
         });
+      } finally {
+        setPrintingSaleId(null);
       }
     }
     setSelectedSale(sale);
@@ -540,10 +550,15 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
                           </button>
                           <button
                             onClick={() => handleQuickPrint(sale)}
-                            className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                            disabled={printingSaleId !== null}
+                            className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-40"
                             title={settings?.skip_receipt_preview ? "1-Click Direct Print Receipt" : "Print Thermal / A4 Receipt"}
                           >
-                            <Printer className="h-4 w-4" />
+                            {printingSaleId === sale.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-emerald-600 dark:text-emerald-400" />
+                            ) : (
+                              <Printer className="h-4 w-4" />
+                            )}
                           </button>
                           {onNavigateToReturn && (
                             <button
@@ -734,13 +749,17 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
             className={`flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl text-sm font-semibold border ${
               toastMessage.type === 'success'
                 ? 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-600/20'
+                : toastMessage.type === 'info'
+                ? 'bg-slate-900 text-white border-slate-700 shadow-slate-900/30'
                 : 'bg-rose-600 text-white border-rose-500 shadow-rose-600/20'
             }`}
           >
             {toastMessage.type === 'success' ? (
-              <CheckCircle2 className="h-5 w-5 shrink-0" />
+              <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-300" />
+            ) : toastMessage.type === 'info' ? (
+              <Loader2 className="h-5 w-5 shrink-0 animate-spin text-emerald-400" />
             ) : (
-              <AlertCircle className="h-5 w-5 shrink-0" />
+              <AlertCircle className="h-5 w-5 shrink-0 text-rose-300" />
             )}
             <span>{toastMessage.text}</span>
             <button
