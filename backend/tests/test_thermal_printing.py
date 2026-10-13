@@ -808,4 +808,38 @@ def test_hardware_buzzer_and_render_pipeline(client):
         assert mock_gen.called
 
 
+def test_printer_diagnostics_route(client):
+    res = client.get('/api/printing/diagnose')
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert 'status' in data
+    assert 'spooler_running' in data
+    assert 'is_online' in data
+    assert 'queue_job_count' in data
+    assert 'issues' in data
+    assert 'recommendations' in data
+    assert 'printers' in data
+
+
+def test_compact_bitmap_fast_path():
+    import base64
+    from backend.app.services.escpos_service import raster_image_to_escpos
+
+    # 576 dots width = 72 bytes per row. 10 rows = 720 bytes.
+    # Create non-blank 1-bit bytes (alternating 0xAA patterns)
+    test_bytes = bytes([0xAA] * 720)
+    compact_b64 = base64.b64encode(test_bytes).decode('ascii')
+
+    escpos = raster_image_to_escpos(
+        compact_bitmap=compact_b64,
+        bitmap_width=576,
+        bitmap_height=10,
+        paper_width="80mm",
+    )
+    assert len(escpos) > 0
+    # Must contain GS v 0 raster header
+    assert b"\x1dv0" in escpos
+
+
+
 

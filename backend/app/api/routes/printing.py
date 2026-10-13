@@ -19,6 +19,7 @@ from backend.app.services.escpos_service import (
     raster_image_to_escpos,
     send_to_thermal_printer,
     clear_printer_queue,
+    diagnose_printer_subsystem,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,21 @@ class PrinterItemResponse(BaseModel):
     is_online: Optional[bool] = True
 
 
+class PrinterDiagnosticResponse(BaseModel):
+    status: str  # "healthy" | "warning" | "error"
+    spooler_running: bool
+    target_printer: Optional[str] = None
+    resolved_printer: Optional[str] = None
+    printer_found: bool
+    is_online: bool
+    queue_job_count: int
+    port_name: Optional[str] = None
+    os_name: str
+    issues: List[str]
+    recommendations: List[str]
+    printers: List[PrinterItemResponse]
+
+
 class ThermalPrintRequest(BaseModel):
     sale_id: Optional[int] = None
     printer_name: Optional[str] = None
@@ -48,13 +64,19 @@ class ThermalPrintRequest(BaseModel):
     printer_profile: Optional[str] = None  # "standard_escpos" | "xprinter_enhanced" | "star_line" | "generic_plain"
     cut_mode: Optional[str] = None  # "partial" | "full" | "tear_only"
     feed_lines: Optional[int] = None  # 2 to 8 lines
-    raster_image: Optional[str] = None  # Base64 PNG data URL for 100% exact preview parity
+    raster_image: Optional[str] = None  # Base64 PNG data URL
+    compact_bitmap: Optional[str] = None  # Base64 packed 1-bit monochrome bytes for 0ms latency
+    bitmap_width: Optional[int] = None  # Dot width (576 or 384)
+    bitmap_height: Optional[int] = None  # Dot height
     render_pipeline: Optional[str] = None  # "native_text" | "raster_canvas"
     beep_enabled: Optional[bool] = None
 
 
 class ThermalRasterRequest(BaseModel):
-    image_data: str  # Base64 data URL / PNG string
+    image_data: Optional[str] = None  # Base64 data URL / PNG string
+    compact_bitmap: Optional[str] = None  # Base64 packed 1-bit monochrome bytes
+    bitmap_width: Optional[int] = None
+    bitmap_height: Optional[int] = None
     printer_name: Optional[str] = None
     paper_width: Optional[str] = None
     darkness: Optional[str] = None
@@ -114,7 +136,7 @@ def print_thermal_receipt(data: ThermalPrintRequest, db: Session = Depends(get_d
     printer_name = data.printer_name or (settings.selected_thermal_printer if settings else None)
 
     # Deduplicate rapid concurrent submissions (e.g. double-click, double Enter key within 3.0 seconds)
-    dedup_key = f"{data.sale_id}_{printer_name}_{data.is_sample}_{data.layout}_{bool(data.raster_image)}"
+    dedup_key = f"{data.sale_id}_{printer_name}_{data.is_sample}_{data.layout}_{bool(data.raster_image or data.compact_bitmap)}"
     now = time.time()
     cached = _recent_print_cache.get(dedup_key)
     if cached and (now - cached["timestamp"] < 3.0):
@@ -125,7 +147,7 @@ def print_thermal_receipt(data: ThermalPrintRequest, db: Session = Depends(get_d
     is_beep = data.beep_enabled if data.beep_enabled is not None else getattr(settings, "thermal_beep_enabled", True)
 
     # 1. Graphical Canvas Raster Pipeline (GS v 0) - ONLY used when explicitly selected in settings
-    if pipeline == "raster_canvas" and data.raster_image:
+    if pipeline == "raster_canvas" and (data.raster_image or data.compact_bitmap):
         try:
             escpos_bytes = raster_image_to_escpos(
                 image_source=data.raster_image,
@@ -136,6 +158,9 @@ def print_thermal_receipt(data: ThermalPrintRequest, db: Session = Depends(get_d
                 feed_lines=data.feed_lines if data.feed_lines is not None else getattr(settings, "thermal_feed_lines", 4),
                 kick_drawer=bool(data.kick_drawer),
                 beep_enabled=is_beep,
+                compact_bitmap=data.compact_bitmap,
+                bitmap_width=data.bitmap_width,
+                bitmap_height=data.bitmap_height,
             )
             res = send_to_thermal_printer(escpos_bytes, printer_name=printer_name)
             _recent_print_cache[dedup_key] = {"timestamp": now, "response": res}
@@ -256,12 +281,26 @@ def print_thermal_raster(data: ThermalRasterRequest, db: Session = Depends(get_d
             feed_lines=data.feed_lines if data.feed_lines is not None else getattr(settings, "thermal_feed_lines", 4),
             kick_drawer=bool(data.kick_drawer),
             beep_enabled=getattr(settings, "thermal_beep_enabled", True),
+            compact_bitmap=data.compact_bitmap,
+            bitmap_width=data.bitmap_width,
+            bitmap_height=data.bitmap_height,
         )
         res = send_to_thermal_printer(escpos_bytes, printer_name=printer_name)
         return ThermalPrintResponse(**res)
     except Exception as e:
         logger.error(f"Direct raster printing failure: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/diagnose", response_model=PrinterDiagnosticResponse)
+def get_printer_diagnostics(printer_name: Optional[str] = None, db: Session = Depends(get_db)):
+    """
+    Performs full end-to-end diagnostic checks on the printer subsystem,
+    reporting spooler health, queue depth, connectivity, and actionable fixes.
+    """
+    settings = db.query(BusinessSettings).filter(BusinessSettings.id == 1).first()
+    target = printer_name or (settings.selected_thermal_printer if settings else None)
+    return diagnose_printer_subsystem(target_printer_name=target)
 
 
 @router.post("/diagnostic", response_model=ThermalPrintResponse)

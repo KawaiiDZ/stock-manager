@@ -32,8 +32,9 @@ import { OutOfStockRestockModal } from '../../components/pos/OutOfStockRestockMo
 import { CartQuantityInput } from '../../components/pos/CartQuantityInput';
 import { useBarcodeScanner, setNativeInputValue } from '../../hooks/useBarcodeScanner';
 import { formatCurrency, formatMoney, formatQty } from '../../utils/format';
-import { rasterizeReceiptOffscreen } from '../../utils/receiptRasterizer';
+import { rasterizeReceiptFast, rasterizeReceiptOffscreen } from '../../utils/receiptRasterizer';
 import { playCheckoutSuccessBeep } from '../../utils/audio';
+import { PrinterDiagnosticsModal } from '../../components/printing/PrinterDiagnosticsModal';
 
 interface CartItem {
   product: Product;
@@ -91,6 +92,8 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   const [showQuotationModal, setShowQuotationModal] = useState(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [warningToast, setWarningToast] = useState<string | null>(null);
+  const [showDiagnosticsModal, setShowDiagnosticsModal] = useState(false);
+  const [printDiagnosticError, setPrintDiagnosticError] = useState<string | null>(null);
 
   const [autoPrintEnabled, setAutoPrintEnabled] = useState<boolean>(Boolean(settings?.skip_receipt_preview));
   const isCompletingRef = useRef<boolean>(false);
@@ -787,8 +790,9 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
 
           const isRaster = settings?.thermal_render_pipeline === 'raster_canvas';
 
-          const dispatchPrint = (rasterImage?: string) =>
-            api.printThermalDirect({
+          const dispatchPrint = (rasterData?: { compactBitmap?: string; dataUrl?: string; widthDots?: number; heightDots?: number } | string) => {
+            const isObj = typeof rasterData === 'object' && rasterData !== null;
+            return api.printThermalDirect({
               sale_id: res.id,
               printer_name: settings?.selected_thermal_printer || undefined,
               paper_width: pWidth,
@@ -801,14 +805,18 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
               feed_lines: settings?.thermal_feed_lines ?? 4,
               render_pipeline: isRaster ? 'raster_canvas' : 'native_text',
               beep_enabled: settings?.thermal_beep_enabled ?? true,
-              raster_image: rasterImage || undefined,
+              raster_image: isObj ? (rasterData as any).dataUrl : (typeof rasterData === 'string' ? rasterData : undefined),
+              compact_bitmap: isObj ? (rasterData as any).compactBitmap : undefined,
+              bitmap_width: isObj ? (rasterData as any).widthDots : undefined,
+              bitmap_height: isObj ? (rasterData as any).heightDots : undefined,
             });
+          };
 
           const printPromise = isRaster
-            ? rasterizeReceiptOffscreen(res, settings, {
+            ? rasterizeReceiptFast(res, settings, {
                 paperWidth: pWidth,
                 layout: settings?.thermal_layout as any,
-              }).then((img) => dispatchPrint(img || undefined))
+              }).then((data) => dispatchPrint(data || undefined))
             : dispatchPrint(); // ⚡ Instant 0ms dispatch in Native ESC/POS mode
 
           printPromise.then((printRes) => {
@@ -823,7 +831,9 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
             console.error('Direct ESC/POS print failed:', err);
             // Automatic fallback: open receipt modal so cashier is never blocked or left without receipt
             setShowReceipt(true);
-            setErrorMsg(`Could not send directly to printer (${err.detail || err.message || 'offline'}). Preview modal opened.`);
+            const errDetail = err.detail || err.message || 'offline or timed out';
+            setErrorMsg(`Could not send directly to printer (${errDetail}). Preview modal opened.`);
+            setPrintDiagnosticError(errDetail);
           });
         } else {
           // Standard PDF / A4 format
@@ -1038,7 +1048,23 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         <div className="flex items-center gap-2 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-sm font-medium">
           <AlertCircle className="h-5 w-5 shrink-0 text-rose-600" />
           <span className="flex-1">{errorMsg}</span>
-          <button onClick={() => setErrorMsg(null)} className="text-xs text-rose-500 font-bold">
+          {(printDiagnosticError || errorMsg.toLowerCase().includes('printer') || errorMsg.toLowerCase().includes('timed out')) && (
+            <button
+              type="button"
+              onClick={() => setShowDiagnosticsModal(true)}
+              className="px-2.5 py-1 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition flex items-center gap-1 shrink-0"
+            >
+              <span>Diagnose & Fix</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setErrorMsg(null);
+              setPrintDiagnosticError(null);
+            }}
+            className="text-xs text-rose-500 font-bold ml-1 hover:text-rose-700 transition"
+          >
             Dismiss
           </button>
         </div>
@@ -1704,6 +1730,13 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         isOpen={showReceipt}
         onClose={() => setShowReceipt(false)}
         sale={completedSale}
+        settings={settings}
+      />
+
+      {/* Printer Diagnostics Modal */}
+      <PrinterDiagnosticsModal
+        isOpen={showDiagnosticsModal}
+        onClose={() => setShowDiagnosticsModal(false)}
         settings={settings}
       />
 

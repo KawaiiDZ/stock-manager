@@ -142,41 +142,76 @@ def list_system_printers() -> List[Dict[str, Any]]:
             logger.warning(f"Could not list CUPS printers: {e}")
 
     elif sys_name == "Windows":
+        win32_success = False
         try:
-            # Query Windows printers via PowerShell including offline & status attributes
-            cmd = ["powershell", "-NoProfile", "-Command", "Get-Printer | Select-Object Name, PortName, Type, IsDefault, PrinterStatus, WorkOffline | ConvertTo-Json -Compress"]
-            p = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-            if p.returncode == 0 and p.stdout.strip():
-                import json
-                data = json.loads(p.stdout.strip())
-                if isinstance(data, dict):
-                    data = [data]
-                for item in data:
-                    pname = item.get("Name", "")
-                    if not pname:
-                        continue
-                    is_default = bool(item.get("IsDefault", False))
-                    port = str(item.get("PortName", ""))
-                    search_str = f"{pname} {port}".lower()
-                    is_thermal = any(k in search_str for k in THERMAL_SIGNATURES)
-                    work_offline = bool(item.get("WorkOffline", False))
-                    raw_status = str(item.get("PrinterStatus", "")).lower()
-                    is_offline = (
-                        work_offline
-                        or raw_status in ("2", "8", "13", "24")
-                        or any(s in raw_status for s in ["offline", "error", "paused", "notavailable", "userintervention"])
-                    )
-                    status_text = "Offline" if is_offline else "Ready"
-                    printers.append({
-                        "name": pname,
-                        "is_default": is_default,
-                        "is_thermal": is_thermal,
-                        "device_uri": port,
-                        "status": status_text,
-                        "is_online": not is_offline,
-                    })
-        except Exception as e:
-            logger.warning(f"Could not list Windows printers: {e}")
+            import win32print
+            default_p = ""
+            try:
+                default_p = win32print.GetDefaultPrinter()
+            except Exception:
+                pass
+            flags = win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS
+            raw_printers = win32print.EnumPrinters(flags, None, 2)
+            for item in raw_printers:
+                pname = item.get("pPrinterName", "")
+                if not pname:
+                    continue
+                port = item.get("pPortName", "")
+                status_flags = item.get("Status", 0)
+                attributes = item.get("Attributes", 0)
+                is_default = (pname == default_p)
+                search_str = f"{pname} {port}".lower()
+                is_thermal = any(k in search_str for k in THERMAL_SIGNATURES)
+                is_offline = bool(status_flags & 0x80) or bool(status_flags & 0x01) or bool(status_flags & 0x02) or bool(attributes & 0x00000400)
+                status_text = "Offline" if is_offline else "Ready"
+                printers.append({
+                    "name": pname,
+                    "is_default": is_default,
+                    "is_thermal": is_thermal,
+                    "device_uri": port,
+                    "status": status_text,
+                    "is_online": not is_offline,
+                })
+            win32_success = True
+        except Exception:
+            pass
+
+        if not win32_success:
+            try:
+                # Fallback: Query Windows printers via PowerShell
+                cmd = ["powershell", "-NoProfile", "-Command", "Get-Printer | Select-Object Name, PortName, Type, IsDefault, PrinterStatus, WorkOffline | ConvertTo-Json -Compress"]
+                p = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+                if p.returncode == 0 and p.stdout.strip():
+                    import json
+                    data = json.loads(p.stdout.strip())
+                    if isinstance(data, dict):
+                        data = [data]
+                    for item in data:
+                        pname = item.get("Name", "")
+                        if not pname:
+                            continue
+                        is_default = bool(item.get("IsDefault", False))
+                        port = str(item.get("PortName", ""))
+                        search_str = f"{pname} {port}".lower()
+                        is_thermal = any(k in search_str for k in THERMAL_SIGNATURES)
+                        work_offline = bool(item.get("WorkOffline", False))
+                        raw_status = str(item.get("PrinterStatus", "")).lower()
+                        is_offline = (
+                            work_offline
+                            or raw_status in ("2", "8", "13", "24")
+                            or any(s in raw_status for s in ["offline", "error", "paused", "notavailable", "userintervention"])
+                        )
+                        status_text = "Offline" if is_offline else "Ready"
+                        printers.append({
+                            "name": pname,
+                            "is_default": is_default,
+                            "is_thermal": is_thermal,
+                            "device_uri": port,
+                            "status": status_text,
+                            "is_online": not is_offline,
+                        })
+            except Exception as e:
+                logger.warning(f"Could not list Windows printers: {e}")
 
     return printers
 
@@ -443,7 +478,7 @@ def image_to_escpos_raster(
 
 
 def raster_image_to_escpos(
-    image_source: Union[str, bytes, Any],
+    image_source: Optional[Union[str, bytes, Any]] = None,
     paper_width: str = "80mm",
     darkness: str = "normal",
     printer_profile: str = "standard_escpos",
@@ -451,6 +486,9 @@ def raster_image_to_escpos(
     feed_lines: int = 4,
     kick_drawer: bool = False,
     beep_enabled: bool = True,
+    compact_bitmap: Optional[str] = None,
+    bitmap_width: Optional[int] = None,
+    bitmap_height: Optional[int] = None,
 ) -> bytes:
     """
     Converts a complete receipt canvas/image (rendered client-side) into high-fidelity
@@ -461,6 +499,80 @@ def raster_image_to_escpos(
     - Clean boxed cards, flexbox column alignments, and solid borders
     - Crisp vector Code-128 barcodes
     """
+    clean_width = str(paper_width or "80mm").lower()
+    if "58" in clean_width:
+        target_dots_w = 360 if "narrow" in clean_width else 384
+    else:
+        target_dots_w = 512 if "compact" in clean_width else 576
+
+    bytes_per_row = target_dots_w // 8
+
+    # --- FAST-PATH 1: Pre-quantized 1-Bit Client Bitmap (0ms latency, no Pillow required) ---
+    if compact_bitmap:
+        try:
+            raw_data = base64.b64decode(compact_bitmap)
+            target_w = bitmap_width or target_dots_w
+            bytes_row = target_w // 8
+            total_h = bitmap_height or (len(raw_data) // bytes_row)
+            if total_h <= 0:
+                raise ValueError("Bitmap height cannot be zero.")
+
+            # Guard against 100% blank white canvas (all bits 0)
+            has_content = any(b != 0x00 for b in raw_data)
+            if not has_content:
+                raise ValueError("Receipt image is completely blank. Print aborted to prevent empty paper feed.")
+
+            band_h_limit = 24
+            raster_chunks = bytearray()
+            for start_row in range(0, total_h, band_h_limit):
+                chunk_h = min(band_h_limit, total_h - start_row)
+                chunk_data = bytearray()
+                for r in range(start_row, start_row + chunk_h):
+                    chunk_data.extend(raw_data[r * bytes_row : (r + 1) * bytes_row])
+
+                xL = bytes_row & 0xFF
+                xH = (bytes_row >> 8) & 0xFF
+                yL = chunk_h & 0xFF
+                yH = (chunk_h >> 8) & 0xFF
+                header = bytes([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH])
+                raster_chunks.extend(header + chunk_data)
+
+            profile = (printer_profile or "standard_escpos").lower()
+            is_escpos = (profile != "generic_plain")
+
+            payload = bytearray()
+            if is_escpos:
+                payload.extend(CMD_INIT)
+                payload.extend(CMD_CODEPAGE_CP1252)
+                if darkness in ("high", "maximum") and profile == "xprinter_enhanced":
+                    payload.extend(CMD_HEATING_MAX)
+                    payload.extend(CMD_DENSITY_MAX)
+                if darkness in ("high", "maximum"):
+                    payload.extend(CMD_DOUBLE_STRIKE_ON)
+
+            if kick_drawer and is_escpos:
+                payload.extend(CMD_CASH_DRAWER_KICK)
+
+            payload.extend(raster_chunks)
+
+            feed_count = max(2, min(8, feed_lines if feed_lines is not None else 4))
+            payload.extend(b"\n" * feed_count)
+
+            clean_cut = (cut_mode or "partial").lower()
+            if clean_cut != "tear_only" and is_escpos:
+                if profile == "star_line":
+                    payload.extend(CMD_STAR_CUT_FULL if clean_cut == "full" else CMD_STAR_CUT_PARTIAL)
+                else:
+                    payload.extend(CMD_CUT_FULL if clean_cut == "full" else CMD_CUT_PARTIAL)
+
+            if beep_enabled and is_escpos:
+                payload.extend(CMD_BEEP)
+
+            return bytes(payload)
+        except Exception as e:
+            logger.warning(f"Compact bitmap fast-path skipped due to: {e}, falling back to PIL image processing")
+
+    # --- FAST-PATH 2: Standard Image processing with Pillow ---
     try:
         from PIL import Image
     except ImportError:
@@ -486,23 +598,19 @@ def raster_image_to_escpos(
     if img is None:
         raise ValueError("Invalid or empty image data provided for thermal raster printing.")
 
-    clean_width = str(paper_width or "80mm").lower()
-    if "58" in clean_width:
-        target_dots_w = 360 if "narrow" in clean_width else 384
-    else:
-        target_dots_w = 512 if "compact" in clean_width else 576
-
-    bytes_per_row = target_dots_w // 8
-
     orig_w, orig_h = img.size
     if orig_w <= 0 or orig_h <= 0:
         raise ValueError("Image dimensions cannot be zero.")
 
-    scale = target_dots_w / orig_w
-    new_h = max(1, int(orig_h * scale))
-
-    resample_filter = getattr(Image, "Resampling", Image).LANCZOS
-    img_resized = img.resize((target_dots_w, new_h), resample=resample_filter)
+    if orig_w == target_dots_w:
+        # ⚡ Instant no-op when client already rendered at target width (576px / 384px)
+        img_resized = img
+        new_h = orig_h
+    else:
+        scale = target_dots_w / orig_w
+        new_h = max(1, int(orig_h * scale))
+        resample_filter = getattr(Image, "Resampling", Image).BILINEAR
+        img_resized = img.resize((target_dots_w, new_h), resample=resample_filter)
 
     # Flatten transparency onto white background
     bg = Image.new("RGB", img_resized.size, (255, 255, 255))
@@ -513,7 +621,6 @@ def raster_image_to_escpos(
         bg.paste(img_resized.convert("RGB"))
 
     # Convert to 1-bit B&W using threshold
-    # 195 separates dark ink/text/barcodes from background cleanly
     bw = bg.convert("L").point(lambda x: 0 if x < 195 else 255, "1")
     raw_img_bytes = bw.tobytes()
 
@@ -1882,3 +1989,126 @@ def clear_printer_queue(printer_name: Optional[str] = None) -> Dict[str, Any]:
         except Exception as e:
             return {"success": False, "message": f"Failed to clear Windows print queue: {e}"}
     return {"success": False, "message": f"Unsupported OS: {sys_name}"}
+
+
+def diagnose_printer_subsystem(target_printer_name: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Performs comprehensive diagnostic checks on the host OS printing subsystem:
+    1. Spooler Service Status (Windows Spooler service / CUPS scheduler)
+    2. Detected printer inventory & connection health
+    3. Target printer configuration, reachability, and handle validation
+    4. Spooler queue depth (counts pending / stuck / errored jobs)
+    5. Actionable diagnosis and remediation suggestions
+    """
+    sys_name = platform.system()
+    issues: List[str] = []
+    recommendations: List[str] = []
+    spooler_running = True
+    queue_job_count = 0
+
+    # 1. Spooler Service Check
+    if sys_name == "Windows":
+        try:
+            res = subprocess.run(["sc", "query", "spooler"], capture_output=True, text=True, timeout=2)
+            if res.returncode == 0:
+                spooler_running = "RUNNING" in res.stdout.upper()
+            else:
+                spooler_running = True
+        except Exception:
+            spooler_running = True
+    elif sys_name in ("Darwin", "Linux"):
+        try:
+            res = subprocess.run(["lpstat", "-r"], capture_output=True, text=True, timeout=2)
+            spooler_running = "running" in res.stdout.lower() and "not running" not in res.stdout.lower()
+        except Exception:
+            spooler_running = True
+
+    if not spooler_running:
+        issues.append("Print Spooler service is stopped or inactive on host machine.")
+        if sys_name == "Windows":
+            recommendations.append("Start the 'Print Spooler' service in Windows Services (services.msc) or run 'net start spooler' as Administrator.")
+        else:
+            recommendations.append("Start the CUPS print daemon by running 'sudo cupsenable' or restarting cupsd.")
+
+    # 2. Printers enumeration
+    available = list_system_printers()
+    if not available:
+        issues.append("No local or network printers found on host system.")
+        recommendations.append("Connect your thermal printer via USB or assign a network IP printer (e.g. 192.168.1.100:9100) in Settings.")
+
+    # 3. Target printer resolution & queue inspection
+    resolved_name, target_info = resolve_target_printer(target_printer_name, available)
+    printer_found = bool(resolved_name)
+    is_online = target_info.get("is_online", True) if target_info else True
+    port_name = target_info.get("device_uri", "") if target_info else ""
+
+    if target_printer_name and not target_info:
+        issues.append(f"Configured printer '{target_printer_name}' was not found among connected devices.")
+        recommendations.append("Check the printer USB connection and power switch, or select an available printer in Settings.")
+
+    if target_info and not is_online:
+        issues.append(f"Printer '{resolved_name}' is currently OFFLINE or Powered Off.")
+        recommendations.append("Turn ON the printer power switch, check for paper roll empty LED, and ensure 'Use Printer Offline' is unchecked in Windows Printer Properties.")
+
+    # 4. Queue stuck jobs check
+    if sys_name == "Windows":
+        try:
+            if target_printer_name:
+                safe_t = target_printer_name.replace("'", "''")
+                cmd = ["powershell", "-NoProfile", "-Command", f"@((Get-PrintJob -PrinterName '{safe_t}' -ErrorAction SilentlyContinue)).Count"]
+            else:
+                cmd = ["powershell", "-NoProfile", "-Command", "@((Get-PrintJob -ErrorAction SilentlyContinue)).Count"]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+            if res.returncode == 0 and res.stdout.strip().isdigit():
+                queue_job_count = int(res.stdout.strip())
+        except Exception:
+            queue_job_count = 0
+    elif sys_name in ("Darwin", "Linux"):
+        try:
+            cmd = ["lpstat", "-o", resolved_name] if resolved_name else ["lpstat", "-o"]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
+            if res.returncode == 0:
+                queue_job_count = len([line for line in res.stdout.splitlines() if line.strip()])
+        except Exception:
+            queue_job_count = 0
+
+    if queue_job_count > 0:
+        issues.append(f"There are {queue_job_count} pending or stuck job(s) in the print spooler queue.")
+        recommendations.append("Click 'Clear Spooler Queue' to remove stuck jobs and unblock printer communication.")
+
+    # 5. Handle open test
+    if resolved_name and sys_name == "Windows":
+        try:
+            import win32print
+            h = win32print.OpenPrinter(resolved_name)
+            win32print.ClosePrinter(h)
+        except ImportError:
+            pass
+        except Exception as e:
+            issues.append(f"Cannot open direct spooler handle to '{resolved_name}': {e}")
+            recommendations.append("Ensure StokFlow has permission to access the printer and no other application has locked the port.")
+
+    # Status classification
+    if not spooler_running or not available or (target_printer_name and not target_info):
+        overall_status = "error"
+    elif issues:
+        overall_status = "warning"
+    else:
+        overall_status = "healthy"
+        recommendations.append("Printer subsystem is healthy and ready for instant printing.")
+
+    return {
+        "status": overall_status,
+        "spooler_running": spooler_running,
+        "target_printer": target_printer_name,
+        "resolved_printer": resolved_name,
+        "printer_found": printer_found,
+        "is_online": is_online,
+        "queue_job_count": queue_job_count,
+        "port_name": port_name,
+        "os_name": sys_name,
+        "issues": issues,
+        "recommendations": recommendations,
+        "printers": available,
+    }
+

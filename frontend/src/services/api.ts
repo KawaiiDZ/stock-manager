@@ -10,6 +10,7 @@ import {
   Quotation, QuotationCreate, QuotationConversionCheckResponse, QuotationConvertRequest,
   GoogleDriveFileItem, GoogleBackupStatusResponse, GoogleBackupSettingsUpdate, GoogleBackupActionResponse,
   PrinterInfo,
+  PrinterDiagnosticResponse,
   User, UserCreate, UserUpdate,
   SyncPushRequest, SyncPushResponse, SyncSnapshotResponse,
   NetworkInfo, DiscoveredHost, HostPingResponse, TestHostResponse,
@@ -61,7 +62,11 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+export interface RequestOptions extends RequestInit {
+  timeoutMs?: number;
+}
+
+async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const remoteHost = getRemoteHostUrl();
   const base = remoteHost ? `${remoteHost}/api` : '/api';
   const token = getAuthToken();
@@ -75,8 +80,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  // AbortController timeout: 2500ms when pointing to remote host, 10000ms for localhost
-  const timeoutMs = options.signal ? undefined : (remoteHost ? 2500 : 10000);
+  // AbortController timeout: customizable via options.timeoutMs, defaults to 8000ms for remote host, 12000ms for localhost
+  const defaultTimeout = remoteHost ? 8000 : 12000;
+  const timeoutMs = options.signal ? undefined : (options.timeoutMs !== undefined ? options.timeoutMs : defaultTimeout);
   let controller: AbortController | undefined;
   let timeoutId: any;
   if (timeoutMs) {
@@ -574,7 +580,12 @@ export const api = {
     request<void>(`/quotations/${id}`, { method: 'DELETE' }),
 
   // Thermal Hardware & Printing
-  getSystemPrinters: () => request<PrinterInfo[]>('/printing/printers'),
+  getSystemPrinters: () => request<PrinterInfo[]>('/printing/printers', { timeoutMs: 8000 }),
+  diagnosePrinting: (printerName?: string) =>
+    request<PrinterDiagnosticResponse>(
+      `/printing/diagnose${printerName ? `?printer_name=${encodeURIComponent(printerName)}` : ''}`,
+      { timeoutMs: 10000 }
+    ),
   printThermalDirect: (data: {
     sale_id?: number;
     printer_name?: string;
@@ -589,15 +600,22 @@ export const api = {
     cut_mode?: string;
     feed_lines?: number;
     raster_image?: string;
+    compact_bitmap?: string;
+    bitmap_width?: number;
+    bitmap_height?: number;
     render_pipeline?: string;
     beep_enabled?: boolean;
   }) =>
     request<{ success: boolean; printer: string; bytes_sent: number; message: string; is_online?: boolean; warning?: string }>('/printing/receipt', {
       method: 'POST',
       body: JSON.stringify(data),
+      timeoutMs: 15000,
     }),
   printThermalRaster: (data: {
-    image_data: string;
+    image_data?: string;
+    compact_bitmap?: string;
+    bitmap_width?: number;
+    bitmap_height?: number;
     printer_name?: string;
     paper_width?: string;
     darkness?: string;
@@ -610,6 +628,7 @@ export const api = {
     request<{ success: boolean; printer: string; bytes_sent: number; message: string; is_online?: boolean; warning?: string }>('/printing/raster', {
       method: 'POST',
       body: JSON.stringify(data),
+      timeoutMs: 15000,
     }),
   printThermalDiagnostic: (data?: {
     printer_name?: string;
@@ -622,11 +641,13 @@ export const api = {
     request<{ success: boolean; printer: string; bytes_sent: number; message: string; is_online?: boolean; warning?: string }>('/printing/diagnostic', {
       method: 'POST',
       body: JSON.stringify(data || {}),
+      timeoutMs: 15000,
     }),
   clearPrinterQueue: (printerName?: string) =>
     request<{ success: boolean; message: string }>('/printing/clear-queue', {
       method: 'POST',
       body: JSON.stringify({ printer_name: printerName }),
+      timeoutMs: 10000,
     }),
 
   // User Management

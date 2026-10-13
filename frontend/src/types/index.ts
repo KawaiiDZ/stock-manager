@@ -70,6 +70,21 @@ export interface PrinterInfo {
   is_online?: boolean;
 }
 
+export interface PrinterDiagnosticResponse {
+  status: 'healthy' | 'warning' | 'error';
+  spooler_running: boolean;
+  target_printer?: string | null;
+  resolved_printer?: string | null;
+  printer_found: boolean;
+  is_online: boolean;
+  queue_job_count: number;
+  port_name?: string | null;
+  os_name: string;
+  issues: string[];
+  recommendations: string[];
+  printers: PrinterInfo[];
+}
+
 export interface CustomField {
   id: number;
   category_id?: number | null;

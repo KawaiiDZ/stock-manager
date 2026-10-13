@@ -48,6 +48,7 @@ import {
   Wallet,
   Bell,
   Gauge,
+  Activity,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -59,6 +60,7 @@ import { SetupWizardModal } from '../../components/wizard/SetupWizardModal';
 import { BarcodePrintModal } from '../../components/barcode/BarcodePrintModal';
 import { ReceiptModal } from '../../components/receipts/ReceiptModal';
 import { ThermalReceipt } from '../../components/receipts/ThermalReceipt';
+import { PrinterDiagnosticsModal } from '../../components/printing/PrinterDiagnosticsModal';
 import { printElement } from '../../utils/print';
 import { STANDARD_LABEL_SIZES, generateBarcodeSvg, parseLabelDimensions } from '../../utils/barcode';
 import { STANDARD_DATE_FORMATS, setGlobalFormattingPreferences, formatDate, formatCurrency } from '../../utils/format';
@@ -640,8 +642,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [resetError, setResetError] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
 
-  // Test Receipt Modal State
+  // Test Receipt & Diagnostic Modal State
   const [showTestReceiptModal, setShowTestReceiptModal] = useState(false);
+  const [showDiagnosticsModal, setShowDiagnosticsModal] = useState(false);
 
   // Realistic sample sale object for test receipt printing and preview
   const sampleTestSale: Sale = {
@@ -3112,6 +3115,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
+                        onClick={() => setShowDiagnosticsModal(true)}
+                        className="px-2.5 py-1 text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50/60 hover:bg-indigo-100/60 transition"
+                        title="Run automated printer and spooler diagnostics"
+                      >
+                        <Activity className="h-3.5 w-3.5 text-indigo-600" />
+                        <span>Diagnostics</span>
+                      </button>
+                      <button
+                        type="button"
                         onClick={handleClearPrinterQueue}
                         disabled={clearingQueue}
                         className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-rose-700 flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-rose-50 transition"
@@ -4821,6 +4833,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           } as any}
         />
       )}
+
+      {/* Printer Diagnostics Modal */}
+      <PrinterDiagnosticsModal
+        isOpen={showDiagnosticsModal}
+        onClose={() => setShowDiagnosticsModal(false)}
+        settings={settings}
+      />
     </div>
   );
 };

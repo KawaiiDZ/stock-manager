@@ -25,7 +25,7 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { ReceiptModal } from '../../components/receipts/ReceiptModal';
 import { formatCurrency, formatMoney, formatDateTime } from '../../utils/format';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
-import { rasterizeReceiptOffscreen } from '../../utils/receiptRasterizer';
+import { rasterizeReceiptFast, rasterizeReceiptOffscreen } from '../../utils/receiptRasterizer';
 import { playReceiptCutBeep } from '../../utils/audio';
 
 interface SalesHistoryPageProps {
@@ -65,8 +65,9 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
         const pWidth = settings?.receipt_printer_type === '58mm' ? '58mm' : '80mm';
         const isRaster = settings?.thermal_render_pipeline === 'raster_canvas';
 
-        const dispatchPrint = (rasterImage?: string) =>
-          api.printThermalDirect({
+        const dispatchPrint = (rasterData?: { compactBitmap?: string; dataUrl?: string; widthDots?: number; heightDots?: number } | string) => {
+          const isObj = typeof rasterData === 'object' && rasterData !== null;
+          return api.printThermalDirect({
             sale_id: sale.id,
             printer_name: settings?.selected_thermal_printer || undefined,
             paper_width: pWidth,
@@ -79,14 +80,18 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
             feed_lines: settings?.thermal_feed_lines ?? 4,
             render_pipeline: isRaster ? 'raster_canvas' : 'native_text',
             beep_enabled: settings?.thermal_beep_enabled ?? true,
-            raster_image: rasterImage || undefined,
+            raster_image: isObj ? (rasterData as any).dataUrl : (typeof rasterData === 'string' ? rasterData : undefined),
+            compact_bitmap: isObj ? (rasterData as any).compactBitmap : undefined,
+            bitmap_width: isObj ? (rasterData as any).widthDots : undefined,
+            bitmap_height: isObj ? (rasterData as any).heightDots : undefined,
           });
+        };
 
         const res = isRaster
-          ? await rasterizeReceiptOffscreen(sale, settings, {
+          ? await rasterizeReceiptFast(sale, settings, {
               paperWidth: pWidth,
               layout: settings?.thermal_layout as any,
-            }).then((img) => dispatchPrint(img || undefined))
+            }).then((data) => dispatchPrint(data || undefined))
           : await dispatchPrint();
 
         if (settings?.thermal_beep_enabled ?? true) {

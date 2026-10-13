@@ -4,11 +4,12 @@ import { Button } from '../common/Button';
 import { ThermalReceipt } from './ThermalReceipt';
 import { PdfInvoiceReceipt } from './PdfInvoiceReceipt';
 import { Sale, BusinessSettings } from '../../types';
-import { Printer, Plus, Receipt, FileText, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Printer, Plus, Receipt, FileText, CheckCircle2, AlertTriangle, Activity } from 'lucide-react';
 import { api } from '../../services/api';
 import { printElement } from '../../utils/print';
-import { rasterizeReceiptElement } from '../../utils/receiptRasterizer';
+import { rasterizeReceiptElement, rasterizeReceiptElementFast } from '../../utils/receiptRasterizer';
 import { playReceiptCutBeep } from '../../utils/audio';
+import { PrinterDiagnosticsModal } from '../printing/PrinterDiagnosticsModal';
 
 interface ReceiptModalProps {
   isOpen: boolean;
@@ -29,6 +30,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   const [directPrinting, setDirectPrinting] = useState<boolean>(false);
   const [printSuccessMsg, setPrintSuccessMsg] = useState<string | null>(null);
   const [printErrorMsg, setPrintErrorMsg] = useState<string | null>(null);
+  const [showDiagnosticsModal, setShowDiagnosticsModal] = useState(false);
   const isPrintingRef = useRef<boolean>(false);
 
   // Directly derive roll geometry and layout from user settings
@@ -75,10 +77,10 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
 
       const isRaster = settings?.thermal_render_pipeline === 'raster_canvas';
 
-      // Capture exact visible DOM element snapshot ONLY if raster canvas pipeline is requested
-      const rasterImage = isRaster
-        ? await rasterizeReceiptElement('printable-thermal-receipt')
-        : undefined;
+      // Capture exact visible DOM element snapshot and quantize to 1-bit monochrome if raster canvas pipeline is requested
+      const rasterRes = isRaster
+        ? await rasterizeReceiptElementFast('printable-thermal-receipt')
+        : null;
 
       const res = await api.printThermalDirect({
         sale_id: sale.id,
@@ -93,7 +95,10 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         feed_lines: settings?.thermal_feed_lines ?? 4,
         render_pipeline: isRaster ? 'raster_canvas' : 'native_text',
         beep_enabled: settings?.thermal_beep_enabled ?? true,
-        raster_image: rasterImage || undefined,
+        raster_image: rasterRes?.dataUrl || undefined,
+        compact_bitmap: rasterRes?.compactBitmap || undefined,
+        bitmap_width: rasterRes?.widthDots || undefined,
+        bitmap_height: rasterRes?.heightDots || undefined,
       });
 
       if (settings?.thermal_beep_enabled ?? true) {
@@ -283,9 +288,19 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         </div>
       )}
       {printErrorMsg && (
-        <div className="px-6 py-2 bg-amber-50 border-t border-amber-200 text-amber-800 text-xs font-semibold flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-          <span>{printErrorMsg}</span>
+        <div className="px-6 py-2 bg-amber-50 border-t border-amber-200 text-amber-800 text-xs font-semibold flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+            <span>{printErrorMsg}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowDiagnosticsModal(true)}
+            className="px-2 py-0.5 text-[11px] font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 rounded border border-amber-300 transition shrink-0 flex items-center gap-1"
+          >
+            <Activity className="h-3 w-3 text-amber-700" />
+            <span>Diagnose Printer</span>
+          </button>
         </div>
       )}
 
@@ -335,6 +350,13 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
           <span><kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded text-[11px] font-mono font-bold text-slate-700 shadow-2xs">Esc</kbd> Close</span>
         </div>
       </div>
+
+      {/* Printer Diagnostics Modal */}
+      <PrinterDiagnosticsModal
+        isOpen={showDiagnosticsModal}
+        onClose={() => setShowDiagnosticsModal(false)}
+        settings={settings}
+      />
     </Modal>
   );
 };
