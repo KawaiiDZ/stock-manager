@@ -752,9 +752,60 @@ def test_raster_image_to_escpos_and_raster_endpoint(client, db_session):
             'raster_image': b64_png,
             'printer_name': 'Test_Raster_Printer',
             'paper_width': '80mm',
+            'render_pipeline': 'raster_canvas',
         })
         assert res_receipt.status_code == 200, res_receipt.text
         assert res_receipt.json()['success'] is True
         assert mock_send_receipt.called
+
+
+def test_hardware_buzzer_and_render_pipeline(client):
+    from backend.app.services.escpos_service import CMD_BEEP, generate_escpos_receipt, raster_image_to_escpos
+
+    # 1. Verify CMD_BEEP in generate_escpos_receipt when beep_enabled=True
+    sample_sale = {
+        'receipt_number': 'REC-BEEP-001',
+        'items': [{'product_name': 'Item 1', 'quantity': 1, 'unit_price': 100, 'total_price': 100}],
+        'subtotal': 100,
+        'total_amount': 100,
+        'paid_amount': 100,
+    }
+    raw_with_beep = generate_escpos_receipt(sample_sale, beep_enabled=True)
+    assert CMD_BEEP in raw_with_beep
+
+    raw_no_beep = generate_escpos_receipt(sample_sale, beep_enabled=False)
+    assert CMD_BEEP not in raw_no_beep
+
+    # 2. Blank image guard prevents runaway empty feeds
+    from PIL import Image
+    import io, pytest
+    blank_white = Image.new("RGB", (200, 200), (255, 255, 255))
+    buf = io.BytesIO()
+    blank_white.save(buf, format="PNG")
+    blank_bytes = buf.getvalue()
+
+    with pytest.raises(ValueError, match="blank white"):
+        raster_image_to_escpos(blank_bytes)
+
+    # 3. Native text pipeline ignores raster_image payload and uses text engine
+    with patch('backend.app.api.routes.printing.send_to_thermal_printer') as mock_send, \
+         patch('backend.app.api.routes.printing.generate_escpos_receipt') as mock_gen:
+        mock_gen.return_value = b"\x1b@NATIVE_TEXT_RECEIPT"
+        mock_send.return_value = {
+            'success': True,
+            'printer': 'Test_POS',
+            'bytes_sent': 25,
+            'is_online': True,
+            'warning': None,
+            'message': 'Printed',
+        }
+        res = client.post('/api/printing/receipt', json={
+            'is_sample': True,
+            'render_pipeline': 'native_text',
+            'raster_image': 'data:image/png;base64,fakeimage',
+        })
+        assert res.status_code == 200
+        assert mock_gen.called
+
 
 

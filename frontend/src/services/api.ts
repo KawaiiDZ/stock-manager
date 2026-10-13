@@ -589,6 +589,8 @@ export const api = {
     cut_mode?: string;
     feed_lines?: number;
     raster_image?: string;
+    render_pipeline?: string;
+    beep_enabled?: boolean;
   }) =>
     request<{ success: boolean; printer: string; bytes_sent: number; message: string; is_online?: boolean; warning?: string }>('/printing/receipt', {
       method: 'POST',

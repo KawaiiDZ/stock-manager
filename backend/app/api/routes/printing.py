@@ -49,6 +49,8 @@ class ThermalPrintRequest(BaseModel):
     cut_mode: Optional[str] = None  # "partial" | "full" | "tear_only"
     feed_lines: Optional[int] = None  # 2 to 8 lines
     raster_image: Optional[str] = None  # Base64 PNG data URL for 100% exact preview parity
+    render_pipeline: Optional[str] = None  # "native_text" | "raster_canvas"
+    beep_enabled: Optional[bool] = None
 
 
 class ThermalRasterRequest(BaseModel):
@@ -119,8 +121,11 @@ def print_thermal_receipt(data: ThermalPrintRequest, db: Session = Depends(get_d
         logger.info(f"Deduplicated rapid print request for '{dedup_key}' (elapsed: {now - cached['timestamp']:.2f}s)")
         return ThermalPrintResponse(**cached["response"])
 
-    # 1. High-Fidelity Client-Side Raster Pipeline (GS v 0) - 100% exact parity with browser preview
-    if data.raster_image:
+    pipeline = data.render_pipeline or getattr(settings, "thermal_render_pipeline", "native_text") or "native_text"
+    is_beep = data.beep_enabled if data.beep_enabled is not None else getattr(settings, "thermal_beep_enabled", True)
+
+    # 1. Graphical Canvas Raster Pipeline (GS v 0) - ONLY used when explicitly selected in settings
+    if pipeline == "raster_canvas" and data.raster_image:
         try:
             escpos_bytes = raster_image_to_escpos(
                 image_source=data.raster_image,
@@ -130,6 +135,7 @@ def print_thermal_receipt(data: ThermalPrintRequest, db: Session = Depends(get_d
                 cut_mode=data.cut_mode or getattr(settings, "thermal_cut_mode", "partial") or "partial",
                 feed_lines=data.feed_lines if data.feed_lines is not None else getattr(settings, "thermal_feed_lines", 4),
                 kick_drawer=bool(data.kick_drawer),
+                beep_enabled=is_beep,
             )
             res = send_to_thermal_printer(escpos_bytes, printer_name=printer_name)
             _recent_print_cache[dedup_key] = {"timestamp": now, "response": res}
@@ -219,6 +225,7 @@ def print_thermal_receipt(data: ThermalPrintRequest, db: Session = Depends(get_d
             printer_profile=data.printer_profile or getattr(settings, "thermal_printer_profile", "standard_escpos") or "standard_escpos",
             cut_mode=data.cut_mode or getattr(settings, "thermal_cut_mode", "partial") or "partial",
             feed_lines=data.feed_lines if data.feed_lines is not None else getattr(settings, "thermal_feed_lines", 4),
+            beep_enabled=is_beep,
         )
 
         res = send_to_thermal_printer(escpos_bytes, printer_name=printer_name)
@@ -248,6 +255,7 @@ def print_thermal_raster(data: ThermalRasterRequest, db: Session = Depends(get_d
             cut_mode=data.cut_mode or getattr(settings, "thermal_cut_mode", "partial") or "partial",
             feed_lines=data.feed_lines if data.feed_lines is not None else getattr(settings, "thermal_feed_lines", 4),
             kick_drawer=bool(data.kick_drawer),
+            beep_enabled=getattr(settings, "thermal_beep_enabled", True),
         )
         res = send_to_thermal_printer(escpos_bytes, printer_name=printer_name)
         return ThermalPrintResponse(**res)

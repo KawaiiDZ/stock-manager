@@ -33,6 +33,7 @@ import { CartQuantityInput } from '../../components/pos/CartQuantityInput';
 import { useBarcodeScanner, setNativeInputValue } from '../../hooks/useBarcodeScanner';
 import { formatCurrency, formatMoney, formatQty } from '../../utils/format';
 import { rasterizeReceiptOffscreen } from '../../utils/receiptRasterizer';
+import { playCheckoutSuccessBeep } from '../../utils/audio';
 
 interface CartItem {
   product: Product;
@@ -781,12 +782,13 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         const pWidth = settings?.receipt_printer_type === '58mm' ? '58mm' : '80mm';
 
         if (isThermal) {
-          // Offscreen client-side raster snapshot ensures 100% exact visual parity with preview modal
-          rasterizeReceiptOffscreen(res, settings, {
-            paperWidth: pWidth,
-            layout: settings?.thermal_layout as any,
-          }).then((rasterImage) => {
-            return api.printThermalDirect({
+          // Play POS terminal confirmation chime immediately on silent checkout
+          playCheckoutSuccessBeep();
+
+          const isRaster = settings?.thermal_render_pipeline === 'raster_canvas';
+
+          const dispatchPrint = (rasterImage?: string) =>
+            api.printThermalDirect({
               sale_id: res.id,
               printer_name: settings?.selected_thermal_printer || undefined,
               paper_width: pWidth,
@@ -797,9 +799,19 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
               printer_profile: settings?.thermal_printer_profile || 'standard_escpos',
               cut_mode: settings?.thermal_cut_mode || 'partial',
               feed_lines: settings?.thermal_feed_lines ?? 4,
+              render_pipeline: isRaster ? 'raster_canvas' : 'native_text',
+              beep_enabled: settings?.thermal_beep_enabled ?? true,
               raster_image: rasterImage || undefined,
             });
-          }).then((printRes) => {
+
+          const printPromise = isRaster
+            ? rasterizeReceiptOffscreen(res, settings, {
+                paperWidth: pWidth,
+                layout: settings?.thermal_layout as any,
+              }).then((img) => dispatchPrint(img || undefined))
+            : dispatchPrint(); // ⚡ Instant 0ms dispatch in Native ESC/POS mode
+
+          printPromise.then((printRes) => {
             if (printRes.is_online === false || printRes.warning) {
               setWarningToast(
                 `⚠️ Sale #${res.receipt_number} queued, but printer is OFFLINE / Powered Off. Please check power switch & USB cable.`

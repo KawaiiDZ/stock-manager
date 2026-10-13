@@ -26,6 +26,7 @@ import { ReceiptModal } from '../../components/receipts/ReceiptModal';
 import { formatCurrency, formatMoney, formatDateTime } from '../../utils/format';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { rasterizeReceiptOffscreen } from '../../utils/receiptRasterizer';
+import { playReceiptCutBeep } from '../../utils/audio';
 
 interface SalesHistoryPageProps {
   settings: BusinessSettings | null;
@@ -62,24 +63,36 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
     if (settings?.skip_receipt_preview && settings?.thermal_print_mode === 'direct_escpos') {
       try {
         const pWidth = settings?.receipt_printer_type === '58mm' ? '58mm' : '80mm';
-        const rasterImage = await rasterizeReceiptOffscreen(sale, settings, {
-          paperWidth: pWidth,
-          layout: settings?.thermal_layout as any,
-        });
+        const isRaster = settings?.thermal_render_pipeline === 'raster_canvas';
 
-        const res = await api.printThermalDirect({
-          sale_id: sale.id,
-          printer_name: settings?.selected_thermal_printer || undefined,
-          paper_width: pWidth,
-          header_style: settings?.thermal_header_style || 'logo_text',
-          show_barcode: settings?.show_barcode ?? true,
-          darkness: settings?.thermal_darkness || 'normal',
-          layout: settings?.thermal_layout || 'classic',
-          printer_profile: settings?.thermal_printer_profile || 'standard_escpos',
-          cut_mode: settings?.thermal_cut_mode || 'partial',
-          feed_lines: settings?.thermal_feed_lines ?? 4,
-          raster_image: rasterImage || undefined,
-        });
+        const dispatchPrint = (rasterImage?: string) =>
+          api.printThermalDirect({
+            sale_id: sale.id,
+            printer_name: settings?.selected_thermal_printer || undefined,
+            paper_width: pWidth,
+            header_style: settings?.thermal_header_style || 'logo_text',
+            show_barcode: settings?.show_barcode ?? true,
+            darkness: settings?.thermal_darkness || 'normal',
+            layout: settings?.thermal_layout || 'classic',
+            printer_profile: settings?.thermal_printer_profile || 'standard_escpos',
+            cut_mode: settings?.thermal_cut_mode || 'partial',
+            feed_lines: settings?.thermal_feed_lines ?? 4,
+            render_pipeline: isRaster ? 'raster_canvas' : 'native_text',
+            beep_enabled: settings?.thermal_beep_enabled ?? true,
+            raster_image: rasterImage || undefined,
+          });
+
+        const res = isRaster
+          ? await rasterizeReceiptOffscreen(sale, settings, {
+              paperWidth: pWidth,
+              layout: settings?.thermal_layout as any,
+            }).then((img) => dispatchPrint(img || undefined))
+          : await dispatchPrint();
+
+        if (settings?.thermal_beep_enabled ?? true) {
+          playReceiptCutBeep();
+        }
+
         setToastMessage({
           type: 'success',
           text: `Receipt #${sale.receipt_number} sent to ${res.printer || 'thermal printer'}`,

@@ -26,6 +26,8 @@ export interface BusinessSettings {
   skip_receipt_preview?: boolean;
   thermal_darkness?: 'normal' | 'high' | 'maximum';
   thermal_printer_profile?: 'standard_escpos' | 'xprinter_enhanced' | 'star_line' | 'generic_plain';
+  thermal_render_pipeline?: 'native_text' | 'raster_canvas';
+  thermal_beep_enabled?: boolean;
   thermal_cut_mode?: 'partial' | 'full' | 'tear_only';
   thermal_feed_lines?: number;
   receipt_letterhead_path?: string | null;

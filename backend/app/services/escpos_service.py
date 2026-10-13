@@ -46,6 +46,11 @@ CMD_CASH_DRAWER_KICK_PIN2 = ESC + b"p\x00\x19\xfa"
 CMD_CASH_DRAWER_KICK_PIN5 = ESC + b"p\x01\x19\xfa"
 CMD_CASH_DRAWER_KICK = CMD_CASH_DRAWER_KICK_PIN2 + CMD_CASH_DRAWER_KICK_PIN5 + b"\x07"
 
+# Hardware Buzzer & Beeper Commands (Epson, Xprinter, Rongta, Star, Generic POS)
+CMD_BEEP_STANDARD = ESC + b"B\x01\x02"  # ESC B 1 2 (1 beep, 100ms duration)
+CMD_BEEP_BELL = b"\x07"                 # ASCII BEL (single audible pulse)
+CMD_BEEP = CMD_BEEP_STANDARD + CMD_BEEP_BELL
+
 # Universal Code Page Select
 CMD_CODEPAGE_CP1252 = ESC + b"t\x10"  # Select CP1252 (Windows Latin-1)
 CMD_CODEPAGE_CP437 = ESC + b"t\x00"   # Select CP437 (USA Standard OEM)
@@ -445,6 +450,7 @@ def raster_image_to_escpos(
     cut_mode: str = "partial",
     feed_lines: int = 4,
     kick_drawer: bool = False,
+    beep_enabled: bool = True,
 ) -> bytes:
     """
     Converts a complete receipt canvas/image (rendered client-side) into high-fidelity
@@ -511,6 +517,11 @@ def raster_image_to_escpos(
     bw = bg.convert("L").point(lambda x: 0 if x < 195 else 255, "1")
     raw_img_bytes = bw.tobytes()
 
+    # Guard against 100% blank white canvas to prevent runaway feeds
+    has_content = any(b != 0xFF for b in raw_img_bytes)
+    if not has_content:
+        raise ValueError("Image data is 100% blank white. Raster print aborted to prevent empty paper feed.")
+
     band_h_limit = 24
     raster_chunks = bytearray()
 
@@ -558,6 +569,9 @@ def raster_image_to_escpos(
             payload.extend(CMD_STAR_CUT_FULL if clean_cut == "full" else CMD_STAR_CUT_PARTIAL)
         else:
             payload.extend(CMD_CUT_FULL if clean_cut == "full" else CMD_CUT_PARTIAL)
+
+    if beep_enabled and is_escpos:
+        payload.extend(CMD_BEEP)
 
     return bytes(payload)
 
@@ -814,6 +828,7 @@ def generate_escpos_receipt(
     printer_profile: Optional[str] = None,
     cut_mode: Optional[str] = None,
     feed_lines: Optional[int] = None,
+    beep_enabled: Optional[bool] = None,
 ) -> bytes:
     """
     Builds a complete, formatted ESC/POS binary receipt payload.
@@ -1359,6 +1374,11 @@ def generate_escpos_receipt(
         else:
             buf.extend(CMD_CUT_FULL if actual_cut_mode == "full" else CMD_CUT_PARTIAL)
 
+    # 10. Hardware Buzzer / Beep
+    is_beep = beep_enabled if beep_enabled is not None else getattr(settings, "thermal_beep_enabled", True)
+    if is_beep and profile != "generic_plain":
+        buf.extend(CMD_BEEP)
+
     return bytes(buf)
 
 
@@ -1504,6 +1524,9 @@ def generate_diagnostic_receipt(
             buf.extend(CMD_STAR_CUT_FULL if cut_mode == "full" else CMD_STAR_CUT_PARTIAL)
         else:
             buf.extend(CMD_CUT_FULL if cut_mode == "full" else CMD_CUT_PARTIAL)
+
+    if profile != "generic_plain" and getattr(settings, "thermal_beep_enabled", True):
+        buf.extend(CMD_BEEP)
 
     return bytes(buf)
 

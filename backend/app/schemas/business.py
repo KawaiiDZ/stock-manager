@@ -32,6 +32,8 @@ class BusinessSettingsResponse(BaseModel):
     skip_receipt_preview: bool = False
     thermal_darkness: str = "normal"
     thermal_printer_profile: str = "standard_escpos"
+    thermal_render_pipeline: str = "native_text"
+    thermal_beep_enabled: bool = True
     thermal_feed_lines: int = 4
     thermal_cut_mode: str = "partial"
     receipt_letterhead_path: Optional[str] = None
@@ -107,6 +109,8 @@ class BusinessSettingsUpdate(BaseModel):
     skip_receipt_preview: Optional[bool] = None
     thermal_darkness: Optional[str] = None
     thermal_printer_profile: Optional[str] = None
+    thermal_render_pipeline: Optional[str] = None
+    thermal_beep_enabled: Optional[bool] = None
     thermal_feed_lines: Optional[int] = None
     thermal_cut_mode: Optional[str] = None
     receipt_letterhead_path: Optional[str] = None

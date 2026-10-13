@@ -8,6 +8,7 @@ import { Printer, Plus, Receipt, FileText, CheckCircle2, AlertTriangle } from 'l
 import { api } from '../../services/api';
 import { printElement } from '../../utils/print';
 import { rasterizeReceiptElement } from '../../utils/receiptRasterizer';
+import { playReceiptCutBeep } from '../../utils/audio';
 
 interface ReceiptModalProps {
   isOpen: boolean;
@@ -72,8 +73,12 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
       setPrintErrorMsg(null);
       setPrintSuccessMsg(null);
 
-      // Capture exact visible DOM element snapshot for 100% visual parity with preview modal
-      const rasterImage = await rasterizeReceiptElement('printable-thermal-receipt');
+      const isRaster = settings?.thermal_render_pipeline === 'raster_canvas';
+
+      // Capture exact visible DOM element snapshot ONLY if raster canvas pipeline is requested
+      const rasterImage = isRaster
+        ? await rasterizeReceiptElement('printable-thermal-receipt')
+        : undefined;
 
       const res = await api.printThermalDirect({
         sale_id: sale.id,
@@ -86,8 +91,15 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         printer_profile: settings?.thermal_printer_profile || 'standard_escpos',
         cut_mode: settings?.thermal_cut_mode || 'partial',
         feed_lines: settings?.thermal_feed_lines ?? 4,
+        render_pipeline: isRaster ? 'raster_canvas' : 'native_text',
+        beep_enabled: settings?.thermal_beep_enabled ?? true,
         raster_image: rasterImage || undefined,
       });
+
+      if (settings?.thermal_beep_enabled ?? true) {
+        playReceiptCutBeep();
+      }
+
       setPrintSuccessMsg(`Receipt sent directly to ${res.printer}`);
       setTimeout(() => setPrintSuccessMsg(null), 4000);
     } catch (err: any) {

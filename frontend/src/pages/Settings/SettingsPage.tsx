@@ -46,6 +46,8 @@ import {
   Users,
   CreditCard,
   Wallet,
+  Bell,
+  Gauge,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -320,6 +322,24 @@ const SETTINGS_SEARCH_INDEX: SettingSearchItem[] = [
     keywords: ['auto print', 'skip preview', '1 click', 'instant print', 'auto'],
   },
   {
+    id: 'print_pipeline',
+    title: 'Print Speed & Rendering Engine (Native Text vs Raster)',
+    category: 'hardware',
+    subTab: 'printers',
+    categoryLabel: 'Receipts & Hardware',
+    description: 'Switch between ultra-fast instant 0ms hardware text engine or graphical canvas raster mode.',
+    keywords: ['speed', 'delay', 'fast print', 'instant print', 'pipeline', 'native text', 'raster', 'empty receipt', 'feed'],
+  },
+  {
+    id: 'printer_buzzer',
+    title: 'Hardware Buzzer & Checkout Sound (Printer Beep)',
+    category: 'hardware',
+    subTab: 'printers',
+    categoryLabel: 'Receipts & Hardware',
+    description: 'Enable or disable the physical printer hardware buzzer and POS terminal confirmation chime.',
+    keywords: ['beep', 'buzzer', 'sound', 'chime', 'silent print', 'audio', 'bell'],
+  },
+  {
     id: 'printer_diagnostics',
     title: 'Printer Calibration, Test Print & Spooler Clear',
     category: 'hardware',
@@ -555,6 +575,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [skipReceiptPreview, setSkipReceiptPreview] = useState<boolean>(
     Boolean(settings?.skip_receipt_preview)
   );
+  const [thermalRenderPipeline, setThermalRenderPipeline] = useState<'native_text' | 'raster_canvas'>(
+    settings?.thermal_render_pipeline || 'native_text'
+  );
+  const [thermalBeepEnabled, setThermalBeepEnabled] = useState<boolean>(
+    settings?.thermal_beep_enabled ?? true
+  );
   const [systemPrinters, setSystemPrinters] = useState<PrinterInfo[]>([]);
   const [loadingPrinters, setLoadingPrinters] = useState<boolean>(false);
   const [directPrintingTest, setDirectPrintingTest] = useState<boolean>(false);
@@ -711,6 +737,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setSelectedThermalPrinter(settings.selected_thermal_printer || '');
       setSelectedA4Printer(settings.selected_a4_printer || '');
       setSkipReceiptPreview(Boolean(settings.skip_receipt_preview));
+      setThermalRenderPipeline(settings.thermal_render_pipeline || 'native_text');
+      setThermalBeepEnabled(settings.thermal_beep_enabled ?? true);
       setShowSku(settings.show_sku ?? true);
       setShowBarcode(settings.show_barcode ?? true);
       setDateFormat(settings.date_format || 'YYYY-MM-DD');
@@ -852,6 +880,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         selected_thermal_printer: selectedThermalPrinter,
         selected_a4_printer: selectedA4Printer,
         skip_receipt_preview: skipReceiptPreview,
+        thermal_render_pipeline: thermalRenderPipeline,
+        thermal_beep_enabled: thermalBeepEnabled,
         show_letterhead: showLetterhead,
         hide_header_text_with_letterhead: hideHeaderTextWithLetterhead,
         receipt_letterhead_path: letterheadImage || null,
@@ -1192,6 +1222,40 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       );
     } catch (err: any) {
       setErrorMsg(err.detail || 'Failed to update auto-print setting.');
+    }
+  };
+
+  const handleChangeThermalRenderPipeline = async (pipeline: 'native_text' | 'raster_canvas') => {
+    setThermalRenderPipeline(pipeline);
+    try {
+      await api.updateSettings({
+        thermal_render_pipeline: pipeline,
+      });
+      onSettingsUpdated();
+      setSuccessMsg(
+        pipeline === 'native_text'
+          ? '⚡ Ultra-Fast Hardware Text engine enabled! Instant ESC/POS printing with 0ms delay.'
+          : '🖼️ Graphical Canvas engine enabled! Render custom fonts & styling via raster canvas.'
+      );
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to update render pipeline setting.');
+    }
+  };
+
+  const handleToggleThermalBeep = async (enabled: boolean) => {
+    setThermalBeepEnabled(enabled);
+    try {
+      await api.updateSettings({
+        thermal_beep_enabled: enabled,
+      });
+      onSettingsUpdated();
+      setSuccessMsg(
+        enabled
+          ? '🔔 Printer hardware buzzer & chime enabled!'
+          : '🔕 Printer buzzer muted.'
+      );
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to update buzzer setting.');
     }
   };
 
@@ -3158,9 +3222,115 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   </div>
                 </div>
 
-                
+                {/* Print Rendering Pipeline: Native ESC/POS vs Graphical Canvas */}
+                <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <Gauge className="h-4 w-4 text-emerald-600" />
+                        Print Rendering Pipeline & Latency Optimization
+                      </h4>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Controls whether receipts are generated using high-speed internal printer fonts or full-canvas raster bitmaps.
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                      {thermalRenderPipeline === 'native_text' ? '⚡ 0ms Direct Text' : '🖼️ Graphical Canvas'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                    {/* Pipeline Option 1: Native Text (Recommended) */}
+                    <button
+                      type="button"
+                      onClick={() => handleChangeThermalRenderPipeline('native_text')}
+                      className={`p-4 rounded-2xl border-2 text-left transition-all flex flex-col justify-between ${
+                        thermalRenderPipeline === 'native_text'
+                          ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm ring-1 ring-emerald-500/20'
+                          : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-1 mb-1.5">
+                          <span className="font-bold text-xs flex items-center gap-1.5">
+                            <Zap className="h-4 w-4 text-emerald-600" />
+                            Ultra-Fast Hardware Text (ESC/POS)
+                          </span>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                            Recommended
+                          </span>
                         </div>
-                        {/* OS Driver Advisory: macOS CUPS vs Windows */}
+                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                          Prints directly using internal printer hardware fonts. <strong>Instant 0ms output</strong> without canvas overhead. Completely fixes endless empty paper feeds on Windows!
+                        </p>
+                      </div>
+                      <div className="mt-3 text-[10px] font-bold text-emerald-700 flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3" /> Fastest &amp; immune to Windows empty-feed bug
+                      </div>
+                    </button>
+
+                    {/* Pipeline Option 2: Graphical Canvas */}
+                    <button
+                      type="button"
+                      onClick={() => handleChangeThermalRenderPipeline('raster_canvas')}
+                      className={`p-4 rounded-2xl border-2 text-left transition-all flex flex-col justify-between ${
+                        thermalRenderPipeline === 'raster_canvas'
+                          ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 shadow-sm'
+                          : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-1 mb-1.5">
+                          <span className="font-bold text-xs flex items-center gap-1.5">
+                            <Image className="h-4 w-4 text-blue-600" />
+                            Graphical Canvas (Raster Bitmap)
+                          </span>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                            Legacy / Graphic
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                          Renders the receipt as an exact graphical image via HTML canvas. Enables custom typography, but adds a brief ~200ms rasterization delay.
+                        </p>
+                      </div>
+                      <div className="mt-3 text-[10px] font-medium text-slate-400">
+                        Requires modern thermal printer with GS v 0 support
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Hardware Buzzer / Beep Sound Setting */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start justify-between gap-4">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <Bell className="h-4 w-4 text-emerald-600" />
+                      <span className="text-sm font-bold text-slate-800">
+                        Printer Hardware Buzzer &amp; POS Audio Chime
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${thermalBeepEnabled ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}`}>
+                        {thermalBeepEnabled ? '🔔 Buzzer Active' : '🔕 Muted'}
+                      </span>
+                    </div>
+                    <label className="flex items-center gap-2.5 cursor-pointer pt-1">
+                      <input
+                        type="checkbox"
+                        checked={thermalBeepEnabled}
+                        onChange={(e) => handleToggleThermalBeep(e.target.checked)}
+                        className="h-4 w-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
+                      />
+                      <span className="text-xs font-bold text-slate-700">
+                        Trigger hardware buzzer / beeper and chime on print &amp; cut
+                      </span>
+                    </label>
+                    <p className="text-xs text-slate-500 leading-relaxed max-w-xl pl-6.5">
+                      Sends hardware bell signals (<code className="font-mono text-[10px] bg-slate-200/60 px-1 py-0.5 rounded">ESC B</code> &amp; <code className="font-mono text-[10px] bg-slate-200/60 px-1 py-0.5 rounded">BEL</code>) to the physical printer buzzer and plays a pleasant checkout chime in the browser upon sale completion.
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+              {/* OS Driver Advisory: macOS CUPS vs Windows */}
           <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
             <div className="flex items-start gap-3">
               <div className="p-2.5 rounded-2xl bg-amber-50 text-amber-600 mt-0.5 shrink-0">
@@ -3168,10 +3338,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               </div>
               <div className="space-y-1">
                 <h4 className="font-bold text-slate-800 text-sm">
-                  Thermal Printer Troubleshooting & OS Driver Setup (macOS & Windows)
+                  Thermal Printer Troubleshooting &amp; OS Driver Setup (macOS &amp; Windows)
                 </h4>
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  Understanding why thermal printers can print endless PostScript code (such as <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-[10px]">/imageType 3 /InterleaveType 2 /DataDict currentdict</code>) and how StokFlow guarantees clean receipt printing.
+                  Understanding why thermal printers can print endless PostScript code or blank paper, and how StokFlow guarantees clean receipt printing.
                 </p>
               </div>
             </div>
@@ -3193,13 +3363,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
                 <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                   <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-mono text-[10px]">Windows</span>
-                  <span>Native Spooler & Dual Mode Support</span>
+                  <span>Native Spooler &amp; Endless Feed Prevention</span>
                 </div>
                 <p className="text-xs text-slate-500 leading-relaxed">
                   On Windows 10/11, official POS receipt drivers (POS-80, POS-58, Xprinter, Epson) install raster spoolers that work out-of-the-box with both <strong>Browser Print Dialog</strong> and <strong>Direct ESC/POS Engine</strong>.
                 </p>
-                <div className="text-[11px] text-blue-800 font-semibold bg-blue-50/80 p-2.5 rounded-xl border border-blue-200/60 leading-relaxed">
-                  ✓ <strong>On Windows:</strong> Both modes function seamlessly. Direct ESC/POS offers the speed advantage of skipping the print dialog on every checkout.
+                <div className="text-[11px] text-amber-800 font-semibold bg-amber-50/80 p-2.5 rounded-xl border border-amber-200/60 leading-relaxed">
+                  ⚠️ <strong>Endless Empty Paper Fix:</strong> If your printer continuously feeds blank paper without stopping, your printer firmware lacks <code className="font-mono text-[10px]">GS v 0</code> raster bitmap support. Set <strong>Rendering Pipeline</strong> to <strong>Ultra-Fast Hardware Text (ESC/POS)</strong> above to solve this instantly!
                 </div>
               </div>
             </div>

@@ -32,6 +32,8 @@ class BusinessSettings(Base):
     skip_receipt_preview = Column(Boolean, nullable=False, default=False)
     thermal_darkness = Column(String(20), nullable=False, default="normal")  # normal (standard POS), high, maximum
     thermal_printer_profile = Column(String(30), nullable=False, default="standard_escpos")  # standard_escpos, xprinter_enhanced, star_line, generic_plain
+    thermal_render_pipeline = Column(String(30), nullable=False, default="native_text")  # native_text (instant 0ms hardware text), raster_canvas (GS v 0)
+    thermal_beep_enabled = Column(Boolean, nullable=False, default=True)  # Hardware buzzer and terminal confirmation sound
     thermal_feed_lines = Column(Integer, nullable=False, default=4)  # lines to feed before cut
     thermal_cut_mode = Column(String(20), nullable=False, default="partial")  # partial, full, tear_only
     receipt_letterhead_path = Column(Text, nullable=True)
