@@ -779,24 +779,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     setLoadingPrinters(true);
     try {
       const list = await api.getSystemPrinters();
-      setSystemPrinters(list);
-      if (list.length > 0) {
-        setSelectedThermalPrinter((prev) => {
-          const thermal = list.find((p) => p.is_thermal);
-          if (prev && list.some((p) => p.name === prev && p.is_thermal)) return prev;
-          if (thermal) return thermal.name;
-          if (prev && list.some((p) => p.name === prev)) return prev;
-          const def = list.find((p) => p.is_default);
-          return def ? def.name : list[0].name;
-        });
-        setSelectedA4Printer((prev) => {
-          if (prev && list.some((p) => p.name === prev)) return prev;
-          const a4Default = list.find((p) => !p.is_thermal && p.is_default);
-          const nonThermal = list.find((p) => !p.is_thermal);
-          const def = list.find((p) => p.is_default);
-          return a4Default ? a4Default.name : (nonThermal ? nonThermal.name : (def ? def.name : list[0].name));
-        });
-      }
+      setSystemPrinters(list || []);
     } catch (err) {
       console.error('Failed to load system printers:', err);
     } finally {
@@ -3163,15 +3146,34 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                         className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 shadow-xs"
                       >
                         <option value="">-- Auto-detect Thermal Printer --</option>
+                        {selectedThermalPrinter && !systemPrinters.some((p) => p.name === selectedThermalPrinter) && (
+                          <option value={selectedThermalPrinter}>
+                            {selectedThermalPrinter} ● [Disconnected / Saved]
+                          </option>
+                        )}
                         {systemPrinters.map((p) => (
                           <option key={p.name} value={p.name}>
                             {p.name} {p.is_online === false ? '● [Offline / Powered Off]' : '● [Online]'} {p.is_thermal ? '★ (Detected Thermal POS)' : ''} {p.is_default ? '(Default)' : ''}
                           </option>
                         ))}
                       </select>
-                      <p className="text-[11px] text-slate-500">
-                        Assigned to: <strong className="text-slate-800 font-mono">{selectedThermalPrinter || 'Auto-detect'}</strong>
-                      </p>
+                      <div className="flex items-center justify-between pt-1">
+                        <p className="text-[11px] text-slate-500">
+                          Active Target:{' '}
+                          <span className="font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60 font-mono text-[11px]">
+                            {selectedThermalPrinter ? selectedThermalPrinter : 'Auto-detect (System will choose thermal printer)'}
+                          </span>
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleTestDirectPrint}
+                          disabled={directPrintingTest}
+                          className="px-2 py-0.5 text-[10px] font-bold text-emerald-700 bg-white hover:bg-emerald-50 rounded border border-emerald-200 transition shrink-0"
+                          title="Print a test sample receipt to verify thermal hardware"
+                        >
+                          {directPrintingTest ? 'Printing...' : 'Test Receipt'}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Device 2: Document / A4 Invoice Printer */}
@@ -3191,15 +3193,38 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                         className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500 shadow-xs"
                       >
                         <option value="">-- System Default A4 Printer --</option>
+                        {selectedA4Printer && !systemPrinters.some((p) => p.name === selectedA4Printer) && (
+                          <option value={selectedA4Printer}>
+                            {selectedA4Printer} ● [Disconnected / Saved]
+                          </option>
+                        )}
                         {systemPrinters.map((p) => (
                           <option key={p.name} value={p.name}>
                             {p.name} {p.is_online === false ? '● [Offline / Powered Off]' : '● [Online]'} {!p.is_thermal ? '★ (Standard A4 / Laser)' : ''} {p.is_default ? '(Default)' : ''}
                           </option>
                         ))}
                       </select>
-                      <p className="text-[11px] text-slate-500">
-                        Assigned to: <strong className="text-slate-800 font-mono">{selectedA4Printer || 'System Default'}</strong>
-                      </p>
+                      <div className="flex items-center justify-between pt-1">
+                        <p className="text-[11px] text-slate-500">
+                          Active Target:{' '}
+                          <span className="font-semibold text-blue-800 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/60 font-mono text-[11px]">
+                            {selectedA4Printer ? selectedA4Printer : 'System Default (OS default printer)'}
+                          </span>
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            printElement('settings-preview-thermal-receipt', {
+                              title: 'A4_Invoice_Test',
+                              isThermal: false,
+                            });
+                          }}
+                          className="px-2 py-0.5 text-[10px] font-bold text-blue-700 bg-white hover:bg-blue-50 rounded border border-blue-200 transition shrink-0"
+                          title="Open document print test"
+                        >
+                          Test A4 Print
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

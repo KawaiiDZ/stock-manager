@@ -142,76 +142,155 @@ def list_system_printers() -> List[Dict[str, Any]]:
             logger.warning(f"Could not list CUPS printers: {e}")
 
     elif sys_name == "Windows":
-        win32_success = False
+        discovered = {}
+        default_p = ""
+
+        # 1. Primary Win32 Print Spooler Enumeration (Level 2 & Level 4)
         try:
             import win32print
-            default_p = ""
             try:
-                default_p = win32print.GetDefaultPrinter()
+                default_p = win32print.GetDefaultPrinter() or ""
             except Exception:
                 pass
-            flags = win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS
-            raw_printers = win32print.EnumPrinters(flags, None, 2)
-            for item in raw_printers:
-                pname = item.get("pPrinterName", "")
-                if not pname:
-                    continue
-                port = item.get("pPortName", "")
-                status_flags = item.get("Status", 0)
-                attributes = item.get("Attributes", 0)
-                is_default = (pname == default_p)
-                search_str = f"{pname} {port}".lower()
-                is_thermal = any(k in search_str for k in THERMAL_SIGNATURES)
-                is_offline = bool(status_flags & 0x80) or bool(status_flags & 0x01) or bool(status_flags & 0x02) or bool(attributes & 0x00000400)
-                status_text = "Offline" if is_offline else "Ready"
-                printers.append({
-                    "name": pname,
-                    "is_default": is_default,
-                    "is_thermal": is_thermal,
-                    "device_uri": port,
-                    "status": status_text,
-                    "is_online": not is_offline,
-                })
-            win32_success = True
-        except Exception:
-            pass
 
-        if not win32_success:
+            flags = win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS
+            # Try Level 2 (Detailed Spooler Info)
             try:
-                # Fallback: Query Windows printers via PowerShell
-                cmd = ["powershell", "-NoProfile", "-Command", "Get-Printer | Select-Object Name, PortName, Type, IsDefault, PrinterStatus, WorkOffline | ConvertTo-Json -Compress"]
-                p = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
-                if p.returncode == 0 and p.stdout.strip():
-                    import json
-                    data = json.loads(p.stdout.strip())
-                    if isinstance(data, dict):
-                        data = [data]
-                    for item in data:
-                        pname = item.get("Name", "")
-                        if not pname:
-                            continue
-                        is_default = bool(item.get("IsDefault", False))
-                        port = str(item.get("PortName", ""))
-                        search_str = f"{pname} {port}".lower()
+                raw_printers_l2 = win32print.EnumPrinters(flags, None, 2)
+                for item in raw_printers_l2:
+                    pname = str(item.get("pPrinterName", "")).strip()
+                    if not pname:
+                        continue
+                    key = pname.lower()
+                    port = str(item.get("pPortName", "")).strip()
+                    status_flags = item.get("Status", 0)
+                    attributes = item.get("Attributes", 0)
+                    is_default = (pname == default_p)
+                    search_str = f"{pname} {port}".lower()
+                    is_thermal = any(k in search_str for k in THERMAL_SIGNATURES)
+                    is_offline = bool(status_flags & 0x80) or bool(status_flags & 0x01) or bool(status_flags & 0x02) or bool(attributes & 0x00000400)
+                    discovered[key] = {
+                        "name": pname,
+                        "is_default": is_default,
+                        "is_thermal": is_thermal,
+                        "device_uri": port,
+                        "status": "Offline" if is_offline else "Ready",
+                        "is_online": not is_offline,
+                    }
+            except Exception as e:
+                logger.debug(f"win32print EnumPrinters Level 2 notice: {e}")
+
+            # Try Level 4 (Fast Registry Enumeration of all local & connected devices)
+            try:
+                raw_printers_l4 = win32print.EnumPrinters(flags, None, 4)
+                for item in raw_printers_l4:
+                    pname = str(item.get("pPrinterName", "")).strip()
+                    if not pname:
+                        continue
+                    key = pname.lower()
+                    if key not in discovered:
+                        is_default = (pname == default_p)
+                        search_str = pname.lower()
                         is_thermal = any(k in search_str for k in THERMAL_SIGNATURES)
-                        work_offline = bool(item.get("WorkOffline", False))
-                        raw_status = str(item.get("PrinterStatus", "")).lower()
-                        is_offline = (
-                            work_offline
-                            or raw_status in ("2", "8", "13", "24")
-                            or any(s in raw_status for s in ["offline", "error", "paused", "notavailable", "userintervention"])
-                        )
-                        status_text = "Offline" if is_offline else "Ready"
-                        printers.append({
+                        discovered[key] = {
                             "name": pname,
                             "is_default": is_default,
+                            "is_thermal": is_thermal,
+                            "device_uri": "",
+                            "status": "Ready",
+                            "is_online": True,
+                        }
+            except Exception as e:
+                logger.debug(f"win32print EnumPrinters Level 4 notice: {e}")
+        except ImportError:
+            pass
+
+        # 2. Windows Print Management API via PowerShell (Matches Windows 'Printers & scanners' 1:1)
+        try:
+            cmd = [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                "Get-Printer | Select-Object Name, PortName, Type, IsDefault, PrinterStatus, WorkOffline | ConvertTo-Json -Compress",
+            ]
+            p = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            if p.returncode == 0 and p.stdout.strip():
+                import json
+                data = json.loads(p.stdout.strip())
+                if isinstance(data, dict):
+                    data = [data]
+                for item in data:
+                    pname = str(item.get("Name", "")).strip()
+                    if not pname:
+                        continue
+                    key = pname.lower()
+                    is_def = bool(item.get("IsDefault", False))
+                    port = str(item.get("PortName", "")).strip()
+                    search_str = f"{pname} {port}".lower()
+                    is_thermal = any(k in search_str for k in THERMAL_SIGNATURES)
+                    work_offline = bool(item.get("WorkOffline", False))
+                    raw_status = str(item.get("PrinterStatus", "")).lower()
+                    is_offline = (
+                        work_offline
+                        or raw_status in ("2", "8", "13", "24")
+                        or any(s in raw_status for s in ["offline", "error", "paused", "notavailable", "userintervention"])
+                    )
+                    status_text = "Offline" if is_offline else "Ready"
+
+                    if key not in discovered:
+                        discovered[key] = {
+                            "name": pname,
+                            "is_default": is_def or (pname == default_p),
                             "is_thermal": is_thermal,
                             "device_uri": port,
                             "status": status_text,
                             "is_online": not is_offline,
-                        })
+                        }
+                    else:
+                        if is_def:
+                            discovered[key]["is_default"] = True
+                        if port and not discovered[key].get("device_uri"):
+                            discovered[key]["device_uri"] = port
+        except Exception as e:
+            logger.debug(f"PowerShell Get-Printer enumeration notice: {e}")
+
+        # 3. Fallback: WMI Win32_Printer if nothing discovered so far
+        if not discovered:
+            try:
+                cmd_wmi = [
+                    "powershell",
+                    "-NoProfile",
+                    "-Command",
+                    "Get-CimInstance Win32_Printer | Select-Object Name, PortName, Default, WorkOffline | ConvertTo-Json -Compress",
+                ]
+                p_wmi = subprocess.run(cmd_wmi, capture_output=True, text=True, timeout=4)
+                if p_wmi.returncode == 0 and p_wmi.stdout.strip():
+                    import json
+                    wmi_data = json.loads(p_wmi.stdout.strip())
+                    if isinstance(wmi_data, dict):
+                        wmi_data = [wmi_data]
+                    for item in wmi_data:
+                        pname = str(item.get("Name", "")).strip()
+                        if not pname:
+                            continue
+                        key = pname.lower()
+                        is_def = bool(item.get("Default", False))
+                        port = str(item.get("PortName", "")).strip()
+                        search_str = f"{pname} {port}".lower()
+                        is_thermal = any(k in search_str for k in THERMAL_SIGNATURES)
+                        work_offline = bool(item.get("WorkOffline", False))
+                        discovered[key] = {
+                            "name": pname,
+                            "is_default": is_def,
+                            "is_thermal": is_thermal,
+                            "device_uri": port,
+                            "status": "Offline" if work_offline else "Ready",
+                            "is_online": not work_offline,
+                        }
             except Exception as e:
-                logger.warning(f"Could not list Windows printers: {e}")
+                logger.warning(f"Could not list Windows printers via WMI: {e}")
+
+        printers = list(discovered.values())
 
     return printers
 

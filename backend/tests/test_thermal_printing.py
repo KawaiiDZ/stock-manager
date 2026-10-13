@@ -284,6 +284,48 @@ def test_windows_printer_enumeration_offline_detection():
             assert off_pos['is_thermal'] is True
 
 
+def test_windows_printer_merge_win32_and_powershell():
+    from backend.app.services.escpos_service import list_system_printers
+    import json
+
+    mock_win32 = MagicMock()
+    mock_win32.GetDefaultPrinter.return_value = "Canon LBP2900"
+    mock_win32.PRINTER_ENUM_LOCAL = 2
+    mock_win32.PRINTER_ENUM_CONNECTIONS = 4
+    # Level 2 returns Canon LBP2900, Level 4 returns empty
+    mock_win32.EnumPrinters.side_effect = [
+        [{"pPrinterName": "Canon LBP2900", "pPortName": "USB001", "Status": 0, "Attributes": 0}],
+        [],
+    ]
+
+    # PowerShell returns POS-80 and Microsoft Print to PDF that win32 missed
+    ps_printers = [
+        {"Name": "Canon LBP2900", "PortName": "USB001", "IsDefault": True, "PrinterStatus": "Normal", "WorkOffline": False},
+        {"Name": "POS-80", "PortName": "USB002", "IsDefault": False, "PrinterStatus": "Normal", "WorkOffline": False},
+        {"Name": "Microsoft Print to PDF", "PortName": "PORTPROMPT:", "IsDefault": False, "PrinterStatus": "Normal", "WorkOffline": False},
+    ]
+    fake_res = MagicMock()
+    fake_res.returncode = 0
+    fake_res.stdout = json.dumps(ps_printers)
+
+    with patch('platform.system', return_value='Windows'):
+        with patch.dict('sys.modules', {'win32print': mock_win32}):
+            with patch('subprocess.run', return_value=fake_res):
+                printers = list_system_printers()
+                assert len(printers) == 3
+                names = [p['name'] for p in printers]
+                assert "Canon LBP2900" in names
+                assert "POS-80" in names
+                assert "Microsoft Print to PDF" in names
+
+                canon = next(p for p in printers if p['name'] == 'Canon LBP2900')
+                assert canon['is_default'] is True
+                assert canon['is_thermal'] is False
+
+                pos = next(p for p in printers if p['name'] == 'POS-80')
+                assert pos['is_thermal'] is True
+
+
 def test_resolve_target_printer():
     from backend.app.services.escpos_service import resolve_target_printer
 
