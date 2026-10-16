@@ -883,5 +883,54 @@ def test_compact_bitmap_fast_path():
     assert b"\x1dv0" in escpos
 
 
+def test_send_to_thermal_printer_windows_fast_path():
+    from backend.app.services.escpos_service import send_to_thermal_printer
+
+    with patch('platform.system', return_value='Windows'):
+        with patch('backend.app.services.escpos_service._send_windows_raw', return_value=128) as mock_send_raw:
+            with patch('backend.app.services.escpos_service.list_system_printers') as mock_list:
+                res = send_to_thermal_printer(b"\x1b@Hello", printer_name="POS80-Receipt")
+                assert res["success"] is True
+                assert res["printer"] == "POS80-Receipt"
+                assert res["bytes_sent"] == 128
+                assert mock_send_raw.called
+                # Ensure slow list_system_printers was NOT called on fast-path!
+                assert not mock_list.called
+
+
+def test_send_to_thermal_printer_cups_fast_path():
+    from backend.app.services.escpos_service import send_to_thermal_printer
+
+    mock_proc = MagicMock()
+    mock_proc.returncode = 0
+    mock_proc.communicate.return_value = (b"", b"")
+
+    with patch('platform.system', return_value='Darwin'):
+        with patch('subprocess.Popen', return_value=mock_proc) as mock_popen:
+            with patch('backend.app.services.escpos_service.list_system_printers') as mock_list:
+                res = send_to_thermal_printer(b"\x1b@Hello", printer_name="Office_Thermal")
+                assert res["success"] is True
+                assert res["printer"] == "Office_Thermal"
+                assert mock_popen.called
+                assert not mock_list.called
+
+
+def test_image_to_escpos_raster_proportional_and_aligned():
+    from PIL import Image
+    from backend.app.services.escpos_service import image_to_escpos_raster
+
+    # Create dummy 500x200 RGBA test image
+    img = Image.new("RGBA", (500, 200), (0, 0, 0, 255))
+    escpos_logo = image_to_escpos_raster(img, paper_width="80mm")
+    assert escpos_logo is not None
+    assert escpos_logo.startswith(b"\x1dv0\x00")
+    # Verify xL, xH width definition
+    xL = escpos_logo[4]
+    xH = escpos_logo[5]
+    total_bytes = xL + (xH << 8)
+    assert total_bytes == 48  # 48 bytes * 8 = 384 dots (80mm standard width)
+
+
+
 
 

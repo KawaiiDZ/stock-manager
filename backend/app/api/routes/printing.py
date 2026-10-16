@@ -110,9 +110,9 @@ class ClearQueueRequest(BaseModel):
 
 
 @router.get("/printers", response_model=List[PrinterItemResponse])
-def get_printers():
+def get_printers(force_refresh: bool = False):
     """Returns all detected printers on the host system with thermal printer auto-detection."""
-    return list_system_printers()
+    return list_system_printers(force_refresh=force_refresh)
 
 
 @router.post("/clear-queue")

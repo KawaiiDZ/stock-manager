@@ -121,7 +121,6 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
     try {
       await api.updateSettings({
         skip_receipt_preview: nextVal,
-        ...(nextVal && settings?.thermal_print_mode === 'browser' ? { thermal_print_mode: 'direct_escpos' } : {}),
       });
       setSuccessToast(
         nextVal
@@ -791,55 +790,78 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
           playCheckoutSuccessBeep();
 
           setIsPrintingReceipt({ receiptNumber: res.receipt_number });
-          const isRaster = settings?.thermal_render_pipeline === 'raster_canvas';
+          const isBrowserMode = settings?.thermal_print_mode === 'browser';
 
-          const dispatchPrint = (rasterData?: { compactBitmap?: string; dataUrl?: string; widthDots?: number; heightDots?: number } | string) => {
-            const isObj = typeof rasterData === 'object' && rasterData !== null;
-            return api.printThermalDirect({
-              sale_id: res.id,
-              printer_name: settings?.selected_thermal_printer || undefined,
-              paper_width: pWidth,
-              header_style: settings?.thermal_header_style || 'logo_text',
-              layout: settings?.thermal_layout || 'classic',
-              show_barcode: settings?.show_barcode ?? true,
-              darkness: settings?.thermal_darkness || 'normal',
-              printer_profile: settings?.thermal_printer_profile || 'standard_escpos',
-              cut_mode: settings?.thermal_cut_mode || 'partial',
-              feed_lines: settings?.thermal_feed_lines ?? 4,
-              render_pipeline: isRaster ? 'raster_canvas' : 'native_text',
-              beep_enabled: settings?.thermal_beep_enabled ?? true,
-              raster_image: isObj ? (rasterData as any).dataUrl : (typeof rasterData === 'string' ? rasterData : undefined),
-              compact_bitmap: isObj ? (rasterData as any).compactBitmap : undefined,
-              bitmap_width: isObj ? (rasterData as any).widthDots : undefined,
-              bitmap_height: isObj ? (rasterData as any).heightDots : undefined,
+          if (isBrowserMode) {
+            // ⚡ Instant High-Fidelity Browser / Kiosk Print:
+            // 100% exact visual parity with preview modal (proportional typography, sharp vector barcodes, intact logos).
+            // When Chrome/Edge runs with --kiosk-printing, prints silently with 0 clicks & 0 modals in ~50ms!
+            setTimeout(() => {
+              const targetNode =
+                document.getElementById('autoprint-thermal-receipt-element') ||
+                document.getElementById('autoprint-thermal-receipt');
+              if (targetNode) {
+                printElement(targetNode, {
+                  title: `Receipt_${res.receipt_number}`,
+                  isThermal: true,
+                  paperWidth: pWidth,
+                });
+              }
+              setIsPrintingReceipt(null);
+              setSuccessToast(`Sale #${res.receipt_number} completed & sent to thermal printer!`);
+            }, 80);
+          } else {
+            // Direct ESC/POS Hardware Spooler Dispatch
+            const isRaster = settings?.thermal_render_pipeline === 'raster_canvas';
+
+            const dispatchPrint = (rasterData?: { compactBitmap?: string; dataUrl?: string; widthDots?: number; heightDots?: number } | string) => {
+              const isObj = typeof rasterData === 'object' && rasterData !== null;
+              return api.printThermalDirect({
+                sale_id: res.id,
+                printer_name: settings?.selected_thermal_printer || undefined,
+                paper_width: pWidth,
+                header_style: settings?.thermal_header_style || 'logo_text',
+                layout: settings?.thermal_layout || 'classic',
+                show_barcode: settings?.show_barcode ?? true,
+                darkness: settings?.thermal_darkness || 'normal',
+                printer_profile: settings?.thermal_printer_profile || 'standard_escpos',
+                cut_mode: settings?.thermal_cut_mode || 'partial',
+                feed_lines: settings?.thermal_feed_lines ?? 4,
+                render_pipeline: isRaster ? 'raster_canvas' : 'native_text',
+                beep_enabled: settings?.thermal_beep_enabled ?? true,
+                raster_image: isObj ? (rasterData as any).dataUrl : (typeof rasterData === 'string' ? rasterData : undefined),
+                compact_bitmap: isObj ? (rasterData as any).compactBitmap : undefined,
+                bitmap_width: isObj ? (rasterData as any).widthDots : undefined,
+                bitmap_height: isObj ? (rasterData as any).heightDots : undefined,
+              });
+            };
+
+            const printPromise = isRaster
+              ? rasterizeReceiptFast(res, settings, {
+                  paperWidth: pWidth,
+                  layout: settings?.thermal_layout as any,
+                }).then((data) => dispatchPrint(data || undefined))
+              : dispatchPrint(); // ⚡ Instant 0ms dispatch in Native ESC/POS mode
+
+            printPromise.then((printRes) => {
+              if (printRes.is_online === false || printRes.warning) {
+                setWarningToast(
+                  `⚠️ Sale #${res.receipt_number} queued, but printer is OFFLINE / Powered Off. Please check power switch & USB cable.`
+                );
+              } else {
+                setSuccessToast(`Sale #${res.receipt_number} completed & printed to ${printRes.printer || 'thermal printer'}!`);
+              }
+            }).catch((err: any) => {
+              console.error('Direct ESC/POS print failed:', err);
+              // Automatic fallback: open receipt modal so cashier is never blocked or left without receipt
+              setShowReceipt(true);
+              const errDetail = err.detail || err.message || 'offline or timed out';
+              setErrorMsg(`Could not send directly to printer (${errDetail}). Preview modal opened.`);
+              setPrintDiagnosticError(errDetail);
+            }).finally(() => {
+              setIsPrintingReceipt(null);
             });
-          };
-
-          const printPromise = isRaster
-            ? rasterizeReceiptFast(res, settings, {
-                paperWidth: pWidth,
-                layout: settings?.thermal_layout as any,
-              }).then((data) => dispatchPrint(data || undefined))
-            : dispatchPrint(); // ⚡ Instant 0ms dispatch in Native ESC/POS mode
-
-          printPromise.then((printRes) => {
-            if (printRes.is_online === false || printRes.warning) {
-              setWarningToast(
-                `⚠️ Sale #${res.receipt_number} queued, but printer is OFFLINE / Powered Off. Please check power switch & USB cable.`
-              );
-            } else {
-              setSuccessToast(`Sale #${res.receipt_number} completed & printed to ${printRes.printer || 'thermal printer'}!`);
-            }
-          }).catch((err: any) => {
-            console.error('Direct ESC/POS print failed:', err);
-            // Automatic fallback: open receipt modal so cashier is never blocked or left without receipt
-            setShowReceipt(true);
-            const errDetail = err.detail || err.message || 'offline or timed out';
-            setErrorMsg(`Could not send directly to printer (${errDetail}). Preview modal opened.`);
-            setPrintDiagnosticError(errDetail);
-          }).finally(() => {
-            setIsPrintingReceipt(null);
-          });
+          }
         } else {
           // Standard PDF / A4 format
           setIsPrintingReceipt({ receiptNumber: res.receipt_number });

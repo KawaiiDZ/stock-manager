@@ -579,8 +579,8 @@ export const api = {
   deleteQuotation: (id: number) =>
     request<void>(`/quotations/${id}`, { method: 'DELETE' }),
 
-  // Thermal Hardware & Printing
-  getSystemPrinters: () => request<PrinterInfo[]>('/printing/printers', { timeoutMs: 8000 }),
+  getSystemPrinters: (forceRefresh?: boolean) =>
+    request<PrinterInfo[]>(`/printing/printers${forceRefresh ? '?force_refresh=true' : ''}`, { timeoutMs: 8000 }),
   diagnosePrinting: (printerName?: string) =>
     request<PrinterDiagnosticResponse>(
       `/printing/diagnose${printerName ? `?printer_name=${encodeURIComponent(printerName)}` : ''}`,

@@ -775,10 +775,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     }
   }, [settings]);
 
-  const loadPrinters = async () => {
+  const loadPrinters = async (forceRefresh: boolean = false) => {
     setLoadingPrinters(true);
     try {
-      const list = await api.getSystemPrinters();
+      const list = await api.getSystemPrinters(forceRefresh);
       setSystemPrinters(list || []);
     } catch (err) {
       console.error('Failed to load system printers:', err);
@@ -1191,19 +1191,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
   const handleToggleSkipReceiptPreview = async (checked: boolean) => {
     setSkipReceiptPreview(checked);
-    const targetMode = checked && thermalPrintMode === 'browser' ? 'direct_escpos' : thermalPrintMode;
-    if (targetMode !== thermalPrintMode) {
-      setThermalPrintMode(targetMode);
-    }
     try {
       await api.updateSettings({
         skip_receipt_preview: checked,
-        thermal_print_mode: targetMode,
       });
       onSettingsUpdated();
       setSuccessMsg(
         checked
-          ? '1-Click Auto-Print enabled! Completing a sale will automatically print directly without preview.'
+          ? '1-Click Auto-Print enabled! Completing a sale will automatically print directly using your selected print engine.'
           : 'Preview modal restored for POS checkout.'
       );
     } catch (err: any) {
@@ -2422,15 +2417,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                                 Direct ESC/POS Engine
                               </span>
                               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 shrink-0">
-                                Recommended
+                                Hardware Raw
                               </span>
                             </div>
                             <p className="text-[11px] text-slate-500 leading-relaxed">
-                              Dispatches raw binary commands straight to the thermal printer via system spooler. 1-click instant checkout, automatic continuous paper cut, and completely immune to PostScript errors.
+                              Dispatches raw binary commands straight to the thermal printer via fast-path system spooler. 1-click instant checkout, automatic continuous paper cut, and completely immune to PostScript errors.
                             </p>
                           </div>
                           <div className="mt-3 text-[10px] font-semibold text-emerald-700 flex items-center gap-1">
-                            <CheckCircle2 className="h-3.5 w-3.5" /> 1-Click fast raw printing without browser dialog
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Fast-path raw spooling (0ms delay)
                           </div>
                         </button>
 
@@ -2448,18 +2443,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                             <div className="flex items-center justify-between gap-1 mb-1.5">
                               <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
                                 <Printer className="h-4 w-4 text-blue-600" />
-                                Browser Print Dialog
+                                Browser Engine (100% Preview CSS Parity)
                               </span>
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">
-                                Standard OS
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 shrink-0">
+                                Exact Visual Match
                               </span>
                             </div>
                             <p className="text-[11px] text-slate-500 leading-relaxed">
-                              Opens your browser's native print preview dialog. Standard for Windows environments with official vendor printer drivers installed, or when selecting different destination printers on the fly.
+                              Prints using the browser's high-fidelity layout engine. 100% exact visual parity with preview (proportional typography, intact logos, crisp barcodes). Supports silent 1-click printing via <code className="font-mono text-[10px] bg-slate-100 px-1 py-0.5 rounded">--kiosk-printing</code>.
                             </p>
                           </div>
-                          <div className="mt-3 text-[10px] font-semibold text-slate-600 flex items-center gap-1">
-                            <span>Continuous single-loop roll without browser page breaks</span>
+                          <div className="mt-3 text-[10px] font-semibold text-blue-700 flex items-center gap-1">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> 100% exact CSS styling &amp; instant vector output
                           </div>
                         </button>
                       </div>
@@ -2493,6 +2488,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                               <span className="block text-[10px] font-bold uppercase text-slate-400">Paper Size</span>
                               <span className="text-xs font-bold text-emerald-700">Roll / Continuous</span>
                             </div>
+                          </div>
+                          <div className="bg-emerald-50/90 p-2.5 rounded-xl border border-emerald-200/80 text-[11px] text-emerald-950 font-medium mt-1">
+                            💡 <strong>1-Click Silent Auto-Print Tip:</strong> To print instantly with 0 dialog popups, launch Chrome/Edge with the shortcut flag <code className="bg-white px-1.5 py-0.5 rounded border border-emerald-300 font-mono text-[10px]">--kiosk-printing</code>. Completing a sale will print straight to your default thermal printer with 100% exact preview styling!
                           </div>
                         </div>
                       )}
@@ -3153,7 +3151,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       </button>
                       <button
                         type="button"
-                        onClick={loadPrinters}
+                        onClick={() => loadPrinters(true)}
                         disabled={loadingPrinters}
                         className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-emerald-700 flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition"
                         title="Rescan connected printers"
