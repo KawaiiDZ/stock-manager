@@ -32,7 +32,7 @@ class BusinessSettingsResponse(BaseModel):
     skip_receipt_preview: bool = False
     thermal_darkness: str = "normal"
     thermal_printer_profile: str = "standard_escpos"
-    thermal_render_pipeline: str = "native_text"
+    thermal_render_pipeline: str = "raster_canvas"
     thermal_beep_enabled: bool = True
     thermal_feed_lines: int = 4
     thermal_cut_mode: str = "partial"

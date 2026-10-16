@@ -75,7 +75,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
       setPrintErrorMsg(null);
       setPrintSuccessMsg(null);
 
-      const isRaster = settings?.thermal_render_pipeline === 'raster_canvas';
+      const isRaster = (settings?.thermal_render_pipeline || 'raster_canvas') === 'raster_canvas';
 
       // Capture exact visible DOM element snapshot and quantize to 1-bit monochrome if raster canvas pipeline is requested
       const rasterRes = isRaster
@@ -121,7 +121,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
 
   const handlePrint = () => {
     if (isPrintingRef.current) return;
-    if (receiptType === 'thermal' && settings?.thermal_print_mode === 'direct_escpos') {
+    const isDirect = settings?.thermal_print_mode !== 'browser_kiosk' && settings?.thermal_print_mode !== 'browser';
+    if (receiptType === 'thermal' && isDirect) {
       handleDirectPrint();
     } else {
       handleBrowserPrint();

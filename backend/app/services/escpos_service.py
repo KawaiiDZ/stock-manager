@@ -517,18 +517,18 @@ def image_to_escpos_raster(
         # Determine paper dot limits & line byte width supporting all thermal models
         if "58" in paper_width:
             if "narrow" in paper_width:
-                total_bytes_per_row = 30
-                max_logo_w = 240
+                total_bytes_per_row = 45  # 360 dots
+                max_logo_w = 208
             else:
-                total_bytes_per_row = 32
-                max_logo_w = 256
+                total_bytes_per_row = 48  # 384 dots
+                max_logo_w = 224
         else:
             if "compact" in paper_width:
-                total_bytes_per_row = 42
-                max_logo_w = 336
+                total_bytes_per_row = 64  # 512 dots
+                max_logo_w = 288
             else:
-                total_bytes_per_row = 48
-                max_logo_w = 384
+                total_bytes_per_row = 72  # 576 dots (full 80mm physical roll width)
+                max_logo_w = 320
 
         orig_w, orig_h = img.size
         if orig_w <= 0 or orig_h <= 0:
@@ -1014,14 +1014,11 @@ def generate_code128_raster_escpos(
     xH = (bytes_per_row >> 8) & 0xFF
 
     out = bytearray()
-    band_limit = 24
-    for start_r in range(0, actual_h, band_limit):
-        chunk_h = min(band_limit, actual_h - start_r)
-        chunk_data = bytes(row_bytes) * chunk_h
-        yL = chunk_h & 0xFF
-        yH = (chunk_h >> 8) & 0xFF
-        header = bytes([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH])
-        out.extend(header + chunk_data)
+    chunk_data = bytes(row_bytes) * actual_h
+    yL = actual_h & 0xFF
+    yH = (actual_h >> 8) & 0xFF
+    header = bytes([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH])
+    out.extend(header + chunk_data)
 
     if include_text:
         out.extend(CMD_ALIGN_CENTER)
@@ -1148,7 +1145,7 @@ def generate_escpos_receipt(
             buf.extend(safe_escpos_text(f"{custom_sub}\n"))
     else:  # classic
         buf.extend(cmd_bold_on)
-        buf.extend(cmd_double_height)
+        buf.extend(cmd_double_size if col_width >= 40 else cmd_double_height)
         buf.extend(safe_escpos_text(f"{shop_name}\n"))
         buf.extend(cmd_normal_size)
         buf.extend(cmd_bold_off)
@@ -1521,7 +1518,9 @@ def generate_escpos_receipt(
 
         buf.extend(double_solid_div)
         buf.extend(cmd_bold_on)
+        buf.extend(cmd_double_height)
         buf.extend(safe_escpos_text(format_row("TOTAL:", f"{currency} {total_amt:,.2f}", col_width)))
+        buf.extend(cmd_normal_size)
         buf.extend(cmd_bold_off)
         buf.extend(double_solid_div)
 

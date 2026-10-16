@@ -63,7 +63,8 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
 
   const handleQuickPrint = async (sale: Sale) => {
     if (printingSaleId !== null) return;
-    if (settings?.skip_receipt_preview && settings?.thermal_print_mode === 'direct_escpos') {
+    const isDirect = settings?.thermal_print_mode !== 'browser_kiosk' && settings?.thermal_print_mode !== 'browser';
+    if (settings?.skip_receipt_preview && isDirect) {
       try {
         setPrintingSaleId(sale.id);
         setToastMessage({
@@ -71,7 +72,7 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
           text: `Printing receipt #${sale.receipt_number}... Please wait.`,
         });
         const pWidth = settings?.receipt_printer_type === '58mm' ? '58mm' : '80mm';
-        const isRaster = settings?.thermal_render_pipeline === 'raster_canvas';
+        const isRaster = (settings?.thermal_render_pipeline || 'raster_canvas') === 'raster_canvas';
 
         const dispatchPrint = (rasterData?: { compactBitmap?: string; dataUrl?: string; widthDots?: number; heightDots?: number } | string) => {
           const isObj = typeof rasterData === 'object' && rasterData !== null;

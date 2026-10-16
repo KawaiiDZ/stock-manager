@@ -790,7 +790,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
           playCheckoutSuccessBeep();
 
           setIsPrintingReceipt({ receiptNumber: res.receipt_number });
-          const isBrowserMode = settings?.thermal_print_mode === 'browser';
+          const isBrowserMode = settings?.thermal_print_mode === 'browser_kiosk' || settings?.thermal_print_mode === 'browser';
 
           if (isBrowserMode) {
             // ⚡ Instant High-Fidelity Browser / Kiosk Print:
@@ -812,7 +812,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
             }, 80);
           } else {
             // Direct ESC/POS Hardware Spooler Dispatch
-            const isRaster = settings?.thermal_render_pipeline === 'raster_canvas';
+            const isRaster = (settings?.thermal_render_pipeline || 'raster_canvas') === 'raster_canvas';
 
             const dispatchPrint = (rasterData?: { compactBitmap?: string; dataUrl?: string; widthDots?: number; heightDots?: number } | string) => {
               const isObj = typeof rasterData === 'object' && rasterData !== null;

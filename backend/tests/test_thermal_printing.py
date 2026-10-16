@@ -928,7 +928,14 @@ def test_image_to_escpos_raster_proportional_and_aligned():
     xL = escpos_logo[4]
     xH = escpos_logo[5]
     total_bytes = xL + (xH << 8)
-    assert total_bytes == 48  # 48 bytes * 8 = 384 dots (80mm standard width)
+    assert total_bytes == 72  # 72 bytes * 8 = 576 dots (80mm standard width)
+
+    # Verify 58mm paper width produces 48 bytes (384 dots)
+    escpos_logo_58 = image_to_escpos_raster(img, paper_width="58mm")
+    assert escpos_logo_58 is not None
+    xL_58 = escpos_logo_58[4]
+    xH_58 = escpos_logo_58[5]
+    assert (xL_58 + (xH_58 << 8)) == 48  # 48 bytes * 8 = 384 dots (58mm width)
 
 
 

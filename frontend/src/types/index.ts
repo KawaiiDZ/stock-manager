@@ -18,7 +18,7 @@ export interface BusinessSettings {
   date_format?: string;
   format_prices_with_commas?: boolean;
   receipt_type?: 'thermal' | 'pdf';
-  thermal_print_mode?: 'browser' | 'direct_escpos';
+  thermal_print_mode?: 'browser' | 'browser_kiosk' | 'direct_escpos';
   thermal_header_style?: 'logo_text' | 'text_only';
   thermal_layout?: 'classic' | 'modern' | 'tabular' | 'compact' | 'elegant';
   selected_thermal_printer?: string;
