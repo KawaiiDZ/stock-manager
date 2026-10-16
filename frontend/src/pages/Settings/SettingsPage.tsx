@@ -49,6 +49,9 @@ import {
   Bell,
   Gauge,
   Activity,
+  Maximize2,
+  Minimize2,
+  ExternalLink,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -60,6 +63,7 @@ import { SetupWizardModal } from '../../components/wizard/SetupWizardModal';
 import { BarcodePrintModal } from '../../components/barcode/BarcodePrintModal';
 import { ReceiptModal } from '../../components/receipts/ReceiptModal';
 import { ThermalReceipt } from '../../components/receipts/ThermalReceipt';
+import { PdfInvoiceReceipt } from '../../components/receipts/PdfInvoiceReceipt';
 import { PrinterDiagnosticsModal } from '../../components/printing/PrinterDiagnosticsModal';
 import { printElement } from '../../utils/print';
 import { STANDARD_LABEL_SIZES, generateBarcodeSvg, parseLabelDimensions } from '../../utils/barcode';
@@ -587,6 +591,22 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [loadingPrinters, setLoadingPrinters] = useState<boolean>(false);
   const [directPrintingTest, setDirectPrintingTest] = useState<boolean>(false);
   const [diagnosticPrintingTest, setDiagnosticPrintingTest] = useState<boolean>(false);
+  const [a4PrintingTest, setA4PrintingTest] = useState<boolean>(false);
+  const [autoLaunchKiosk, setAutoLaunchKiosk] = useState<boolean>(settings?.auto_launch_kiosk ?? false);
+  const [kioskWindowMode, setKioskWindowMode] = useState<'fullscreen' | 'kiosk' | 'maximized'>(
+    settings?.kiosk_window_mode || 'fullscreen'
+  );
+  const [kioskBrowser, setKioskBrowser] = useState<'auto' | 'chrome' | 'msedge' | 'system'>(
+    settings?.kiosk_browser || 'auto'
+  );
+  const [launchingKiosk, setLaunchingKiosk] = useState<boolean>(false);
+  const [kioskFeedback, setKioskFeedback] = useState<{
+    type: 'success' | 'warning' | 'error' | 'info';
+    message: string;
+  } | null>(null);
+  const [isFullscreenActive, setIsFullscreenActive] = useState<boolean>(
+    typeof document !== 'undefined' ? Boolean(document.fullscreenElement) : false
+  );
   const [clearingQueue, setClearingQueue] = useState<boolean>(false);
   const [testPrintFeedback, setTestPrintFeedback] = useState<{
     type: 'success' | 'warning' | 'error';
@@ -772,8 +792,19 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setBarcodeLabelShowSku(settings.barcode_label_show_sku ?? true);
       setBarcodeLabelCustomText(settings.barcode_label_custom_text || '');
       setLockDashboardFinances(Boolean(settings.lock_dashboard_finances));
+      setAutoLaunchKiosk(settings.auto_launch_kiosk ?? false);
+      setKioskWindowMode(settings.kiosk_window_mode || 'fullscreen');
+      setKioskBrowser(settings.kiosk_browser || 'auto');
     }
   }, [settings]);
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreenActive(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
 
   const loadPrinters = async (forceRefresh: boolean = false) => {
     setLoadingPrinters(true);
@@ -888,6 +919,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         barcode_label_show_sku: barcodeLabelShowSku,
         barcode_label_custom_text: barcodeLabelCustomText.trim(),
         payment_accounts: paymentAccounts,
+        auto_launch_kiosk: autoLaunchKiosk,
+        kiosk_window_mode: kioskWindowMode,
+        kiosk_browser: kioskBrowser,
       });
       setGlobalFormattingPreferences({
         dateFormat,
@@ -1415,8 +1449,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
       // 1. Snapshot the live preview receipt in settings if mounted, or offscreen raster
       let rasterRes: AcceleratedRasterResult | null = null;
-      if (document.getElementById('settings-preview-thermal-receipt')) {
-        rasterRes = await rasterizeReceiptElementFast('settings-preview-thermal-receipt', {
+      const targetThermalElemId = document.getElementById('settings-preview-thermal-receipt')
+        ? 'settings-preview-thermal-receipt'
+        : 'settings-preview-thermal-receipt-offscreen';
+      if (document.getElementById(targetThermalElemId)) {
+        rasterRes = await rasterizeReceiptElementFast(targetThermalElemId, {
           paperWidth: pWidth,
         });
       }
@@ -1499,11 +1536,127 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   };
 
   const handleTestBrowserPrint = () => {
-    printElement('settings-preview-thermal-receipt', {
+    const targetThermalElemId = document.getElementById('settings-preview-thermal-receipt')
+      ? 'settings-preview-thermal-receipt'
+      : 'settings-preview-thermal-receipt-offscreen';
+    printElement(targetThermalElemId, {
       title: 'Sample_Test_Receipt',
       isThermal: true,
       paperWidth: (printerType === '58mm' ? '58mm' : '80mm'),
     });
+  };
+
+  const handleTestThermalPrintAuto = async () => {
+    if (thermalPrintMode === 'browser') {
+      handleTestBrowserPrint();
+    } else {
+      await handleTestDirectPrint();
+    }
+  };
+
+  const handleTestA4Print = () => {
+    setA4PrintingTest(true);
+    setTestPrintFeedback(null);
+    try {
+      printElement('settings-preview-a4-invoice', {
+        title: 'A4_Invoice_Test',
+        isThermal: false,
+      });
+      setTestPrintFeedback({
+        type: 'success',
+        message: `A4 Invoice test print dispatched to '${selectedA4Printer || 'System Default A4 Printer'}'. Verify page layout and margins.`,
+      });
+    } catch (err: any) {
+      setTestPrintFeedback({
+        type: 'error',
+        message: err.message || 'Failed to dispatch A4 invoice test print.',
+      });
+    } finally {
+      setTimeout(() => setA4PrintingTest(false), 800);
+    }
+  };
+
+  const handleToggleAutoLaunchKiosk = async (enabled: boolean) => {
+    setAutoLaunchKiosk(enabled);
+    try {
+      await api.updateSettings({ auto_launch_kiosk: enabled });
+      onSettingsUpdated();
+      setSuccessMsg(
+        enabled
+          ? 'Auto-Launch Kiosk & Fullscreen mode enabled on application startup!'
+          : 'Auto-Launch Kiosk disabled. Standard browser will open on startup.'
+      );
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to update kiosk startup setting.');
+    }
+  };
+
+  const handleChangeKioskWindowMode = async (mode: 'fullscreen' | 'kiosk' | 'maximized') => {
+    setKioskWindowMode(mode);
+    try {
+      await api.updateSettings({ kiosk_window_mode: mode });
+      onSettingsUpdated();
+      setSuccessMsg(
+        `Kiosk window mode set to: ${
+          mode === 'fullscreen' ? 'Fullscreen App' : mode === 'kiosk' ? 'Dedicated POS Kiosk' : 'Maximized App'
+        }`
+      );
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to update window mode.');
+    }
+  };
+
+  const handleChangeKioskBrowser = async (browser: 'auto' | 'chrome' | 'msedge' | 'system') => {
+    setKioskBrowser(browser);
+    try {
+      await api.updateSettings({ kiosk_browser: browser });
+      onSettingsUpdated();
+      setSuccessMsg(`Kiosk browser engine set to: ${browser.toUpperCase()}`);
+    } catch (err: any) {
+      setErrorMsg(err.detail || 'Failed to update browser preference.');
+    }
+  };
+
+  const handleLaunchKioskNow = async () => {
+    setLaunchingKiosk(true);
+    setKioskFeedback(null);
+    try {
+      const res = await api.launchKiosk();
+      if (res.success) {
+        setKioskFeedback({
+          type: 'success',
+          message: res.message || 'Kiosk window launched successfully!',
+        });
+      } else {
+        setKioskFeedback({
+          type: 'warning',
+          message: res.message || 'Could not launch kiosk window directly.',
+        });
+      }
+    } catch (err: any) {
+      setKioskFeedback({
+        type: 'error',
+        message: err.detail || 'Failed to trigger kiosk window launch.',
+      });
+    } finally {
+      setLaunchingKiosk(false);
+    }
+  };
+
+  const handleToggleBrowserFullscreen = () => {
+    try {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+        setIsFullscreenActive(true);
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        }
+        setIsFullscreenActive(false);
+      }
+    } catch (err) {
+      // ignore
+    }
   };
 
   const handleOpenResetModal = (mode: 'sales_only' | 'inventory_only' | 'all_data') => {
@@ -3117,151 +3270,293 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                     {hardwareSubTab === 'printers' && (
                       <div className="space-y-6 max-w-4xl">
                         <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
+
+                          {/* Kiosk & Fullscreen POS Display Auto-Launch Card */}
+                          <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-md space-y-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div className="flex items-center gap-3">
+                                <div className="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-xl border border-emerald-500/30">
+                                  <Monitor className="h-5 w-5" />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h4 className="text-sm font-bold text-white tracking-wide">
+                                      Auto-Launch Kiosk & Fullscreen POS Terminal
+                                    </h4>
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${autoLaunchKiosk ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-400/40' : 'bg-slate-700 text-slate-300'}`}>
+                                      {autoLaunchKiosk ? 'Auto-Launch ON' : 'Standard Browser'}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-slate-300 mt-0.5">
+                                    When starting the app (via run_app.py or start_app.bat), automatically open in a dedicated app window with silent printing.
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={handleToggleBrowserFullscreen}
+                                  className="px-3 py-1.5 text-xs font-semibold text-slate-200 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-600 transition flex items-center gap-1.5"
+                                  title="Toggle Fullscreen in current browser window"
+                                >
+                                  {isFullscreenActive ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                                  <span>{isFullscreenActive ? 'Exit Fullscreen' : 'Fullscreen'}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleLaunchKioskNow}
+                                  disabled={launchingKiosk}
+                                  className="px-3.5 py-1.5 text-xs font-bold text-emerald-950 bg-emerald-400 hover:bg-emerald-300 rounded-xl transition flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                                  title="Launch a native Chromium Kiosk window right now to preview"
+                                >
+                                  {launchingKiosk ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
+                                  <span>{launchingKiosk ? 'Launching...' : 'Launch Kiosk Window Now'}</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Kiosk Feedback Banner */}
+                            {kioskFeedback && (
+                              <div className={`p-3 rounded-xl text-xs font-semibold flex items-center justify-between gap-2 ${
+                                kioskFeedback.type === 'success' ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/30' :
+                                kioskFeedback.type === 'warning' ? 'bg-amber-500/20 text-amber-200 border border-amber-500/30' :
+                                'bg-rose-500/20 text-rose-200 border border-rose-500/30'
+                              }`}>
+                                <span>{kioskFeedback.message}</span>
+                                <button type="button" onClick={() => setKioskFeedback(null)} className="opacity-70 hover:opacity-100 text-xs">✕</button>
+                              </div>
+                            )}
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                              {/* Setting 1: Enable Auto Launch */}
+                              <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/80 space-y-2">
+                                <label className="flex items-center justify-between cursor-pointer">
+                                  <span className="text-xs font-bold text-slate-200">Auto-Launch on Startup</span>
+                                  <input
+                                    type="checkbox"
+                                    checked={autoLaunchKiosk}
+                                    onChange={(e) => handleToggleAutoLaunchKiosk(e.target.checked)}
+                                    className="h-4 w-4 text-emerald-500 rounded border-slate-600 bg-slate-700 focus:ring-emerald-400 cursor-pointer accent-emerald-500"
+                                  />
+                                </label>
+                                <p className="text-[11px] text-slate-400 leading-tight">
+                                  Automatically opens Chrome/Edge with <code className="text-emerald-300 font-mono">--kiosk-printing</code> and dedicated window mode.
+                                </p>
+                              </div>
+
+                              {/* Setting 2: Window Mode */}
+                              <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/80 space-y-1.5">
+                                <label className="block text-xs font-bold text-slate-200">
+                                  Window Display Mode
+                                </label>
+                                <select
+                                  value={kioskWindowMode}
+                                  onChange={(e) => handleChangeKioskWindowMode(e.target.value as any)}
+                                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-200 focus:outline-none focus:border-emerald-500"
+                                >
+                                  <option value="fullscreen">Fullscreen App Window (Recommended)</option>
+                                  <option value="kiosk">Dedicated POS Kiosk (Locked Fullscreen)</option>
+                                  <option value="maximized">Maximized App Window (Desktop Window)</option>
+                                </select>
+                                <p className="text-[10px] text-slate-400 leading-tight">
+                                  {kioskWindowMode === 'fullscreen' && 'Fullscreen coverage; F11 / Alt+Tab still available.'}
+                                  {kioskWindowMode === 'kiosk' && 'Locks screen with hidden OS taskbar and borders.'}
+                                  {kioskWindowMode === 'maximized' && 'Desktop window with minimize and close buttons.'}
+                                </p>
+                              </div>
+
+                              {/* Setting 3: Preferred Browser */}
+                              <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/80 space-y-1.5">
+                                <label className="block text-xs font-bold text-slate-200">
+                                  Target Browser Engine
+                                </label>
+                                <select
+                                  value={kioskBrowser}
+                                  onChange={(e) => handleChangeKioskBrowser(e.target.value as any)}
+                                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-200 focus:outline-none focus:border-emerald-500"
+                                >
+                                  <option value="auto">Auto-Detect (Chrome → Edge)</option>
+                                  <option value="chrome">Google Chrome</option>
+                                  <option value="msedge">Microsoft Edge</option>
+                                  <option value="system">Default System Browser (Standard)</option>
+                                </select>
+                                <p className="text-[10px] text-slate-400 leading-tight">
+                                  Edge is preinstalled on Windows 10/11. Supports instant silent printing.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
                           {/* Dual Hardware Printer Devices (Avoid Hardware Conflicts) */}
-                <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                        <Printer className="h-4 w-4 text-emerald-600" />
-                        Hardware Printer Device Assignments
-                      </h4>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Assign independent physical printers for POS receipts vs A4 invoices/reports to prevent device conflicts.
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowDiagnosticsModal(true)}
-                        className="px-2.5 py-1 text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50/60 hover:bg-indigo-100/60 transition"
-                        title="Run automated printer and spooler diagnostics"
-                      >
-                        <Activity className="h-3.5 w-3.5 text-indigo-600" />
-                        <span>Diagnostics</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleClearPrinterQueue}
-                        disabled={clearingQueue}
-                        className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-rose-700 flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-rose-50 transition"
-                        title="Cancel all pending/stuck print jobs in the printer queue"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-rose-500" />
-                        <span>{clearingQueue ? 'Clearing...' : 'Clear Queue'}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => loadPrinters(true)}
-                        disabled={loadingPrinters}
-                        className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-emerald-700 flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition"
-                        title="Rescan connected printers"
-                      >
-                        <RefreshCw className={`h-3.5 w-3.5 ${loadingPrinters ? 'animate-spin text-emerald-600' : ''}`} />
-                        <span>Rescan</span>
-                      </button>
-                    </div>
-                  </div>
+                          <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs space-y-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                  <Printer className="h-4 w-4 text-emerald-600" />
+                                  Hardware Printer Device Configuration
+                                </h4>
+                                <p className="text-xs text-slate-400 mt-0.5">
+                                  Configure independent physical printers for POS receipts vs A4 invoices/reports and run test prints.
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setShowDiagnosticsModal(true)}
+                                  className="px-2.5 py-1 text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50/60 hover:bg-indigo-100/60 transition"
+                                  title="Run automated printer and spooler diagnostics"
+                                >
+                                  <Activity className="h-3.5 w-3.5 text-indigo-600" />
+                                  <span>Diagnostics</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleClearPrinterQueue}
+                                  disabled={clearingQueue}
+                                  className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-rose-700 flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-rose-50 transition"
+                                  title="Cancel all pending/stuck print jobs in the printer queue"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+                                  <span>{clearingQueue ? 'Clearing...' : 'Clear Queue'}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => loadPrinters(true)}
+                                  disabled={loadingPrinters}
+                                  className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-emerald-700 flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition"
+                                  title="Rescan connected printers"
+                                >
+                                  <RefreshCw className={`h-3.5 w-3.5 ${loadingPrinters ? 'animate-spin text-emerald-600' : ''}`} />
+                                  <span>Rescan</span>
+                                </button>
+                              </div>
+                            </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Device 1: Thermal Receipt Printer */}
-                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                          <Receipt className="h-3.5 w-3.5 text-emerald-600" />
-                          POS Thermal Receipt Printer
-                        </label>
-                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60">
-                          POS Rolls
-                        </span>
-                      </div>
-                      <select
-                        value={selectedThermalPrinter}
-                        onChange={(e) => handleChangeThermalPrinter(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 shadow-xs"
-                      >
-                        <option value="">-- Auto-detect Thermal Printer --</option>
-                        {selectedThermalPrinter && !systemPrinters.some((p) => p.name === selectedThermalPrinter) && (
-                          <option value={selectedThermalPrinter}>
-                            {selectedThermalPrinter} ● [Disconnected / Saved]
-                          </option>
-                        )}
-                        {systemPrinters.map((p) => (
-                          <option key={p.name} value={p.name}>
-                            {p.name} {p.is_online === false ? '● [Offline / Powered Off]' : '● [Online]'} {p.is_thermal ? '★ (Detected Thermal POS)' : ''} {p.is_default ? '(Default)' : ''}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="flex items-center justify-between pt-1">
-                        <p className="text-[11px] text-slate-500">
-                          Active Target:{' '}
-                          <span className="font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60 font-mono text-[11px]">
-                            {selectedThermalPrinter ? selectedThermalPrinter : 'Auto-detect (System will choose thermal printer)'}
-                          </span>
-                        </p>
-                        <button
-                          type="button"
-                          onClick={handleTestDirectPrint}
-                          disabled={directPrintingTest}
-                          className="px-2 py-0.5 text-[10px] font-bold text-emerald-700 bg-white hover:bg-emerald-50 rounded border border-emerald-200 transition shrink-0"
-                          title="Print a test sample receipt to verify thermal hardware"
-                        >
-                          {directPrintingTest ? 'Printing...' : 'Test Receipt'}
-                        </button>
-                      </div>
-                    </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {/* Device 1: Thermal Receipt Printer */}
+                              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                                    <Receipt className="h-3.5 w-3.5 text-emerald-600" />
+                                    POS Thermal Receipt Printer
+                                  </label>
+                                  <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60">
+                                    POS Rolls
+                                  </span>
+                                </div>
+                                <select
+                                  value={selectedThermalPrinter}
+                                  onChange={(e) => handleChangeThermalPrinter(e.target.value)}
+                                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 shadow-xs"
+                                >
+                                  <option value="">-- Auto-detect Thermal Printer --</option>
+                                  {selectedThermalPrinter && !systemPrinters.some((p) => p.name === selectedThermalPrinter) && (
+                                    <option value={selectedThermalPrinter}>
+                                      {selectedThermalPrinter} ● [Disconnected / Saved]
+                                    </option>
+                                  )}
+                                  {systemPrinters.map((p) => (
+                                    <option key={p.name} value={p.name}>
+                                      {p.name} {p.is_online === false ? '● [Offline / Powered Off]' : '● [Online]'} {p.is_thermal ? '★ (Detected Thermal POS)' : ''} {p.is_default ? '(Default)' : ''}
+                                    </option>
+                                  ))}
+                                </select>
 
-                    {/* Device 2: Document / A4 Invoice Printer */}
-                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                          <FileText className="h-3.5 w-3.5 text-blue-600" />
-                          Document & A4 Invoice Printer
-                        </label>
-                        <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/60">
-                          A4 Invoices & Reports
-                        </span>
-                      </div>
-                      <select
-                        value={selectedA4Printer}
-                        onChange={(e) => handleChangeA4Printer(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500 shadow-xs"
-                      >
-                        <option value="">-- System Default A4 Printer --</option>
-                        {selectedA4Printer && !systemPrinters.some((p) => p.name === selectedA4Printer) && (
-                          <option value={selectedA4Printer}>
-                            {selectedA4Printer} ● [Disconnected / Saved]
-                          </option>
-                        )}
-                        {systemPrinters.map((p) => (
-                          <option key={p.name} value={p.name}>
-                            {p.name} {p.is_online === false ? '● [Offline / Powered Off]' : '● [Online]'} {!p.is_thermal ? '★ (Standard A4 / Laser)' : ''} {p.is_default ? '(Default)' : ''}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="flex items-center justify-between pt-1">
-                        <p className="text-[11px] text-slate-500">
-                          Active Target:{' '}
-                          <span className="font-semibold text-blue-800 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/60 font-mono text-[11px]">
-                            {selectedA4Printer ? selectedA4Printer : 'System Default (OS default printer)'}
-                          </span>
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            printElement('settings-preview-thermal-receipt', {
-                              title: 'A4_Invoice_Test',
-                              isThermal: false,
-                            });
-                          }}
-                          className="px-2 py-0.5 text-[10px] font-bold text-blue-700 bg-white hover:bg-blue-50 rounded border border-blue-200 transition shrink-0"
-                          title="Open document print test"
-                        >
-                          Test A4 Print
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                                {/* Roll width selection inside the thermal card */}
+                                <div className="flex items-center justify-between gap-2 pt-0.5">
+                                  <span className="text-[11px] font-bold text-slate-600">Roll Width:</span>
+                                  <select
+                                    value={printerType}
+                                    onChange={(e) => handleChangePrinterType(e.target.value)}
+                                    className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 shadow-xs"
+                                  >
+                                    <option value="80mm">80mm Wide Roll (48 cols)</option>
+                                    <option value="80mm_compact">80mm Compact (42 cols)</option>
+                                    <option value="58mm">58mm Standard Roll (32 cols)</option>
+                                    <option value="58mm_narrow">58mm Narrow POS (30 cols)</option>
+                                  </select>
+                                </div>
+
+                                <div className="flex items-center justify-between pt-1 border-t border-slate-200/80">
+                                  <p className="text-[11px] text-slate-500 truncate max-w-[190px]" title={selectedThermalPrinter || 'Auto-detect'}>
+                                    Target:{' '}
+                                    <span className="font-semibold text-emerald-800 font-mono text-[11px]">
+                                      {selectedThermalPrinter ? selectedThermalPrinter : 'Auto-detect'}
+                                    </span>
+                                  </p>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={handleTestThermalPrintAuto}
+                                      disabled={directPrintingTest}
+                                      className="px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-white hover:bg-emerald-50 rounded-lg border border-emerald-300 transition shadow-xs flex items-center gap-1"
+                                      title="Print a test sample receipt using active print engine"
+                                    >
+                                      {directPrintingTest ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Receipt className="h-3 w-3" />}
+                                      <span>{directPrintingTest ? 'Printing...' : 'Test Receipt'}</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Device 2: Document / A4 Invoice Printer */}
+                              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                                    <FileText className="h-3.5 w-3.5 text-blue-600" />
+                                    Document & A4 Invoice Printer
+                                  </label>
+                                  <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/60">
+                                    A4 Invoices & Reports
+                                  </span>
+                                </div>
+                                <select
+                                  value={selectedA4Printer}
+                                  onChange={(e) => handleChangeA4Printer(e.target.value)}
+                                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500 shadow-xs"
+                                >
+                                  <option value="">-- System Default A4 Printer --</option>
+                                  {selectedA4Printer && !systemPrinters.some((p) => p.name === selectedA4Printer) && (
+                                    <option value={selectedA4Printer}>
+                                      {selectedA4Printer} ● [Disconnected / Saved]
+                                    </option>
+                                  )}
+                                  {systemPrinters.map((p) => (
+                                    <option key={p.name} value={p.name}>
+                                      {p.name} {p.is_online === false ? '● [Offline / Powered Off]' : '● [Online]'} {!p.is_thermal ? '★ (Standard A4 / Laser)' : ''} {p.is_default ? '(Default)' : ''}
+                                    </option>
+                                  ))}
+                                </select>
+
+                                {/* Document formatting info */}
+                                <div className="flex items-center justify-between gap-2 pt-0.5 text-xs text-slate-500">
+                                  <span className="text-[11px] font-bold text-slate-600">Document Type:</span>
+                                  <span className="text-[11px] font-mono font-semibold text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200">
+                                    A4 Standard • {invoiceTitle || 'TAX INVOICE'}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center justify-between pt-1 border-t border-slate-200/80">
+                                  <p className="text-[11px] text-slate-500 truncate max-w-[190px]" title={selectedA4Printer || 'System Default'}>
+                                    Target:{' '}
+                                    <span className="font-semibold text-blue-800 font-mono text-[11px]">
+                                      {selectedA4Printer ? selectedA4Printer : 'System Default'}
+                                    </span>
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={handleTestA4Print}
+                                    disabled={a4PrintingTest}
+                                    className="px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-white hover:bg-blue-50 rounded-lg border border-blue-300 transition shadow-xs flex items-center gap-1"
+                                    title="Open document print test with authentic multi-column corporate A4 invoice"
+                                  >
+                                    {a4PrintingTest ? <RefreshCw className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
+                                    <span>{a4PrintingTest ? 'Printing...' : 'Test A4 Print'}</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
 
                 
                           {/* POS Checkout Receipt Preview Modal & 1-Click Print Checkbox */}
@@ -4899,6 +5194,76 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         onClose={() => setShowDiagnosticsModal(false)}
         settings={settings}
       />
+
+      {/* Hidden Offscreen Containers for Accurate Test Printing */}
+      <div
+        style={{
+          position: 'fixed',
+          left: '-9999px',
+          top: '-9999px',
+          width: '0px',
+          height: '0px',
+          overflow: 'hidden',
+          opacity: 0,
+          pointerEvents: 'none',
+        }}
+        aria-hidden="true"
+      >
+        <ThermalReceipt
+          id="settings-preview-thermal-receipt-offscreen"
+          sale={sampleTestSale}
+          businessName={bizName}
+          phone={bizPhone}
+          address={bizAddress}
+          currency={currency}
+          headerText={receiptHeader}
+          footerText={receiptFooter}
+          paperWidth={printerType === '58mm' ? '58mm' : '80mm'}
+          headerStyle={thermalHeaderStyle}
+          layout={thermalLayout}
+          showBarcode={showBarcode}
+          settings={{
+            ...(settings || {}),
+            business_name: bizName,
+            phone: bizPhone,
+            address: bizAddress,
+            currency: currency,
+            receipt_header: receiptHeader,
+            receipt_footer: receiptFooter,
+            receipt_printer_type: printerType as any,
+            thermal_header_style: thermalHeaderStyle,
+            thermal_layout: thermalLayout,
+            thermal_darkness: thermalDarkness,
+            show_barcode: showBarcode,
+            receipt_logo_path: settings?.receipt_logo_path,
+            logo_path: settings?.logo_path,
+          } as any}
+        />
+        <PdfInvoiceReceipt
+          id="settings-preview-a4-invoice"
+          sale={sampleTestSale}
+          businessName={bizName}
+          phone={bizPhone}
+          address={bizAddress}
+          currency={currency}
+          headerText={receiptHeader}
+          footerText={invoiceTerms || receiptFooter}
+          documentTitle={invoiceTitle}
+          settings={{
+            ...(settings || {}),
+            business_name: bizName,
+            phone: bizPhone,
+            address: bizAddress,
+            currency: currency,
+            invoice_title: invoiceTitle,
+            invoice_terms: invoiceTerms,
+            receipt_footer: receiptFooter,
+            receipt_letterhead_path: settings?.receipt_letterhead_path,
+            show_letterhead: showLetterhead,
+            hide_header_text_with_letterhead: hideHeaderTextWithLetterhead,
+          } as any}
+        />
+      </div>
     </div>
   );
 };

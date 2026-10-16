@@ -4,6 +4,7 @@ import { formatCurrency, formatDateTime } from '../../utils/format';
 import { CheckCircle2, AlertCircle, Clock, RotateCcw } from 'lucide-react';
 
 export interface PdfInvoiceReceiptProps {
+  id?: string;
   sale: Sale;
   settings?: BusinessSettings | null;
   businessName?: string;
@@ -16,6 +17,7 @@ export interface PdfInvoiceReceiptProps {
 }
 
 export const PdfInvoiceReceipt: React.FC<PdfInvoiceReceiptProps> = ({
+  id = 'printable-pdf-invoice',
   sale,
   settings,
   businessName,
@@ -99,7 +101,7 @@ export const PdfInvoiceReceipt: React.FC<PdfInvoiceReceiptProps> = ({
 
   return (
     <div
-      id="printable-pdf-invoice"
+      id={id}
       className="bg-white text-slate-800 font-sans text-xs p-8 max-w-[210mm] min-w-[190mm] min-h-[285mm] h-auto mx-auto shadow-sm border border-slate-200 rounded-lg print:border-none print:shadow-none print:p-0 print:m-0 print:max-w-none flex flex-col justify-between"
       style={{ boxSizing: 'border-box' }}
     >

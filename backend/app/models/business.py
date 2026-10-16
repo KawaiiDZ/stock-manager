@@ -60,4 +60,8 @@ class BusinessSettings(Base):
     config_pin_hash = Column(String(255), nullable=False)
     enable_pos_quick_pay = Column(Boolean, nullable=False, default=True)
     payment_accounts = Column(Text, nullable=False, default='["Cash", "Bank Transfer", "Easypaisa", "Jazzcash"]')
+    # Kiosk & Fullscreen POS Launch Configuration
+    auto_launch_kiosk = Column(Boolean, nullable=False, default=False)
+    kiosk_window_mode = Column(String(30), nullable=False, default="fullscreen")  # fullscreen, kiosk, maximized
+    kiosk_browser = Column(String(30), nullable=False, default="auto")  # auto, chrome, msedge, system
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

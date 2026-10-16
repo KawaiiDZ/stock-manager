@@ -53,6 +53,9 @@ export interface BusinessSettings {
   dashboard_financials_pin?: string;
   enable_pos_quick_pay?: boolean;
   payment_accounts?: string[];
+  auto_launch_kiosk?: boolean;
+  kiosk_window_mode?: 'fullscreen' | 'kiosk' | 'maximized';
+  kiosk_browser?: 'auto' | 'chrome' | 'msedge' | 'system';
 }
 
 export interface PaymentSplit {

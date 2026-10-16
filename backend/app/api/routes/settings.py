@@ -32,3 +32,12 @@ def apply_business_preset(data: ApplyPresetRequest, db: Session = Depends(get_db
 @router.post("/reset-data", response_model=ResetDataResponse)
 def reset_system_data(data: ResetDataRequest, db: Session = Depends(get_db)):
     return reset_database_data(db, confirm_pin=data.confirm_pin, wipe_mode=data.wipe_mode or "inventory_only")
+
+@router.post("/launch-kiosk")
+def trigger_kiosk_launch(db: Session = Depends(get_db)):
+    from backend.app.services.kiosk_service import launch_kiosk_browser
+    biz = get_settings(db)
+    local_url = "http://127.0.0.1:8000"
+    mode = getattr(biz, "kiosk_window_mode", "fullscreen") or "fullscreen"
+    browser = getattr(biz, "kiosk_browser", "auto") or "auto"
+    return launch_kiosk_browser(local_url, window_mode=mode, browser_choice=browser, kiosk_printing=True)

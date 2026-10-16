@@ -58,6 +58,9 @@ class BusinessSettingsResponse(BaseModel):
     has_dashboard_financials_pin: bool = False
     enable_pos_quick_pay: bool = True
     payment_accounts: List[str] = ["Cash", "Bank Transfer", "Easypaisa", "Jazzcash"]
+    auto_launch_kiosk: bool = False
+    kiosk_window_mode: str = "fullscreen"
+    kiosk_browser: str = "auto"
 
     @field_validator("payment_accounts", mode="before")
     def parse_payment_accounts(cls, v):
@@ -135,6 +138,9 @@ class BusinessSettingsUpdate(BaseModel):
     dashboard_financials_pin: Optional[str] = None
     enable_pos_quick_pay: Optional[bool] = None
     payment_accounts: Optional[List[str]] = None
+    auto_launch_kiosk: Optional[bool] = None
+    kiosk_window_mode: Optional[str] = None
+    kiosk_browser: Optional[str] = None
 
 class PresetTemplateResponse(BaseModel):
     key: str

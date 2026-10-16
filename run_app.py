@@ -45,6 +45,26 @@ def find_available_port(start_port: int = DEFAULT_PORT, max_tries: int = 10) -> 
                 continue
     return start_port
 
+def get_kiosk_launch_preferences():
+    """Retrieve auto kiosk & window launch configuration from settings table."""
+    try:
+        from backend.app.core.database import SessionLocal
+        from backend.app.models.business import BusinessSettings
+        db = SessionLocal()
+        try:
+            biz = db.query(BusinessSettings).first()
+            if biz:
+                return {
+                    "auto_launch_kiosk": bool(getattr(biz, "auto_launch_kiosk", False)),
+                    "kiosk_window_mode": getattr(biz, "kiosk_window_mode", "fullscreen") or "fullscreen",
+                    "kiosk_browser": getattr(biz, "kiosk_browser", "auto") or "auto",
+                }
+        finally:
+            db.close()
+    except Exception:
+        pass
+    return {"auto_launch_kiosk": False, "kiosk_window_mode": "fullscreen", "kiosk_browser": "auto"}
+
 def open_browser(port: int = DEFAULT_PORT):
     time.sleep(1.2)
     local_url = f"http://127.0.0.1:{port}"
@@ -57,6 +77,17 @@ def open_browser(port: int = DEFAULT_PORT):
     print(f"  Press Ctrl+C to stop the application.")
     print(f"=======================================================\n")
     try:
+        prefs = get_kiosk_launch_preferences()
+        if prefs.get("auto_launch_kiosk"):
+            from backend.app.services.kiosk_service import launch_kiosk_browser
+            mode = prefs.get("kiosk_window_mode", "fullscreen")
+            browser = prefs.get("kiosk_browser", "auto")
+            print(f"  [KIOSK LAUNCHER] Auto-launching in {mode.upper()} mode ({browser}) with --kiosk-printing...")
+            res = launch_kiosk_browser(local_url, window_mode=mode, browser_choice=browser, kiosk_printing=True)
+            if res.get("success") and not res.get("fallback"):
+                return
+            print(f"  [KIOSK LAUNCHER] Notice: {res.get('message')}")
+
         if sys.platform == "win32":
             try:
                 os.startfile(local_url)
@@ -64,8 +95,8 @@ def open_browser(port: int = DEFAULT_PORT):
             except Exception:
                 pass
         webbrowser.open(local_url)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  [WARNING] Could not open browser automatically: {e}")
 
 def main():
     print("Initializing Offline Stock Manager...")

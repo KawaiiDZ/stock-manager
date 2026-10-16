@@ -197,6 +197,10 @@ export const api = {
     }
     return res;
   },
+  launchKiosk: () =>
+    request<{ success: boolean; browser: string; message: string; window_mode?: string }>('/settings/launch-kiosk', {
+      method: 'POST',
+    }),
 
   // Products
   getProducts: async (params?: { search?: string; category_id?: number; is_active?: boolean; skip?: number; limit?: number }) => {
