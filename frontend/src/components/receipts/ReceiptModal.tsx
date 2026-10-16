@@ -108,9 +108,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
       setPrintSuccessMsg(`Receipt sent directly to ${res.printer}`);
       setTimeout(() => setPrintSuccessMsg(null), 4000);
     } catch (err: any) {
-      setPrintErrorMsg(err.detail || 'Direct ESC/POS print failed. Opening browser print dialog...');
-      isPrintingRef.current = false;
-      handleBrowserPrint();
+      setPrintErrorMsg(
+        err.detail || 'Direct ESC/POS print failed. Check printer connection or click "Browser Print" below.'
+      );
     } finally {
       setDirectPrinting(false);
       setTimeout(() => {
@@ -299,14 +299,24 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
             <span>{printErrorMsg}</span>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowDiagnosticsModal(true)}
-            className="px-2 py-0.5 text-[11px] font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 rounded border border-amber-300 transition shrink-0 flex items-center gap-1"
-          >
-            <Activity className="h-3 w-3 text-amber-700" />
-            <span>Diagnose Printer</span>
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={handleBrowserPrint}
+              className="px-2 py-0.5 text-[11px] font-bold text-slate-700 bg-white hover:bg-slate-100 rounded border border-slate-300 transition shrink-0"
+              title="Open browser print dialogue as manual fallback"
+            >
+              Open Browser Print
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowDiagnosticsModal(true)}
+              className="px-2 py-0.5 text-[11px] font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 rounded border border-amber-300 transition shrink-0 flex items-center gap-1"
+            >
+              <Activity className="h-3 w-3 text-amber-700" />
+              <span>Diagnose</span>
+            </button>
+          </div>
         </div>
       )}
 

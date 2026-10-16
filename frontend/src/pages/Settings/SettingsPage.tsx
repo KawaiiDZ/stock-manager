@@ -1696,6 +1696,20 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     });
   }, [searchQuery]);
 
+  const isTargetVirtualPdf = useMemo(() => {
+    const target = (selectedThermalPrinter || '').toLowerCase();
+    if (target && (target.includes('pdf') || target.includes('xps') || target.includes('onenote') || target.includes('writer'))) {
+      return true;
+    }
+    if (!selectedThermalPrinter) {
+      const def = systemPrinters.find((p) => p.is_default);
+      if (def && (def.is_virtual_pdf || (def.name || '').toLowerCase().includes('pdf') || (def.name || '').toLowerCase().includes('xps'))) {
+        return true;
+      }
+    }
+    return false;
+  }, [selectedThermalPrinter, systemPrinters]);
+
   const handleSelectSearchResult = (item: SettingSearchItem) => {
     setActiveCategory(item.category);
     if (item.subTab) {
@@ -3444,6 +3458,19 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                                     POS Rolls
                                   </span>
                                 </div>
+
+                                {isTargetVirtualPdf && (
+                                  <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-300 text-[11px] text-amber-900 font-medium space-y-1">
+                                    <div className="flex items-center gap-1 font-bold text-amber-800">
+                                      <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                                      <span>Virtual PDF Destination Detected</span>
+                                    </div>
+                                    <p className="leading-tight text-slate-700">
+                                      Your active target is a virtual PDF printer (<strong>{selectedThermalPrinter || 'System Default'}</strong>). Silent checkout will prompt to save a file instead of physically printing. Please select your physical POS Thermal Printer in the dropdown above, or choose <strong>Direct Hardware ESC/POS</strong> below.
+                                    </p>
+                                  </div>
+                                )}
+
                                 <select
                                   value={selectedThermalPrinter}
                                   onChange={(e) => handleChangeThermalPrinter(e.target.value)}
@@ -3457,10 +3484,48 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                                   )}
                                   {systemPrinters.map((p) => (
                                     <option key={p.name} value={p.name}>
-                                      {p.name} {p.is_online === false ? '● [Offline / Powered Off]' : '● [Online]'} {p.is_thermal ? '★ (Detected Thermal POS)' : ''} {p.is_default ? '(Default)' : ''}
+                                      {p.name} {p.is_virtual_pdf ? '● [Virtual PDF / File Save]' : p.is_online === false ? '● [Offline / Powered Off]' : '● [Online]'} {p.is_thermal ? '★ (Detected Thermal POS)' : ''} {p.is_default ? '(Default)' : ''}
                                     </option>
                                   ))}
                                 </select>
+
+                                {/* Print Engine Mode Switcher */}
+                                <div className="p-2.5 rounded-xl bg-white border border-slate-200/90 space-y-1.5 shadow-xs">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                                      <Zap className="h-3 w-3 text-emerald-600" />
+                                      Print Engine Mode:
+                                    </span>
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${thermalPrintMode === 'direct_escpos' ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-indigo-50 text-indigo-800 border-indigo-200'}`}>
+                                      {thermalPrintMode === 'direct_escpos' ? '⚡ Direct ESC/POS (Recommended)' : 'Browser Kiosk Print'}
+                                    </span>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleChangeThermalPrintMode('direct_escpos')}
+                                      className={`px-2 py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 border ${thermalPrintMode === 'direct_escpos' ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}`}
+                                      title="Direct ESC/POS sends raw commands straight to the thermal spooler (bypasses browser dialogs entirely)"
+                                    >
+                                      <Zap className="h-3.5 w-3.5" />
+                                      <span>Direct ESC/POS</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleChangeThermalPrintMode('browser')}
+                                      className={`px-2 py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 border ${thermalPrintMode === 'browser' ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}`}
+                                      title="Browser print uses window.print() inside Chromium Kiosk"
+                                    >
+                                      <Monitor className="h-3.5 w-3.5" />
+                                      <span>Browser Kiosk</span>
+                                    </button>
+                                  </div>
+                                  <p className="text-[10px] text-slate-500 leading-tight">
+                                    {thermalPrintMode === 'direct_escpos'
+                                      ? 'Recommended: Direct raw hardware spooling with 0 dialog popups, 0 PDF prompts, and 0ms latency.'
+                                      : 'Uses Chrome window.print(). Requires Kiosk Mode with physical printer set as default.'}
+                                  </p>
+                                </div>
 
                                 {/* Roll width selection inside the thermal card */}
                                 <div className="flex items-center justify-between gap-2 pt-0.5">
@@ -3478,7 +3543,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                                 </div>
 
                                 <div className="flex items-center justify-between pt-1 border-t border-slate-200/80">
-                                  <p className="text-[11px] text-slate-500 truncate max-w-[190px]" title={selectedThermalPrinter || 'Auto-detect'}>
+                                  <p className="text-[11px] text-slate-500 truncate max-w-[140px]" title={selectedThermalPrinter || 'Auto-detect'}>
                                     Target:{' '}
                                     <span className="font-semibold text-emerald-800 font-mono text-[11px]">
                                       {selectedThermalPrinter ? selectedThermalPrinter : 'Auto-detect'}
@@ -3487,13 +3552,22 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                                   <div className="flex items-center gap-1.5 shrink-0">
                                     <button
                                       type="button"
-                                      onClick={handleTestThermalPrintAuto}
+                                      onClick={handleTestDirectPrint}
                                       disabled={directPrintingTest}
                                       className="px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-white hover:bg-emerald-50 rounded-lg border border-emerald-300 transition shadow-xs flex items-center gap-1"
-                                      title="Print a test sample receipt using active print engine"
+                                      title="Print test receipt directly to printer hardware spooler (0 browser dialogs)"
                                     >
-                                      {directPrintingTest ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Receipt className="h-3 w-3" />}
-                                      <span>{directPrintingTest ? 'Printing...' : 'Test Receipt'}</span>
+                                      {directPrintingTest ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3 text-emerald-600" />}
+                                      <span>{directPrintingTest ? 'Spooling...' : 'Test ESC/POS'}</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={handleTestBrowserPrint}
+                                      className="px-2 py-1 text-[11px] font-semibold text-slate-600 bg-white hover:bg-slate-50 rounded-lg border border-slate-300 transition shadow-xs flex items-center gap-1"
+                                      title="Test printing via browser window.print() pipeline"
+                                    >
+                                      <Monitor className="h-3 w-3 text-slate-500" />
+                                      <span>Browser Test</span>
                                     </button>
                                   </div>
                                 </div>

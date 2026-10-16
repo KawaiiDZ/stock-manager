@@ -307,6 +307,16 @@ def list_system_printers(force_refresh: bool = False, include_wmi: bool = False)
 
         printers = list(discovered.values())
 
+    # Tag virtual PDF / print-to-file printers so they are never treated as thermal POS targets
+    for p in printers:
+        pname = p.get("name", "")
+        dev = p.get("device_uri", "")
+        combined = f"{pname} {dev}".lower()
+        is_pdf = any(kw in combined for kw in ["pdf", "xps", "onenote", "fax", "writer", "document writer"])
+        p["is_virtual_pdf"] = is_pdf
+        if is_pdf:
+            p["is_thermal"] = False
+
     _printer_cache = {
         "timestamp": time.time(),
         "platform": sys_name,
@@ -429,22 +439,26 @@ def resolve_target_printer(
                 logger.info(f"Resolved printer '{clean}' via substring match -> '{p_name}'")
                 return p_name, p
 
-    # Tier 5: Fallback to detected thermal printer
+    # Tier 5: Fallback to detected thermal printer (never virtual PDF)
     for p in available:
-        if p.get("is_thermal") and p.get("is_online", True):
+        if p.get("is_thermal") and p.get("is_online", True) and not p.get("is_virtual_pdf"):
             logger.info(f"Fell back to online thermal printer -> '{p['name']}'")
             return p["name"], p
 
     for p in available:
-        if p.get("is_thermal"):
+        if p.get("is_thermal") and not p.get("is_virtual_pdf"):
             return p["name"], p
 
-    # Fallback to system default
+    # Fallback to system default (prefer non-virtual)
     for p in available:
-        if p.get("is_default"):
+        if p.get("is_default") and not p.get("is_virtual_pdf"):
             return p["name"], p
 
-    # Last resort: first printer in list
+    # Last resort: first non-PDF printer
+    for p in available:
+        if not p.get("is_virtual_pdf"):
+            return p["name"], p
+
     if available:
         return available[0]["name"], available[0]
 

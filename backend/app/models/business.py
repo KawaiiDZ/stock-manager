@@ -24,7 +24,7 @@ class BusinessSettings(Base):
     date_format = Column(String(30), nullable=False, default="YYYY-MM-DD")
     format_prices_with_commas = Column(Boolean, nullable=False, default=True)
     receipt_type = Column(String(20), nullable=False, default="thermal")  # thermal, pdf
-    thermal_print_mode = Column(String(30), nullable=False, default="browser")  # browser, direct_escpos
+    thermal_print_mode = Column(String(30), nullable=False, default="direct_escpos")  # browser, direct_escpos
     thermal_header_style = Column(String(30), nullable=False, default="logo_text")  # logo_text, text_only
     thermal_layout = Column(String(30), nullable=False, default="classic")  # classic, modern, tabular, compact, elegant
     selected_thermal_printer = Column(String(100), nullable=False, default="")

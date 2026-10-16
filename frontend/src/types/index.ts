@@ -68,6 +68,7 @@ export interface PrinterInfo {
   name: string;
   is_default: boolean;
   is_thermal: boolean;
+  is_virtual_pdf?: boolean;
   device_uri?: string;
   status?: string;
   is_online?: boolean;

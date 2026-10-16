@@ -24,7 +24,7 @@ class BusinessSettingsResponse(BaseModel):
     date_format: str = "YYYY-MM-DD"
     format_prices_with_commas: bool = True
     receipt_type: str = "thermal"
-    thermal_print_mode: str = "browser"
+    thermal_print_mode: str = "direct_escpos"
     thermal_header_style: str = "logo_text"
     thermal_layout: str = "classic"
     selected_thermal_printer: str = ""
