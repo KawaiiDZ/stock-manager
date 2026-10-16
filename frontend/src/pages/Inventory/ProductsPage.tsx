@@ -345,6 +345,62 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
     }
   };
 
+  const handleProductModalKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    const target = e.target as HTMLElement;
+    if (!target || !(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) return;
+    if (target.type === 'submit' || target.tagName === 'BUTTON') return;
+
+    const form = e.currentTarget;
+    const focusable = Array.from(
+      form.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
+        'input:not([type="hidden"]):not([disabled]), select:not([disabled])'
+      )
+    ).filter((el) => !el.closest('button'));
+
+    const idx = focusable.indexOf(target as any);
+    if (idx === -1) return;
+
+    if (e.key === 'ArrowDown' || (e.key === 'Enter' && target.tagName !== 'BUTTON')) {
+      if (target instanceof HTMLInputElement) {
+        e.preventDefault();
+        const next = (idx + 1) % focusable.length;
+        focusable[next]?.focus();
+        if ('select' in focusable[next]) (focusable[next] as HTMLInputElement).select?.();
+      } else if (target instanceof HTMLSelectElement && e.key === 'Enter') {
+        e.preventDefault();
+        const next = (idx + 1) % focusable.length;
+        focusable[next]?.focus();
+      }
+    } else if (e.key === 'ArrowUp') {
+      if (target instanceof HTMLInputElement) {
+        e.preventDefault();
+        const prev = (idx - 1 + focusable.length) % focusable.length;
+        focusable[prev]?.focus();
+        if ('select' in focusable[prev]) (focusable[prev] as HTMLInputElement).select?.();
+      }
+    } else if (e.key === 'ArrowRight' && target instanceof HTMLInputElement) {
+      const atEnd = target.selectionStart === target.value.length && target.selectionEnd === target.value.length;
+      const allSelected = target.selectionStart === 0 && target.selectionEnd === target.value.length;
+      if (atEnd || allSelected) {
+        if (idx < focusable.length - 1) {
+          e.preventDefault();
+          focusable[idx + 1]?.focus();
+          if ('select' in focusable[idx + 1]) (focusable[idx + 1] as HTMLInputElement).select?.();
+        }
+      }
+    } else if (e.key === 'ArrowLeft' && target instanceof HTMLInputElement) {
+      const atStart = target.selectionStart === 0 && target.selectionEnd === 0;
+      const allSelected = target.selectionStart === 0 && target.selectionEnd === target.value.length;
+      if (atStart || allSelected) {
+        if (idx > 0) {
+          e.preventDefault();
+          focusable[idx - 1]?.focus();
+          if ('select' in focusable[idx - 1]) (focusable[idx - 1] as HTMLInputElement).select?.();
+        }
+      }
+    }
+  };
+
   const handleConfirmDelete = async () => {
     if (!deletingProduct) return;
     setDeleting(true);
@@ -1013,7 +1069,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
         subtitle={editingProduct ? editingProduct.product_id : 'Enter product details below'}
         maxWidth="lg"
       >
-        <form onSubmit={handleSaveProduct} className="space-y-4">
+        <form onSubmit={handleSaveProduct} onKeyDown={handleProductModalKeyDown} className="space-y-4">
           {modalError && (
             <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-medium">
               <AlertCircle className="h-4 w-4 shrink-0" />
@@ -1070,10 +1126,104 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
             )}
           </div>
 
+          {/* Dynamic Category-Specific & Global Custom Fields (Placed right after Name & Category, before Barcode and Price) */}
+          {(() => {
+            const activeCategory = categories.find((c) => c.id === Number(formData.category_id));
+            const relevantFields = customFields.filter(
+              (cf) => !cf.category_id || cf.category_id === Number(formData.category_id)
+            );
+
+            if (relevantFields.length === 0) {
+              return null;
+            }
+
+            return (
+              <div className="border-t border-slate-100 dark:border-slate-800 pt-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                    <span>Specifications & Attributes</span>
+                    {activeCategory && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                        {activeCategory.name}
+                      </span>
+                    )}
+                  </h4>
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    {relevantFields.length} field{relevantFields.length !== 1 ? 's' : ''} available
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {relevantFields.map((cf) => {
+                    const isGlobal = !cf.category_id;
+                    if (cf.field_type === 'select' && cf.options) {
+                      const opts = cf.options.split(',').map((o) => o.trim()).filter(Boolean);
+                      return (
+                        <div key={cf.id}>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                              {cf.name} {cf.is_required && '*'}
+                            </label>
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">
+                              {isGlobal ? 'Global' : activeCategory?.name || 'Category'}
+                            </span>
+                          </div>
+                          <select
+                            value={customFieldValues[cf.id] || ''}
+                            onChange={(e) =>
+                              setCustomFieldValues({
+                                ...customFieldValues,
+                                [cf.id]: e.target.value,
+                              })
+                            }
+                            className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500 shadow-sm"
+                            required={cf.is_required}
+                          >
+                            <option value="">Select {cf.name}...</option>
+                            {opts.map((opt, i) => (
+                              <option key={i} value={opt}>
+                                {opt}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={cf.id}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                            {cf.name} {cf.is_required && '*'}
+                          </label>
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">
+                            {isGlobal ? 'Global' : activeCategory?.name || 'Category'}
+                          </span>
+                        </div>
+                        <input
+                          type={cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date' : 'text'}
+                          placeholder={`Enter ${cf.name}`}
+                          value={customFieldValues[cf.id] || ''}
+                          onChange={(e) =>
+                            setCustomFieldValues({
+                              ...customFieldValues,
+                              [cf.id]: e.target.value,
+                            })
+                          }
+                          required={cf.is_required}
+                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500 shadow-sm"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
           {showBarcode && (
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
                   Barcode (Optional)
                 </label>
                 <button
@@ -1134,108 +1284,6 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
               />
             )}
           </div>
-
-          {/* Dynamic Category-Specific & Global Custom Fields */}
-          {(() => {
-            const activeCategory = categories.find((c) => c.id === Number(formData.category_id));
-            const relevantFields = customFields.filter(
-              (cf) => !cf.category_id || cf.category_id === Number(formData.category_id)
-            );
-
-            if (relevantFields.length === 0) {
-              return (
-                <div className="border-t border-slate-100 pt-3">
-                  <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-500">
-                    <strong>Category Specifications:</strong> No custom attributes defined yet for{' '}
-                    <span className="font-bold text-slate-700">{activeCategory?.name || 'this category'}</span>.
-                    You can add category-specific fields in <strong className="text-slate-700">Settings → Custom Attributes</strong>.
-                  </div>
-                </div>
-              );
-            }
-
-            return (
-              <div className="border-t border-slate-100 pt-3 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                    <span>Specifications & Attributes</span>
-                    {activeCategory && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        {activeCategory.name}
-                      </span>
-                    )}
-                  </h4>
-                  <span className="text-[11px] text-slate-400 font-medium">
-                    {relevantFields.length} field{relevantFields.length !== 1 ? 's' : ''} available
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {relevantFields.map((cf) => {
-                    const isGlobal = !cf.category_id;
-                    if (cf.field_type === 'select' && cf.options) {
-                      const opts = cf.options.split(',').map((o) => o.trim()).filter(Boolean);
-                      return (
-                        <div key={cf.id}>
-                          <div className="flex items-center justify-between mb-1.5">
-                            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
-                              {cf.name} {cf.is_required && '*'}
-                            </label>
-                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-500">
-                              {isGlobal ? 'Global' : activeCategory?.name || 'Category'}
-                            </span>
-                          </div>
-                          <select
-                            value={customFieldValues[cf.id] || ''}
-                            onChange={(e) =>
-                              setCustomFieldValues({
-                                ...customFieldValues,
-                                [cf.id]: e.target.value,
-                              })
-                            }
-                            className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-emerald-500 shadow-sm"
-                            required={cf.is_required}
-                          >
-                            <option value="">Select {cf.name}...</option>
-                            {opts.map((opt, i) => (
-                              <option key={i} value={opt}>
-                                {opt}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      );
-                    }
-                    return (
-                      <div key={cf.id}>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
-                            {cf.name} {cf.is_required && '*'}
-                          </label>
-                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-500">
-                            {isGlobal ? 'Global' : activeCategory?.name || 'Category'}
-                          </span>
-                        </div>
-                        <input
-                          type={cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date' : 'text'}
-                          placeholder={`Enter ${cf.name}`}
-                          value={customFieldValues[cf.id] || ''}
-                          onChange={(e) =>
-                            setCustomFieldValues({
-                              ...customFieldValues,
-                              [cf.id]: e.target.value,
-                            })
-                          }
-                          required={cf.is_required}
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 shadow-sm"
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })()}
 
           <div className="flex flex-wrap items-center justify-end gap-3 pt-3 border-t border-slate-100">
             <Button

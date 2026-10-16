@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../../services/api';
 import { Category, BusinessSettings, CustomField, Product } from '../../types';
 import { Plus, Trash2, Layers, AlertCircle, Sparkles, Barcode } from 'lucide-react';
@@ -304,6 +304,98 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
     }
   };
 
+  // Ordered visible columns matching user-preferred layout:
+  // Name -> SKU -> Custom Attributes -> Barcode -> Cost Price -> Sale Price -> Stock Qty
+  const visibleColumns = useMemo(() => {
+    const cols: string[] = ['name'];
+    if (showSku) cols.push('sku');
+    relevantCustomFields.forEach((cf) => cols.push(`custom_${cf.id}`));
+    if (showBarcode) cols.push('barcode');
+    cols.push('purchase_price', 'selling_price', 'opening_stock');
+    return cols;
+  }, [showSku, relevantCustomFields, showBarcode]);
+
+  const focusCell = (rIdx: number, cIdx: number) => {
+    if (rIdx < 0 || rIdx >= rows.length || cIdx < 0 || cIdx >= visibleColumns.length) return;
+    const colKey = visibleColumns[cIdx];
+    const el = document.querySelector<HTMLInputElement | HTMLSelectElement>(
+      `[data-bulk-cell="${rIdx}-${colKey}"]`
+    );
+    if (el) {
+      el.focus();
+      if ('select' in el && typeof el.select === 'function') {
+        el.select();
+      }
+    }
+  };
+
+  const handleCellKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>,
+    rIdx: number,
+    colKey: string
+  ) => {
+    const cIdx = visibleColumns.indexOf(colKey);
+    const isInput = e.currentTarget instanceof HTMLInputElement;
+    const isSelect = e.currentTarget instanceof HTMLSelectElement;
+
+    if (e.key === 'ArrowUp') {
+      if (isInput) {
+        e.preventDefault();
+        if (rIdx > 0) {
+          focusCell(rIdx - 1, cIdx);
+        }
+      }
+    } else if (e.key === 'ArrowDown') {
+      if (isInput) {
+        e.preventDefault();
+        if (rIdx < rows.length - 1) {
+          focusCell(rIdx + 1, cIdx);
+        } else if (rIdx === rows.length - 1 && rows[rIdx].name.trim().length > 0) {
+          handleAddRows(1);
+          setTimeout(() => focusCell(rIdx + 1, cIdx), 60);
+        }
+      }
+    } else if (e.key === 'ArrowLeft') {
+      if (isSelect) {
+        e.preventDefault();
+        if (cIdx > 0) focusCell(rIdx, cIdx - 1);
+        else if (rIdx > 0) focusCell(rIdx - 1, visibleColumns.length - 1);
+      } else if (isInput) {
+        const input = e.currentTarget as HTMLInputElement;
+        const atStart = input.selectionStart === 0 && input.selectionEnd === 0;
+        const allSelected = input.selectionStart === 0 && input.selectionEnd === input.value.length;
+        if (atStart || allSelected) {
+          e.preventDefault();
+          if (cIdx > 0) focusCell(rIdx, cIdx - 1);
+          else if (rIdx > 0) focusCell(rIdx - 1, visibleColumns.length - 1);
+        }
+      }
+    } else if (e.key === 'ArrowRight') {
+      if (isSelect) {
+        e.preventDefault();
+        if (cIdx < visibleColumns.length - 1) focusCell(rIdx, cIdx + 1);
+        else if (rIdx < rows.length - 1) focusCell(rIdx + 1, 0);
+      } else if (isInput) {
+        const input = e.currentTarget as HTMLInputElement;
+        const atEnd = input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
+        const allSelected = input.selectionStart === 0 && input.selectionEnd === input.value.length;
+        if (atEnd || allSelected) {
+          e.preventDefault();
+          if (cIdx < visibleColumns.length - 1) focusCell(rIdx, cIdx + 1);
+          else if (rIdx < rows.length - 1) focusCell(rIdx + 1, 0);
+        }
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (rIdx < rows.length - 1) {
+        focusCell(rIdx + 1, cIdx);
+      } else if (rows[rIdx].name.trim().length > 0) {
+        handleAddRows(1);
+        setTimeout(() => focusCell(rIdx + 1, cIdx), 60);
+      }
+    }
+  };
+
   // Calculate total table width for horizontal scrolling
   const totalTableWidth =
     (colWidths.index || 45) +
@@ -423,6 +515,39 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                     </th>
                   )}
 
+                  {/* Dynamic Category & Global Custom Attribute Columns (Placed before Barcode & Pricing) */}
+                  {relevantCustomFields.map((cf) => {
+                    const colKey = `custom_${cf.id}`;
+                    const isGlobal = !cf.category_id;
+                    return (
+                      <th
+                        key={cf.id}
+                        style={{ width: `${colWidths[colKey] || 160}px` }}
+                        className="py-3 px-2.5 relative group"
+                      >
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="truncate text-emerald-900 dark:text-emerald-300 font-extrabold">
+                            {cf.name}
+                            {cf.is_required && <span className="text-rose-500 font-black"> *</span>}
+                          </span>
+                          <span
+                            className={`text-[9px] font-bold px-1.5 py-0.2 rounded shrink-0 ${
+                              isGlobal
+                                ? 'bg-slate-200/80 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                                : 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300'
+                            }`}
+                          >
+                            {isGlobal ? 'Global' : activeCategory?.name || 'Cat'}
+                          </span>
+                        </div>
+                        <div
+                          onMouseDown={(e) => handleStartResize(colKey, e)}
+                          className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-emerald-500 active:bg-emerald-600 transition"
+                        />
+                      </th>
+                    );
+                  })}
+
                   {/* Barcode (Optional) */}
                   {showBarcode && (
                     <th
@@ -473,39 +598,6 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                     />
                   </th>
 
-                  {/* Dynamic Category & Global Custom Attribute Columns */}
-                  {relevantCustomFields.map((cf) => {
-                    const colKey = `custom_${cf.id}`;
-                    const isGlobal = !cf.category_id;
-                    return (
-                      <th
-                        key={cf.id}
-                        style={{ width: `${colWidths[colKey] || 160}px` }}
-                        className="py-3 px-2.5 relative group"
-                      >
-                        <div className="flex items-center justify-between gap-1">
-                          <span className="truncate text-emerald-900 font-extrabold">
-                            {cf.name}
-                            {cf.is_required && <span className="text-rose-500 font-black"> *</span>}
-                          </span>
-                          <span
-                            className={`text-[9px] font-bold px-1.5 py-0.2 rounded shrink-0 ${
-                              isGlobal
-                                ? 'bg-slate-200/80 text-slate-600'
-                                : 'bg-emerald-100 text-emerald-800'
-                            }`}
-                          >
-                            {isGlobal ? 'Global' : activeCategory?.name || 'Cat'}
-                          </span>
-                        </div>
-                        <div
-                          onMouseDown={(e) => handleStartResize(colKey, e)}
-                          className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-emerald-500 active:bg-emerald-600 transition"
-                        />
-                      </th>
-                    );
-                  })}
-
                   {/* Action */}
                   <th
                     style={{ width: `${colWidths.action || 45}px` }}
@@ -532,7 +624,9 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                       <input
                         type="text"
                         placeholder="e.g. Product Item Name"
+                        data-bulk-cell={`${idx}-name`}
                         value={row.name}
+                        onKeyDown={(e) => handleCellKeyDown(e, idx, 'name')}
                         onChange={(e) => handleUpdateCell(idx, 'name', e.target.value)}
                         className="w-full bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-lg px-2.5 py-1.5 font-bold text-slate-900 dark:text-white text-xs focus:outline-none shadow-sm"
                       />
@@ -544,80 +638,16 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                         <input
                           type="text"
                           placeholder="SKU-001"
+                          data-bulk-cell={`${idx}-sku`}
                           value={row.sku}
+                          onKeyDown={(e) => handleCellKeyDown(e, idx, 'sku')}
                           onChange={(e) => handleUpdateCell(idx, 'sku', e.target.value)}
                           className="w-full bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-lg px-2 py-1.5 text-xs text-slate-700 dark:text-slate-200 focus:outline-none"
                         />
                       </td>
                     )}
 
-                    {/* Barcode */}
-                    {showBarcode && (
-                      <td style={{ width: `${colWidths.barcode || 140}px` }} className="py-1 px-1">
-                        <input
-                          type="text"
-                          placeholder="Scan / Barcode"
-                          value={row.barcode}
-                          onChange={(e) => handleUpdateCell(idx, 'barcode', e.target.value)}
-                          className="w-full bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-lg px-2 py-1.5 font-mono text-slate-700 dark:text-slate-200 text-xs focus:outline-none"
-                        />
-                      </td>
-                    )}
-
-                    {/* Cost Price */}
-                    <td
-                      style={{ width: `${colWidths.purchase_price || 130}px` }}
-                      className="py-1 px-1"
-                    >
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={row.purchase_price || ''}
-                        placeholder="0.00"
-                        onChange={(e) =>
-                          handleUpdateCell(idx, 'purchase_price', Number(e.target.value))
-                        }
-                        className="w-full text-right bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-lg px-2 py-1.5 font-semibold text-slate-800 dark:text-slate-200 text-xs focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      />
-                    </td>
-
-                    {/* Sale Price */}
-                    <td
-                      style={{ width: `${colWidths.selling_price || 130}px` }}
-                      className="py-1 px-1"
-                    >
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={row.selling_price || ''}
-                        placeholder="0.00"
-                        onChange={(e) =>
-                          handleUpdateCell(idx, 'selling_price', Number(e.target.value))
-                        }
-                        className="w-full text-right bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-lg px-2 py-1.5 font-black text-slate-900 dark:text-white text-xs focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      />
-                    </td>
-
-                    {/* Stock Qty */}
-                    <td
-                      style={{ width: `${colWidths.opening_stock || 110}px` }}
-                      className="py-1 px-1"
-                    >
-                      <input
-                        type="number"
-                        min="0"
-                        value={row.opening_stock || ''}
-                        placeholder="0"
-                        onChange={(e) =>
-                          handleUpdateCell(idx, 'opening_stock', Number(e.target.value))
-                        }
-                        className="w-full text-right bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-lg px-2 py-1.5 font-bold text-brand-600 dark:text-brand-400 text-xs focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      />
-                    </td>
-
-                    {/* Dynamic Custom Field Cells */}
+                    {/* Dynamic Custom Field Cells (Placed before Barcode & Pricing) */}
                     {relevantCustomFields.map((cf) => {
                       const colKey = `custom_${cf.id}`;
                       if (cf.field_type === 'select' && cf.options) {
@@ -629,7 +659,9 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                             className="py-1 px-1"
                           >
                             <select
+                              data-bulk-cell={`${idx}-${colKey}`}
                               value={row.custom_values[cf.id] || ''}
+                              onKeyDown={(e) => handleCellKeyDown(e, idx, colKey)}
                               onChange={(e) =>
                                 handleUpdateCustomValue(idx, cf.id, e.target.value)
                               }
@@ -660,7 +692,9 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                                 : 'text'
                             }
                             placeholder={cf.name}
+                            data-bulk-cell={`${idx}-${colKey}`}
                             value={row.custom_values[cf.id] || ''}
+                            onKeyDown={(e) => handleCellKeyDown(e, idx, colKey)}
                             onChange={(e) =>
                               handleUpdateCustomValue(idx, cf.id, e.target.value)
                             }
@@ -669,6 +703,80 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                         </td>
                       );
                     })}
+
+                    {/* Barcode */}
+                    {showBarcode && (
+                      <td style={{ width: `${colWidths.barcode || 140}px` }} className="py-1 px-1">
+                        <input
+                          type="text"
+                          placeholder="Scan / Barcode"
+                          data-bulk-cell={`${idx}-barcode`}
+                          value={row.barcode}
+                          onKeyDown={(e) => handleCellKeyDown(e, idx, 'barcode')}
+                          onChange={(e) => handleUpdateCell(idx, 'barcode', e.target.value)}
+                          className="w-full bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-lg px-2 py-1.5 font-mono text-slate-700 dark:text-slate-200 text-xs focus:outline-none"
+                        />
+                      </td>
+                    )}
+
+                    {/* Cost Price */}
+                    <td
+                      style={{ width: `${colWidths.purchase_price || 130}px` }}
+                      className="py-1 px-1"
+                    >
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        data-bulk-cell={`${idx}-purchase_price`}
+                        value={row.purchase_price || ''}
+                        placeholder="0.00"
+                        onKeyDown={(e) => handleCellKeyDown(e, idx, 'purchase_price')}
+                        onChange={(e) =>
+                          handleUpdateCell(idx, 'purchase_price', Number(e.target.value))
+                        }
+                        className="w-full text-right bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-lg px-2 py-1.5 font-semibold text-slate-800 dark:text-slate-200 text-xs focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                    </td>
+
+                    {/* Sale Price */}
+                    <td
+                      style={{ width: `${colWidths.selling_price || 130}px` }}
+                      className="py-1 px-1"
+                    >
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        data-bulk-cell={`${idx}-selling_price`}
+                        value={row.selling_price || ''}
+                        placeholder="0.00"
+                        onKeyDown={(e) => handleCellKeyDown(e, idx, 'selling_price')}
+                        onChange={(e) =>
+                          handleUpdateCell(idx, 'selling_price', Number(e.target.value))
+                        }
+                        className="w-full text-right bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-lg px-2 py-1.5 font-black text-slate-900 dark:text-white text-xs focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                    </td>
+
+                    {/* Stock Qty */}
+                    <td
+                      style={{ width: `${colWidths.opening_stock || 110}px` }}
+                      className="py-1 px-1"
+                    >
+                      <input
+                        type="number"
+                        min="0"
+                        data-bulk-cell={`${idx}-opening_stock`}
+                        value={row.opening_stock || ''}
+                        placeholder="0"
+                        onKeyDown={(e) => handleCellKeyDown(e, idx, 'opening_stock')}
+                        onChange={(e) =>
+                          handleUpdateCell(idx, 'opening_stock', Number(e.target.value))
+                        }
+                        className="w-full text-right bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-lg px-2 py-1.5 font-bold text-brand-600 dark:text-brand-400 text-xs focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                    </td>
 
                     {/* Delete Row */}
                     <td

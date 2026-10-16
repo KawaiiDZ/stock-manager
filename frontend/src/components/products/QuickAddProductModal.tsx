@@ -103,6 +103,62 @@ export const QuickAddProductModal: React.FC<QuickAddProductModalProps> = ({
     }
   };
 
+  const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    const target = e.target as HTMLElement;
+    if (!target || !(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) return;
+    if (target.type === 'submit' || target.tagName === 'BUTTON') return;
+
+    const form = e.currentTarget;
+    const focusable = Array.from(
+      form.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
+        'input:not([type="hidden"]):not([disabled]), select:not([disabled])'
+      )
+    ).filter((el) => !el.closest('button'));
+
+    const idx = focusable.indexOf(target as any);
+    if (idx === -1) return;
+
+    if (e.key === 'ArrowDown' || (e.key === 'Enter' && target.tagName !== 'BUTTON')) {
+      if (target instanceof HTMLInputElement) {
+        e.preventDefault();
+        const next = (idx + 1) % focusable.length;
+        focusable[next]?.focus();
+        if ('select' in focusable[next]) (focusable[next] as HTMLInputElement).select?.();
+      } else if (target instanceof HTMLSelectElement && e.key === 'Enter') {
+        e.preventDefault();
+        const next = (idx + 1) % focusable.length;
+        focusable[next]?.focus();
+      }
+    } else if (e.key === 'ArrowUp') {
+      if (target instanceof HTMLInputElement) {
+        e.preventDefault();
+        const prev = (idx - 1 + focusable.length) % focusable.length;
+        focusable[prev]?.focus();
+        if ('select' in focusable[prev]) (focusable[prev] as HTMLInputElement).select?.();
+      }
+    } else if (e.key === 'ArrowRight' && target instanceof HTMLInputElement) {
+      const atEnd = target.selectionStart === target.value.length && target.selectionEnd === target.value.length;
+      const allSelected = target.selectionStart === 0 && target.selectionEnd === target.value.length;
+      if (atEnd || allSelected) {
+        if (idx < focusable.length - 1) {
+          e.preventDefault();
+          focusable[idx + 1]?.focus();
+          if ('select' in focusable[idx + 1]) (focusable[idx + 1] as HTMLInputElement).select?.();
+        }
+      }
+    } else if (e.key === 'ArrowLeft' && target instanceof HTMLInputElement) {
+      const atStart = target.selectionStart === 0 && target.selectionEnd === 0;
+      const allSelected = target.selectionStart === 0 && target.selectionEnd === target.value.length;
+      if (atStart || allSelected) {
+        if (idx > 0) {
+          e.preventDefault();
+          focusable[idx - 1]?.focus();
+          if ('select' in focusable[idx - 1]) (focusable[idx - 1] as HTMLInputElement).select?.();
+        }
+      }
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -113,7 +169,7 @@ export const QuickAddProductModal: React.FC<QuickAddProductModalProps> = ({
       subtitle={initialBarcode ? `Registering product with barcode ${initialBarcode}` : 'Enter new product details'}
       maxWidth="lg"
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="space-y-4">
         {errorMsg && (
           <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
             <AlertCircle className="h-4 w-4 shrink-0" />
