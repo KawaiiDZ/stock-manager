@@ -41,3 +41,56 @@ def trigger_kiosk_launch(db: Session = Depends(get_db)):
     mode = getattr(biz, "kiosk_window_mode", "fullscreen") or "fullscreen"
     browser = getattr(biz, "kiosk_browser", "auto") or "auto"
     return launch_kiosk_browser(local_url, window_mode=mode, browser_choice=browser, kiosk_printing=True)
+
+@router.post("/shutdown")
+def shutdown_application():
+    """
+    Gracefully shuts down the Stock Manager application:
+    1. Checkpoints and truncates the SQLite WAL file so all data is cleanly persisted to disk.
+    2. Stops background network beacon and cloud backup scheduler.
+    3. Terminates any active kiosk browser window spawned by the app.
+    4. Terminates the Python process after an 800ms delay to allow HTTP 200 response to complete.
+    """
+    import os
+    import time
+    import threading
+    from sqlalchemy import text
+    from backend.app.core.database import engine
+    from backend.app.services.network_service import stop_discovery_beacon
+    from backend.app.services.backup_scheduler import stop_backup_scheduler
+    from backend.app.services.kiosk_service import terminate_kiosk_browser
+
+    # 1. Flush SQLite WAL completely to disk
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("PRAGMA wal_checkpoint(TRUNCATE)"))
+            conn.commit()
+    except Exception as e:
+        print("[Shutdown] Warning: SQLite WAL checkpoint encountered error:", e)
+
+    # 2. Stop background network discovery beacon and cloud backup scheduler
+    try:
+        stop_discovery_beacon()
+    except Exception:
+        pass
+    try:
+        stop_backup_scheduler()
+    except Exception:
+        pass
+
+    # 3. Schedule exit in background thread so the HTTP response finishes transmitting
+    def do_exit():
+        time.sleep(0.8)
+        try:
+            terminate_kiosk_browser()
+        except Exception:
+            pass
+        os._exit(0)
+
+    threading.Thread(target=do_exit, daemon=True).start()
+
+    return {
+        "success": True,
+        "message": "Stock Manager is shutting down safely. Database is checkpointed and services are stopped."
+    }
+

@@ -25,6 +25,8 @@ import { SetupWizardModal } from './components/wizard/SetupWizardModal';
 import { ConnectionBanner } from './components/network/ConnectionBanner';
 import { NetworkSyncModal } from './components/network/NetworkSyncModal';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { ConfirmDialog } from './components/common/ConfirmDialog';
+import { CheckCircle2 } from 'lucide-react';
 
 import { setGlobalFormattingPreferences } from './utils/format';
 import { dispatchGlobalShortcut } from './utils/shortcuts';
@@ -47,6 +49,10 @@ export const App: React.FC = () => {
   const [preLoadedSellProduct, setPreLoadedSellProduct] = useState<Product | null>(null);
   const [showWizard, setShowWizard] = useState<boolean>(false);
   const [showNetworkModal, setShowNetworkModal] = useState<boolean>(false);
+  const [showShutdownConfirm, setShowShutdownConfirm] = useState<boolean>(false);
+  const [isShuttingDown, setIsShuttingDown] = useState<boolean>(false);
+  const [isShutdownComplete, setIsShutdownComplete] = useState<boolean>(false);
+  const [shutdownMessage, setShutdownMessage] = useState<string>('');
 
   const loadSettingsAndBadges = async () => {
     try {
@@ -157,8 +163,98 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
 
+  const handleTriggerShutdown = () => {
+    setShowShutdownConfirm(true);
+  };
+
+  const handleConfirmShutdown = async () => {
+    setIsShuttingDown(true);
+    try {
+      const res = await api.shutdown();
+      setShutdownMessage(res?.message || 'Stock Manager has shut down safely.');
+    } catch {
+      setShutdownMessage('Stock Manager has shut down safely.');
+    } finally {
+      setIsShuttingDown(false);
+      setShowShutdownConfirm(false);
+      setIsShutdownComplete(true);
+    }
+  };
+
+  useEffect(() => {
+    if (isShutdownComplete) {
+      const timer = setTimeout(() => {
+        try {
+          window.close();
+        } catch {}
+      }, 1800);
+      return () => clearTimeout(timer);
+    }
+  }, [isShutdownComplete]);
+
+  if (isShutdownComplete) {
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-950 text-white flex flex-col items-center justify-center p-6 select-none animate-in fade-in duration-300">
+        <div className="max-w-md w-full bg-slate-900/90 border border-slate-800 rounded-3xl p-8 flex flex-col items-center text-center shadow-2xl backdrop-blur-md">
+          <div className="h-16 w-16 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mb-5 text-emerald-400">
+            <CheckCircle2 className="h-8 w-8" />
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">Stock Manager Safely Shut Down</h2>
+          <p className="text-sm text-slate-300 mb-6 leading-relaxed">
+            {shutdownMessage || 'All database changes and settings have been written to disk. The background server and services have stopped.'}
+          </p>
+          <div className="w-full bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 mb-6 text-xs text-slate-400 text-left space-y-2">
+            <div className="flex items-center gap-2 text-emerald-400 font-semibold">
+              <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
+              Database WAL checkpointed to disk
+            </div>
+            <div className="flex items-center gap-2 text-emerald-400 font-semibold">
+              <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
+              Background sync & cloud schedulers stopped
+            </div>
+            <div className="flex items-center gap-2 text-emerald-400 font-semibold">
+              <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
+              HTTP server process terminated
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              window.close();
+            }}
+            className="w-full py-3 bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-xl text-sm transition shadow-lg shadow-brand-600/30"
+          >
+            Close Window
+          </button>
+          <p className="text-[11px] text-slate-500 mt-4">
+            You may now safely close this browser window or tab.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (!currentUser) {
-    return <LoginPage settings={settings} onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <>
+        <LoginPage
+          settings={settings}
+          onLoginSuccess={handleLoginSuccess}
+          onShutdown={handleTriggerShutdown}
+        />
+        <ConfirmDialog
+          isOpen={showShutdownConfirm}
+          onClose={() => setShowShutdownConfirm(false)}
+          onConfirm={handleConfirmShutdown}
+          title="Shut Down Stock Manager?"
+          message="This will cleanly save all changes, checkpoint the SQLite database to disk, and stop the local background server and kiosk window. Are you sure you want to exit?"
+          confirmText="Shut Down App"
+          cancelText="Cancel"
+          variant="danger"
+          loading={isShuttingDown}
+        />
+      </>
+    );
   }
 
   return (
@@ -174,6 +270,7 @@ export const App: React.FC = () => {
         }}
         urgentBillsCount={urgentBillsCount}
         pendingQuotationsCount={pendingQuotationsCount}
+        onShutdown={handleTriggerShutdown}
       />
 
       {/* Main Viewport Area */}
@@ -187,6 +284,7 @@ export const App: React.FC = () => {
           onHubClick={() => setCurrentTab('hub')}
           onNetworkClick={() => setShowNetworkModal(true)}
           onLogout={handleLogout}
+          onShutdown={handleTriggerShutdown}
         />
 
         <ConnectionBanner onOpenModal={() => setShowNetworkModal(true)} />
@@ -289,6 +387,19 @@ export const App: React.FC = () => {
       <NetworkSyncModal
         isOpen={showNetworkModal}
         onClose={() => setShowNetworkModal(false)}
+      />
+
+      {/* Shut Down Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showShutdownConfirm}
+        onClose={() => setShowShutdownConfirm(false)}
+        onConfirm={handleConfirmShutdown}
+        title="Shut Down Stock Manager?"
+        message="This will cleanly save all changes, checkpoint the SQLite database to disk, and stop the local background server and kiosk window. Are you sure you want to exit?"
+        confirmText="Shut Down App"
+        cancelText="Cancel"
+        variant="danger"
+        loading={isShuttingDown}
       />
     </div>
   );

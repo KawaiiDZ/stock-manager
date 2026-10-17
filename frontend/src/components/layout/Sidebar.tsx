@@ -17,6 +17,7 @@ import {
   Pin,
   FileText,
   Compass,
+  Power,
 } from 'lucide-react';
 
 interface NavItem {
@@ -38,6 +39,7 @@ interface SidebarProps {
   urgentBillsCount?: number;
   pendingQuotationsCount?: number;
   settings?: BusinessSettings | null;
+  onShutdown?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -46,6 +48,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   urgentBillsCount = 0,
   pendingQuotationsCount = 0,
   settings,
+  onShutdown,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
@@ -275,6 +278,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           ))}
         </nav>
+
+        {/* Shut Down Action */}
+        {onShutdown && (
+          <div className="p-2 border-t border-slate-100 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={onShutdown}
+              title="Shut down Stock Manager and safely close application"
+              className={`flex items-center gap-2.5 transition text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl font-semibold text-xs ${
+                isExpanded
+                  ? 'w-full px-3 py-2 border border-rose-200/80 dark:border-rose-900/50 shadow-2xs'
+                  : 'w-11 h-11 mx-auto justify-center'
+              }`}
+            >
+              <Power className="h-4 w-4 shrink-0" />
+              {isExpanded && <span>Shut Down App</span>}
+            </button>
+          </div>
+        )}
 
         {/* Footer info */}
         <div className="p-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/60 flex items-center justify-between text-xs text-slate-400 dark:text-slate-500 overflow-hidden">

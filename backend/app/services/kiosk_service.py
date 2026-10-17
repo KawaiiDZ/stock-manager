@@ -19,6 +19,24 @@ from backend.app.core.config import settings
 
 logger = logging.getLogger("uvicorn.error")
 
+_active_kiosk_process: Optional[subprocess.Popen] = None
+
+def terminate_kiosk_browser():
+    """Cleanly terminates the launched kiosk browser process if active."""
+    global _active_kiosk_process
+    if _active_kiosk_process is not None:
+        try:
+            logger.info("[KioskLauncher] Terminating active kiosk browser process...")
+            _active_kiosk_process.terminate()
+            try:
+                _active_kiosk_process.wait(timeout=2.0)
+            except Exception:
+                _active_kiosk_process.kill()
+        except Exception as e:
+            logger.warning(f"[KioskLauncher] Error terminating kiosk browser: {e}")
+        finally:
+            _active_kiosk_process = None
+
 VIRTUAL_PDF_KEYWORDS = ["pdf", "xps", "onenote", "fax", "writer", "document writer"]
 
 def is_virtual_pdf_printer(name: Optional[str]) -> bool:
@@ -377,7 +395,9 @@ def launch_kiosk_browser(
         else:
             kwargs["start_new_session"] = True
 
-        subprocess.Popen(cmd, **kwargs)
+        proc = subprocess.Popen(cmd, **kwargs)
+        global _active_kiosk_process
+        _active_kiosk_process = proc
 
         return {
             "success": True,

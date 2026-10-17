@@ -201,6 +201,10 @@ export const api = {
     request<{ success: boolean; browser: string; message: string; window_mode?: string }>('/settings/launch-kiosk', {
       method: 'POST',
     }),
+  shutdown: () =>
+    request<{ success: boolean; message: string }>('/settings/shutdown', {
+      method: 'POST',
+    }),
 
   // Products
   getProducts: async (params?: { search?: string; category_id?: number; is_active?: boolean; skip?: number; limit?: number }) => {

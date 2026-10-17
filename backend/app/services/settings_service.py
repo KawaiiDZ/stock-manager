@@ -55,5 +55,10 @@ def update_settings(db: Session, update_data: BusinessSettingsUpdate) -> Busines
         settings.currency = "Rs."
     db.commit()
     db.refresh(settings)
+    try:
+        from sqlalchemy import text
+        db.execute(text("PRAGMA wal_checkpoint(PASSIVE)"))
+    except Exception:
+        pass
     setattr(settings, "has_dashboard_financials_pin", bool(getattr(settings, "dashboard_financials_pin_hash", None)))
     return settings

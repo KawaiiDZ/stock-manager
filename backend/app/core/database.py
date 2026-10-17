@@ -151,8 +151,8 @@ def auto_upgrade_schema(target_engine=None):
             conn.execute(text("UPDATE suppliers SET supplier_id = 'S-' || printf('%06d', id) WHERE supplier_id IS NULL OR supplier_id = ''"))
             conn.execute(text("UPDATE suppliers SET is_active = 1 WHERE is_active IS NULL"))
             conn.execute(text("UPDATE business_settings SET industry_preset = 'general' WHERE industry_preset IS NULL OR industry_preset = ''"))
-            conn.execute(text("UPDATE business_settings SET thermal_render_pipeline = 'raster_canvas' WHERE thermal_render_pipeline IS NULL OR thermal_render_pipeline = '' OR thermal_render_pipeline = 'native_text'"))
-            conn.execute(text("UPDATE business_settings SET thermal_print_mode = 'direct_escpos' WHERE thermal_print_mode = 'browser'"))
+            conn.execute(text("UPDATE business_settings SET thermal_render_pipeline = 'raster_canvas' WHERE thermal_render_pipeline IS NULL OR thermal_render_pipeline = ''"))
+            conn.execute(text("UPDATE business_settings SET thermal_print_mode = 'direct_escpos' WHERE thermal_print_mode IS NULL OR thermal_print_mode = ''"))
             conn.commit()
         except Exception as e:
             print("Auto-upgrade error (identifier auto-healing):", e)

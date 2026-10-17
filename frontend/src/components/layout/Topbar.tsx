@@ -1,6 +1,6 @@
 import React from 'react';
 import { BusinessSettings } from '../../types';
-import { ShoppingCart, LogOut, Store, Zap, Compass, Sun, Moon, Radio, Wifi, WifiOff } from 'lucide-react';
+import { ShoppingCart, LogOut, Store, Zap, Compass, Sun, Moon, Radio, Wifi, WifiOff, Power } from 'lucide-react';
 import { Button } from '../common/Button';
 import { useTheme } from '../../context/ThemeContext';
 import { useNetwork } from '../../context/NetworkContext';
@@ -11,6 +11,7 @@ interface TopbarProps {
   onHubClick?: () => void;
   onNetworkClick?: () => void;
   onLogout: () => void;
+  onShutdown?: () => void;
 }
 
 export const Topbar: React.FC<TopbarProps> = ({
@@ -19,6 +20,7 @@ export const Topbar: React.FC<TopbarProps> = ({
   onHubClick,
   onNetworkClick,
   onLogout,
+  onShutdown,
 }) => {
   const { effectiveMode, toggleDarkMode } = useTheme();
   const { isOnline, isHost, pendingSyncCount, isSyncing, onlineClientsCount } = useNetwork();
@@ -123,12 +125,23 @@ export const Topbar: React.FC<TopbarProps> = ({
 
         <button
           onClick={onLogout}
-          className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl transition"
+          className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition"
           title="Sign out of system"
         >
           <LogOut className="h-4 w-4" />
           <span className="hidden sm:inline">Logout</span>
         </button>
+
+        {onShutdown && (
+          <button
+            onClick={onShutdown}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200/80 dark:border-rose-900/50 rounded-xl transition shadow-2xs"
+            title="Shut down Stock Manager and safely close application"
+          >
+            <Power className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Shut Down</span>
+          </button>
+        )}
       </div>
     </header>
   );

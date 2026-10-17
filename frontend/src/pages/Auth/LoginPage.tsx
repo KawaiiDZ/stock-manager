@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { api } from '../../services/api';
-import { ShoppingCart, Lock, User, AlertCircle } from 'lucide-react';
+import { ShoppingCart, Lock, User, AlertCircle, Power } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { BusinessSettings } from '../../types';
@@ -8,11 +8,13 @@ import { BusinessSettings } from '../../types';
 interface LoginPageProps {
   settings: BusinessSettings | null;
   onLoginSuccess: (user: { username: string; full_name: string }) => void;
+  onShutdown?: () => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({
   settings,
   onLoginSuccess,
+  onShutdown,
 }) => {
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('admin123');
@@ -107,6 +109,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           Default login: <span className="font-mono font-bold text-slate-600 dark:text-slate-300">admin</span> /{' '}
           <span className="font-mono font-bold text-slate-600 dark:text-slate-300">admin123</span>
         </div>
+
+        {onShutdown && (
+          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-center">
+            <button
+              type="button"
+              onClick={onShutdown}
+              className="flex items-center gap-1.5 text-xs text-rose-500 hover:text-rose-600 dark:text-rose-400 font-semibold px-3 py-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
+              title="Shut down local server and exit"
+            >
+              <Power className="h-3.5 w-3.5" />
+              Shut Down Stock Manager
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
