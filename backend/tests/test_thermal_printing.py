@@ -929,13 +929,24 @@ def test_image_to_escpos_raster_proportional_and_aligned():
     xH = escpos_logo[5]
     total_bytes = xL + (xH << 8)
     assert total_bytes == 72  # 72 bytes * 8 = 576 dots (80mm standard width)
+    height_80 = escpos_logo[6] + (escpos_logo[7] << 8)
+    assert height_80 <= 64  # Constrained height matching preview proportions
 
-    # Verify 58mm paper width produces 48 bytes (384 dots)
+    # Verify 58mm paper width produces 48 bytes (384 dots) and <= 56 dots height
     escpos_logo_58 = image_to_escpos_raster(img, paper_width="58mm")
     assert escpos_logo_58 is not None
     xL_58 = escpos_logo_58[4]
     xH_58 = escpos_logo_58[5]
     assert (xL_58 + (xH_58 << 8)) == 48  # 48 bytes * 8 = 384 dots (58mm width)
+    height_58 = escpos_logo_58[6] + (escpos_logo_58[7] << 8)
+    assert height_58 <= 56
+
+    # Verify square 512x512 brand mark scales to 64x64 dots without vertical distortion
+    img_square = Image.new("RGBA", (512, 512), (0, 0, 0, 255))
+    escpos_sq = image_to_escpos_raster(img_square, paper_width="80mm")
+    assert escpos_sq is not None
+    h_sq = escpos_sq[6] + (escpos_sq[7] << 8)
+    assert h_sq == 64  # Scaled to clean 64 dots, not blown up to 320 dots!
 
 
 

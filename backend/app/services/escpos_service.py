@@ -514,32 +514,37 @@ def image_to_escpos_raster(
         if img is None:
             return None
 
-        # Determine paper dot limits & line byte width supporting all thermal models
+        # Determine paper dot limits & line byte width matching preview modal proportions (h-8 ~ 64 dots)
         if "58" in paper_width:
             if "narrow" in paper_width:
                 total_bytes_per_row = 45  # 360 dots
-                max_logo_w = 208
+                max_logo_w = 184
+                max_logo_h = 56
             else:
                 total_bytes_per_row = 48  # 384 dots
-                max_logo_w = 224
+                max_logo_w = 184
+                max_logo_h = 56
         else:
             if "compact" in paper_width:
                 total_bytes_per_row = 64  # 512 dots
-                max_logo_w = 288
+                max_logo_w = 256
+                max_logo_h = 64
             else:
                 total_bytes_per_row = 72  # 576 dots (full 80mm physical roll width)
-                max_logo_w = 320
+                max_logo_w = 256
+                max_logo_h = 64
 
         orig_w, orig_h = img.size
         if orig_w <= 0 or orig_h <= 0:
             return None
 
-        # Scale logo proportionally up to max_logo_w, maintaining strict 8-byte alignment (prevents tearing)
-        target_dots_w = min(max_logo_w, orig_w) if orig_w >= 64 else max_logo_w
-        target_dots_w = max(64, (target_dots_w // 8) * 8)
-        scale = target_dots_w / orig_w
+        # Scale logo proportionally within 2D preview bounding box (max_logo_w, max_logo_h),
+        # maintaining strict 8-byte alignment (prevents tearing and print-head overheating)
+        scale = min(max_logo_w / orig_w, max_logo_h / orig_h)
+        target_dots_w = max(16, (int(orig_w * scale) // 8) * 8)
+        target_dots_h = max(1, int(orig_h * scale))
         new_w = target_dots_w
-        new_h = max(1, int(orig_h * scale))
+        new_h = target_dots_h
 
         # Resize smoothly
         resample_filter = getattr(Image, "Resampling", Image).LANCZOS
