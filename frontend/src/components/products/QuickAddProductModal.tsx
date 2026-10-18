@@ -33,9 +33,9 @@ export const QuickAddProductModal: React.FC<QuickAddProductModalProps> = ({
   const [sku, setSku] = useState('');
   const [barcode, setBarcode] = useState('');
   const [categoryId, setCategoryId] = useState<number>(0);
-  const [purchasePrice, setPurchasePrice] = useState<number>(0);
-  const [sellingPrice, setSellingPrice] = useState<number>(0);
-  const [openingStock, setOpeningStock] = useState<number>(1);
+  const [purchasePrice, setPurchasePrice] = useState<string>('');
+  const [sellingPrice, setSellingPrice] = useState<string>('');
+  const [openingStock, setOpeningStock] = useState<string>('1');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [generatingBarcode, setGeneratingBarcode] = useState(false);
@@ -46,9 +46,9 @@ export const QuickAddProductModal: React.FC<QuickAddProductModalProps> = ({
       setSku('');
       setBarcode(initialBarcode || '');
       setCategoryId(categories.length > 0 ? categories[0].id : 0);
-      setPurchasePrice(0);
-      setSellingPrice(0);
-      setOpeningStock(1);
+      setPurchasePrice('');
+      setSellingPrice('');
+      setOpeningStock('1');
       setErrorMsg(null);
       setLoading(false);
     }
@@ -75,7 +75,10 @@ export const QuickAddProductModal: React.FC<QuickAddProductModalProps> = ({
       setErrorMsg('Product name is required.');
       return;
     }
-    if (sellingPrice < 0 || purchasePrice < 0 || openingStock < 0) {
+    const numSell = Number(sellingPrice) || 0;
+    const numBuy = Number(purchasePrice) || 0;
+    const numStock = Number(openingStock) || 0;
+    if (numSell < 0 || numBuy < 0 || numStock < 0) {
       setErrorMsg('Prices and opening stock quantity cannot be negative.');
       return;
     }
@@ -89,9 +92,9 @@ export const QuickAddProductModal: React.FC<QuickAddProductModalProps> = ({
         sku: sku.trim() || undefined,
         barcode: barcode.trim() || undefined,
         category_id: categoryId > 0 ? categoryId : undefined,
-        purchase_price: Number(purchasePrice) || 0,
-        selling_price: Number(sellingPrice) || 0,
-        opening_stock: Number(openingStock) || 0,
+        purchase_price: numBuy,
+        selling_price: numSell,
+        opening_stock: numStock,
       });
 
       onProductCreated(newProd);
@@ -247,8 +250,9 @@ export const QuickAddProductModal: React.FC<QuickAddProductModalProps> = ({
             step="0.01"
             min="0"
             prefix={currency}
+            placeholder="0.00"
             value={purchasePrice}
-            onChange={(e) => setPurchasePrice(Number(e.target.value))}
+            onChange={(e) => setPurchasePrice(e.target.value.replace(/^0+(?=[1-9])/, ''))}
             required
           />
 
@@ -258,8 +262,9 @@ export const QuickAddProductModal: React.FC<QuickAddProductModalProps> = ({
             step="0.01"
             min="0"
             prefix={currency}
+            placeholder="0.00"
             value={sellingPrice}
-            onChange={(e) => setSellingPrice(Number(e.target.value))}
+            onChange={(e) => setSellingPrice(e.target.value.replace(/^0+(?=[1-9])/, ''))}
             required
           />
 
@@ -267,8 +272,9 @@ export const QuickAddProductModal: React.FC<QuickAddProductModalProps> = ({
             label="Initial Stock"
             type="number"
             min="0"
+            placeholder="0"
             value={openingStock}
-            onChange={(e) => setOpeningStock(Number(e.target.value))}
+            onChange={(e) => setOpeningStock(e.target.value.replace(/^0+(?=[1-9])/, ''))}
             hint="Units available"
           />
         </div>

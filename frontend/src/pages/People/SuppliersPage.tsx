@@ -490,9 +490,10 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({ settings }) => {
                   min="0.01"
                   max={Number(paySupplier.current_due || 0)}
                   prefix={currency}
+                  placeholder="0.00"
                   value={payAmount || ''}
                   onChange={(e) => {
-                    const val = Number(e.target.value);
+                    const val = Number(e.target.value.replace(/^0+(?=[1-9])/, ''));
                     setPayAmount(val);
                   }}
                   required

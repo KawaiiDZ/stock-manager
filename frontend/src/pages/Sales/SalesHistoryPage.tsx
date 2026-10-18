@@ -212,7 +212,8 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
   const handleOpenPayment = (sale: Sale) => {
     setPaymentSale(sale);
     setPaymentAmount(Number(sale.due_amount || 0));
-    setPaymentMethod('Cash');
+    const activeAccounts = settings?.payment_accounts || ['Cash', 'Bank Transfer', 'Easypaisa'];
+    setPaymentMethod(activeAccounts[0] || 'Cash');
     setPaymentNotes('');
   };
 
@@ -519,8 +520,22 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
                       <td className="py-4 px-6 text-right font-bold text-slate-900 dark:text-white">
                         {formatCurrency(sale.total_amount, currency)}
                       </td>
-                      <td className="py-4 px-6 text-right text-emerald-600 dark:text-emerald-400 font-semibold">
-                        {formatCurrency(sale.paid_amount, currency)}
+                      <td className="py-4 px-6 text-right">
+                        <div className="font-semibold text-emerald-600 dark:text-emerald-400">
+                          {formatCurrency(sale.paid_amount, currency)}
+                        </div>
+                        {sale.payments && sale.payments.length > 0 && (
+                          <div className="flex flex-wrap items-center justify-end gap-1 mt-1">
+                            {Array.from(new Set(sale.payments.map((p) => p.payment_method).filter(Boolean))).map((method, idx) => (
+                              <span
+                                key={idx}
+                                className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700 leading-tight"
+                              >
+                                {method}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </td>
                       <td className="py-4 px-6 text-right font-semibold text-rose-600 dark:text-rose-400">
                         {dueNum > 0 ? formatCurrency(dueNum, currency) : '—'}
@@ -658,18 +673,17 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5">Payment Method *</label>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5">Receiving Account *</label>
                 <select
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value)}
                   className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-brand-500 shadow-sm cursor-pointer"
                 >
-                  <option value="Cash">Cash</option>
-                  <option value="Bank Transfer">Bank Transfer</option>
-                  <option value="Credit Card">Credit Card</option>
-                  <option value="Debit Card">Debit Card</option>
-                  <option value="Cheque">Cheque</option>
-                  <option value="Online / Mobile Wallet">Online / Mobile Wallet</option>
+                  {(settings?.payment_accounts || ['Cash', 'Bank Transfer', 'Easypaisa', 'Jazzcash']).map((acc) => (
+                    <option key={acc} value={acc}>
+                      {acc}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>

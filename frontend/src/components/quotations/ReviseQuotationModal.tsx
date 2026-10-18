@@ -353,10 +353,13 @@ export const ReviseQuotationModal: React.FC<ReviseQuotationModalProps> = ({
                             type="number"
                             step="any"
                             min="0.01"
-                            value={it.quantity}
-                            onChange={(e) =>
-                              handleUpdateItem(idx, 'quantity', parseFloat(e.target.value) || 0)
-                            }
+                            placeholder="1"
+                            value={it.quantity || ''}
+                            onFocus={(e) => requestAnimationFrame(() => e.target.select())}
+                            onChange={(e) => {
+                              const raw = e.target.value.replace(/^0+(?=[1-9])/, '');
+                              handleUpdateItem(idx, 'quantity', parseFloat(raw) || 0);
+                            }}
                             className="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                           />
                         </td>
@@ -365,10 +368,13 @@ export const ReviseQuotationModal: React.FC<ReviseQuotationModalProps> = ({
                             type="number"
                             step="0.01"
                             min="0"
-                            value={it.unit_price}
-                            onChange={(e) =>
-                              handleUpdateItem(idx, 'unit_price', parseFloat(e.target.value) || 0)
-                            }
+                            placeholder="0.00"
+                            value={it.unit_price === 0 ? '' : it.unit_price}
+                            onFocus={(e) => requestAnimationFrame(() => e.target.select())}
+                            onChange={(e) => {
+                              const raw = e.target.value.replace(/^0+(?=[1-9])/, '');
+                              handleUpdateItem(idx, 'unit_price', parseFloat(raw) || 0);
+                            }}
                             className="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                           />
                         </td>
@@ -377,14 +383,13 @@ export const ReviseQuotationModal: React.FC<ReviseQuotationModalProps> = ({
                             type="number"
                             step="0.01"
                             min="0"
-                            value={it.discount_amount}
-                            onChange={(e) =>
-                              handleUpdateItem(
-                                idx,
-                                'discount_amount',
-                                parseFloat(e.target.value) || 0
-                              )
-                            }
+                            placeholder="0.00"
+                            value={it.discount_amount === 0 ? '' : it.discount_amount}
+                            onFocus={(e) => requestAnimationFrame(() => e.target.select())}
+                            onChange={(e) => {
+                              const raw = e.target.value.replace(/^0+(?=[1-9])/, '');
+                              handleUpdateItem(idx, 'discount_amount', parseFloat(raw) || 0);
+                            }}
                             className="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                           />
                         </td>
@@ -460,8 +465,13 @@ export const ReviseQuotationModal: React.FC<ReviseQuotationModalProps> = ({
                 type="number"
                 step="0.01"
                 min="0"
-                value={discountAmount}
-                onChange={(e) => setDiscountAmount(parseFloat(e.target.value) || 0)}
+                placeholder="0.00"
+                value={discountAmount === 0 ? '' : discountAmount}
+                onFocus={(e) => requestAnimationFrame(() => e.target.select())}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/^0+(?=[1-9])/, '');
+                  setDiscountAmount(parseFloat(raw) || 0);
+                }}
                 className="w-28 text-right px-2 py-1 border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
               />
             </div>
@@ -472,8 +482,13 @@ export const ReviseQuotationModal: React.FC<ReviseQuotationModalProps> = ({
                 type="number"
                 step="0.1"
                 min="0"
-                value={taxRate}
-                onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)}
+                placeholder="0.0"
+                value={taxRate === 0 ? '' : taxRate}
+                onFocus={(e) => requestAnimationFrame(() => e.target.select())}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/^0+(?=[1-9])/, '');
+                  setTaxRate(parseFloat(raw) || 0);
+                }}
                 className="w-28 text-right px-2 py-1 border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
               />
             </div>

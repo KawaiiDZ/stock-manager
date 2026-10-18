@@ -328,7 +328,7 @@ export const OutOfStockRestockModal: React.FC<OutOfStockRestockModalProps> = ({
                 min="1"
                 step="1"
                 value={quantityToAdd}
-                onChange={(e) => setQuantityToAdd(Math.max(1, Number(e.target.value)))}
+                onChange={(e) => setQuantityToAdd(Math.max(1, Number(e.target.value.replace(/^0+(?=[1-9])/, ''))))}
                 required
                 autoFocus
                 placeholder="e.g. 5"
@@ -361,7 +361,7 @@ export const OutOfStockRestockModal: React.FC<OutOfStockRestockModalProps> = ({
                 min="0"
                 step="any"
                 value={unitCost}
-                onChange={(e) => setUnitCost(Number(e.target.value))}
+                onChange={(e) => setUnitCost(Number(e.target.value.replace(/^0+(?=[1-9])/, '')))}
                 placeholder="0.00"
               />
               <Input
@@ -370,7 +370,7 @@ export const OutOfStockRestockModal: React.FC<OutOfStockRestockModalProps> = ({
                 min="0"
                 step="any"
                 value={sellingPrice}
-                onChange={(e) => setSellingPrice(Number(e.target.value))}
+                onChange={(e) => setSellingPrice(Number(e.target.value.replace(/^0+(?=[1-9])/, '')))}
                 placeholder="0.00"
               />
             </div>
@@ -469,7 +469,7 @@ export const OutOfStockRestockModal: React.FC<OutOfStockRestockModalProps> = ({
                 min="0"
                 step="1"
                 value={physicalCount}
-                onChange={(e) => setPhysicalCount(Math.max(0, Number(e.target.value)))}
+                onChange={(e) => setPhysicalCount(Math.max(0, Number(e.target.value.replace(/^0+(?=[1-9])/, ''))))}
                 required
                 autoFocus
                 placeholder="e.g. 5"

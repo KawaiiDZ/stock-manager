@@ -41,6 +41,7 @@ class SaleItem(Base):
     unit_cost = Column(Numeric(12, 2), nullable=False, default=0.00)
     total_cost = Column(Numeric(12, 2), nullable=False, default=0.00)
     gross_profit = Column(Numeric(12, 2), nullable=False, default=0.00)
+    notes = Column(Text, nullable=True)
 
     __table_args__ = (
         CheckConstraint('quantity > 0', name='check_sale_item_quantity_positive'),

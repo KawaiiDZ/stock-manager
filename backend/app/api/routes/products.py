@@ -7,7 +7,8 @@ from backend.app.schemas.product import (
     ProductCreate, ProductUpdate, ProductResponse,
     CategoryCreate, CategoryResponse,
     CustomFieldCreate, CustomFieldUpdate, CustomFieldResponse, CustomFieldReorderRequest,
-    StockAdjustmentRequest, BulkProductsResponse
+    StockAdjustmentRequest, BulkProductsResponse,
+    ProductBulkUpdateItem, BulkProductUpdateResponse
 )
 from backend.app.services import product_service
 
@@ -78,6 +79,10 @@ def create_product(data: ProductCreate, db: Session = Depends(get_db)):
 @router.post("/products/bulk", response_model=BulkProductsResponse, status_code=status.HTTP_201_CREATED)
 def create_products_bulk(products: List[ProductCreate], db: Session = Depends(get_db)):
     return product_service.create_products_bulk(db, products)
+
+@router.put("/products/bulk", response_model=BulkProductUpdateResponse)
+def update_products_bulk(updates: List[ProductBulkUpdateItem], db: Session = Depends(get_db)):
+    return product_service.update_products_bulk(db, updates)
 
 @router.get("/products/generate-barcode")
 def generate_barcode(db: Session = Depends(get_db)):

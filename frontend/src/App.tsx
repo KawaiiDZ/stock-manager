@@ -97,29 +97,59 @@ export const App: React.FC = () => {
     }).catch(() => {});
 
     // Global UX enhancement: auto-select "0" in numeric inputs so typing replaces zero immediately
+    const isNumericInput = (el: HTMLElement | null): el is HTMLInputElement => {
+      return (
+        !!el &&
+        el.tagName === 'INPUT' &&
+        (el.getAttribute('type') === 'number' ||
+          el.getAttribute('inputmode') === 'numeric' ||
+          el.getAttribute('inputmode') === 'decimal')
+      );
+    };
+
     const handleGlobalFocusIn = (e: FocusEvent) => {
-      const target = e.target as HTMLInputElement;
-      if (target && target.tagName === 'INPUT' && (target.type === 'number' || target.inputMode === 'numeric' || target.inputMode === 'decimal')) {
+      const target = e.target as HTMLElement;
+      if (isNumericInput(target)) {
+        requestAnimationFrame(() => {
+          if (target.value === '0' || target.value === '0.00' || target.value === '0.0') {
+            target.select();
+          }
+        });
+      }
+    };
+
+    const handleGlobalMouseUp = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (isNumericInput(target)) {
         if (target.value === '0' || target.value === '0.00' || target.value === '0.0') {
-          setTimeout(() => target.select(), 10);
+          requestAnimationFrame(() => {
+            target.select();
+          });
         }
       }
     };
 
     const handleGlobalInput = (e: Event) => {
-      const target = e.target as HTMLInputElement;
-      if (target && target.tagName === 'INPUT' && target.type === 'number') {
+      const target = e.target as HTMLElement;
+      if (isNumericInput(target)) {
         const val = target.value;
-        if (/^0\d+/.test(val) && !val.startsWith('0.')) {
-          target.value = val.replace(/^0+/, '');
+        if (/^0+[1-9]/.test(val)) {
+          const stripped = val.replace(/^0+/, '');
+          target.value = stripped;
+          const tracker = (target as any)._valueTracker;
+          if (tracker) {
+            tracker.setValue(val);
+          }
         }
       }
     };
 
     document.addEventListener('focusin', handleGlobalFocusIn);
+    document.addEventListener('mouseup', handleGlobalMouseUp);
     document.addEventListener('input', handleGlobalInput);
     return () => {
       document.removeEventListener('focusin', handleGlobalFocusIn);
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
       document.removeEventListener('input', handleGlobalInput);
     };
   }, []);

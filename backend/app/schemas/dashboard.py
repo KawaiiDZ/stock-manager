@@ -4,6 +4,12 @@ from typing import List, Optional
 from pydantic import BaseModel
 from backend.app.schemas.sales import SaleResponse
 
+class DaySalesAccountBreakdown(BaseModel):
+    account: str
+    sales_amount: Decimal = Decimal("0.00")
+    debt_amount: Decimal = Decimal("0.00")
+    total_collected: Decimal = Decimal("0.00")
+
 class DashboardStatsResponse(BaseModel):
     today_sales_revenue: Decimal
     today_sales_cash: Decimal = Decimal("0.00")
@@ -16,6 +22,7 @@ class DashboardStatsResponse(BaseModel):
     customer_outstanding: Decimal
     supplier_outstanding: Decimal
     bills_needing_attention_count: int
+    today_account_breakdown: List[DaySalesAccountBreakdown] = []
 
 class BillAttentionItem(BaseModel):
     id: int
@@ -45,4 +52,7 @@ class DaySalesDetailResponse(BaseModel):
     date: str
     sales_revenue: Decimal
     transaction_count: int
+    sales_collected_cash: Decimal = Decimal("0.00")
+    debt_collected_cash: Decimal = Decimal("0.00")
+    account_breakdown: List[DaySalesAccountBreakdown] = []
     sales: List[SaleResponse]

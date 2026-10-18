@@ -40,6 +40,7 @@ def seed_initial_data(db: Session):
             hide_header_text_with_letterhead=False,
             invoice_title="TAX INVOICE",
             enable_quotations=True,
+            enable_bill_templates=True,
             invoice_terms="1. Goods once sold will be accepted for return within 7 days in original condition.\n2. Warranty claims require presenting this invoice.\n3. Thank you for your business!",
             quotation_terms="1. This quotation is an estimate and valid for 15 days from issue date.\n2. Stock is subject to physical availability upon confirmation.\n3. This document does not constitute a tax invoice until approved.",
             enable_barcode_scanner=True,
@@ -68,6 +69,8 @@ def seed_initial_data(db: Session):
             settings.invoice_title = "TAX INVOICE"
         if getattr(settings, "enable_quotations", None) is None:
             settings.enable_quotations = True
+        if getattr(settings, "enable_bill_templates", None) is None:
+            settings.enable_bill_templates = True
         if not getattr(settings, "invoice_terms", None):
             settings.invoice_terms = "1. Goods once sold will be accepted for return within 7 days in original condition.\n2. Warranty claims require presenting this invoice.\n3. Thank you for your business!"
         if not getattr(settings, "quotation_terms", None):
@@ -100,6 +103,15 @@ def seed_initial_data(db: Session):
             is_active=True
         )
         db.add(default_customer)
+
+    # 4. Default No-Stock Item Category
+    from backend.app.models.product import ProductCategory
+    from sqlalchemy import func
+    no_stock = db.query(ProductCategory).filter(
+        func.lower(ProductCategory.name) == "no-stock item"
+    ).first()
+    if not no_stock:
+        db.add(ProductCategory(name="No-Stock Item", is_active=True))
 
     db.commit()
 

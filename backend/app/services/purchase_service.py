@@ -167,8 +167,9 @@ def create_purchase(db: Session, data: PurchaseCreate) -> PurchaseResponse:
     # Now that all business rules are validated, update product stocks and prices
     for v_it in validated_items:
         prod = v_it["product"]
-        prod.current_stock += v_it["quantity"]
-        prod.purchase_price = v_it["unit_cost"]
+        if not getattr(prod, "is_service", False):
+            prod.current_stock += v_it["quantity"]
+            prod.purchase_price = v_it["unit_cost"]
         if v_it["selling_price"] is not None and v_it["selling_price"] >= Decimal("0.00"):
             prod.selling_price = v_it["selling_price"]
 
@@ -205,28 +206,29 @@ def create_purchase(db: Session, data: PurchaseCreate) -> PurchaseResponse:
         )
         db.add(p_item)
 
-        # Create new FIFO Inventory Batch
-        batch = InventoryBatch(
-            product_id=prod.id,
-            purchase_id=purchase.id,
-            quantity_received=qty,
-            quantity_remaining=qty,
-            unit_cost=cost
-        )
-        db.add(batch)
+        if not getattr(prod, "is_service", False):
+            # Create new FIFO Inventory Batch
+            batch = InventoryBatch(
+                product_id=prod.id,
+                purchase_id=purchase.id,
+                quantity_received=qty,
+                quantity_remaining=qty,
+                unit_cost=cost
+            )
+            db.add(batch)
 
-        # Log movement
-        supp_label = f"from {supplier.name}" if supplier else "(Direct Stock Entry)"
-        movement = InventoryMovement(
-            product_id=prod.id,
-            movement_type="PURCHASE",
-            quantity=qty,
-            unit_cost=cost,
-            reference_type="PURCHASE",
-            reference_id=po_num,
-            notes=f"Received {supp_label} ({po_num})"
-        )
-        db.add(movement)
+            # Log movement
+            supp_label = f"from {supplier.name}" if supplier else "(Direct Stock Entry)"
+            movement = InventoryMovement(
+                product_id=prod.id,
+                movement_type="PURCHASE",
+                quantity=qty,
+                unit_cost=cost,
+                reference_type="PURCHASE",
+                reference_id=po_num,
+                notes=f"Received {supp_label} ({po_num})"
+            )
+            db.add(movement)
 
     if paid > Decimal("0.00"):
         payment = PurchasePayment(

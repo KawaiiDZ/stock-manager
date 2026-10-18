@@ -338,8 +338,9 @@ export const BillsPage: React.FC<BillsPageProps> = ({ settings }) => {
               step="0.01"
               min="1"
               prefix={currency}
+              placeholder="0.00"
               value={amount || ''}
-              onChange={(e) => setAmount(Number(e.target.value))}
+              onChange={(e) => setAmount(Number(e.target.value.replace(/^0+(?=[1-9])/, '')))}
               required
             />
 
@@ -437,8 +438,9 @@ export const BillsPage: React.FC<BillsPageProps> = ({ settings }) => {
                 step="0.01"
                 min="0.01"
                 max={Number(payingBill.due_amount || 0)}
+                placeholder="0.00"
                 value={payAmount || ''}
-                onChange={(e) => setPayAmount(Number(e.target.value))}
+                onChange={(e) => setPayAmount(Number(e.target.value.replace(/^0+(?=[1-9])/, '')))}
                 prefix={currency}
                 required
                 autoFocus

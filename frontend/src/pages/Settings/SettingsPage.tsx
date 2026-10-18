@@ -52,6 +52,7 @@ import {
   Maximize2,
   Minimize2,
   ExternalLink,
+  Layers,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -71,6 +72,7 @@ import { STANDARD_DATE_FORMATS, setGlobalFormattingPreferences, formatDate, form
 import { GoogleBackupCard } from '../../components/settings/GoogleBackupCard';
 import { rasterizeReceiptElementFast, rasterizeReceiptFast, AcceleratedRasterResult } from '../../utils/receiptRasterizer';
 import { UsersManagementTab } from '../../components/settings/UsersManagementTab';
+import { BillTemplatesTab } from '../../components/settings/BillTemplatesTab';
 
 export interface ThermalLayoutOption {
   id: 'classic' | 'modern' | 'tabular' | 'compact' | 'elegant';
@@ -157,7 +159,7 @@ interface SettingsPageProps {
 interface SettingSearchItem {
   id: string;
   title: string;
-  category: 'general' | 'finance' | 'hardware' | 'appearance' | 'security' | 'maintenance';
+  category: 'general' | 'finance' | 'hardware' | 'appearance' | 'security' | 'maintenance' | 'templates';
   subTab?: 'receipts' | 'printers' | 'invoices' | 'barcodes';
   categoryLabel: string;
   description: string;
@@ -165,6 +167,14 @@ interface SettingSearchItem {
 }
 
 const SETTINGS_SEARCH_INDEX: SettingSearchItem[] = [
+  {
+    id: 'bill_templates',
+    title: 'Bill & Product Kit Templates (Solar, AC, Kits)',
+    category: 'templates',
+    categoryLabel: 'Bill Templates',
+    description: 'Create category-constrained product kit templates for solar systems, AC installs, and repeating orders.',
+    keywords: ['template', 'bill template', 'solar', 'ac', 'inverter', 'battery', 'kit', 'slots', 'package'],
+  },
   {
     id: 'biz_profile',
     title: 'Store Name, Phone & Address',
@@ -505,7 +515,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
   // Reorganized Master Categories & Quick-Find
   const [activeCategory, setActiveCategory] = useState<
-    'general' | 'finance' | 'hardware' | 'appearance' | 'security' | 'maintenance'
+    'general' | 'finance' | 'hardware' | 'appearance' | 'security' | 'maintenance' | 'templates'
   >('general');
 
   const [hardwareSubTab, setHardwareSubTab] = useState<
@@ -544,6 +554,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [enableQuotations, setEnableQuotations] = useState(settings?.enable_quotations ?? true);
   const [enableNavigationHub, setEnableNavigationHub] = useState(settings?.enable_navigation_hub ?? true);
   const [enablePosQuickPay, setEnablePosQuickPay] = useState(settings?.enable_pos_quick_pay ?? true);
+  const [enableBillTemplates, setEnableBillTemplates] = useState(settings?.enable_bill_templates ?? true);
   const [invoiceTerms, setInvoiceTerms] = useState(settings?.invoice_terms || '');
   const [quotationTerms, setQuotationTerms] = useState(settings?.quotation_terms || '');
 
@@ -774,6 +785,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setEnableQuotations(settings.enable_quotations ?? true);
       setEnableNavigationHub(settings.enable_navigation_hub ?? true);
       setEnablePosQuickPay(settings.enable_pos_quick_pay ?? true);
+      setEnableBillTemplates(settings.enable_bill_templates ?? true);
       if (settings.payment_accounts && settings.payment_accounts.length > 0) {
         setPaymentAccounts(settings.payment_accounts);
       }
@@ -866,8 +878,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     }
   };
 
-  const handleSaveSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveSettings = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setSaving(true);
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -906,6 +918,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         enable_quotations: enableQuotations,
         enable_navigation_hub: enableNavigationHub,
         enable_pos_quick_pay: enablePosQuickPay,
+        enable_bill_templates: enableBillTemplates,
         theme_mode: themeMode,
         color_theme: colorTheme,
         invoice_terms: invoiceTerms,
@@ -936,6 +949,131 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setSaving(false);
     }
   };
+
+  const handleDiscardChanges = () => {
+    if (!settings) return;
+    setBizName(settings.business_name || '');
+    setBizPhone(settings.phone || '');
+    setBizAddress(settings.address || '');
+    setCurrency(settings.currency || 'Rs.');
+    setTaxEnabled(settings.tax_enabled || false);
+    setDefaultTaxRate(settings.default_tax_rate || 0);
+    setReceiptHeader(settings.receipt_header || '');
+    setReceiptFooter(settings.receipt_footer || '');
+    setPrinterType(settings.receipt_printer_type || '80mm');
+    setThermalPrintMode(settings.thermal_print_mode || 'direct_escpos');
+    setThermalHeaderStyle(settings.thermal_header_style || 'logo_text');
+    setThermalDarkness(settings.thermal_darkness || 'normal');
+    setThermalLayout(settings.thermal_layout || 'classic');
+    setThermalPrinterProfile(settings.thermal_printer_profile || 'standard_escpos');
+    setThermalCutMode(settings.thermal_cut_mode || 'partial');
+    setThermalFeedLines(settings.thermal_feed_lines ?? 4);
+    setSelectedThermalPrinter(settings.selected_thermal_printer || '');
+    setSelectedA4Printer(settings.selected_a4_printer || '');
+    setSkipReceiptPreview(Boolean(settings.skip_receipt_preview));
+    setThermalRenderPipeline(settings.thermal_render_pipeline || 'raster_canvas');
+    setThermalBeepEnabled(settings.thermal_beep_enabled ?? true);
+    setShowSku(settings.show_sku ?? true);
+    setShowBarcode(settings.show_barcode ?? true);
+    setDateFormat(settings.date_format || 'YYYY-MM-DD');
+    setFormatPricesWithCommas(settings.format_prices_with_commas ?? true);
+    setReceiptType(settings.receipt_type || 'thermal');
+    setShowLetterhead(settings.show_letterhead ?? false);
+    setHideHeaderTextWithLetterhead(settings.hide_header_text_with_letterhead ?? false);
+    setLetterheadImage(settings.receipt_letterhead_path || '');
+    setInvoiceTitle(settings.invoice_title || 'TAX INVOICE');
+    setEnableQuotations(settings.enable_quotations ?? true);
+    setEnableNavigationHub(settings.enable_navigation_hub ?? true);
+    setEnablePosQuickPay(settings.enable_pos_quick_pay ?? true);
+    setEnableBillTemplates(settings.enable_bill_templates ?? true);
+    setThemeMode(settings.theme_mode || 'light');
+    setColorTheme(settings.color_theme || 'emerald');
+    setInvoiceTerms(settings.invoice_terms || '1. Goods once sold will be accepted for return within 7 days in original condition.\n2. Warranty claims require presenting this invoice.\n3. Thank you for your business!');
+    setQuotationTerms(settings.quotation_terms || '1. This quotation is an estimate and valid for 15 days from issue date.\n2. Stock is subject to physical availability upon confirmation.\n3. This document does not constitute a tax invoice until approved.');
+    setEnableBarcodeScanner(settings.enable_barcode_scanner ?? true);
+    setEnableBarcodePrinter(settings.enable_barcode_printer ?? true);
+    const bSize = settings.barcode_label_size || '50x25mm';
+    setBarcodeLabelSize(bSize);
+    const parsedDim = parseLabelDimensions(bSize);
+    setCustomLabelWidthMm(parsedDim.widthMm);
+    setCustomLabelHeightMm(parsedDim.heightMm);
+    setBarcodeLabelShowBusinessName(settings.barcode_label_show_business_name ?? true);
+    setBarcodeLabelShowProductName(settings.barcode_label_show_product_name ?? true);
+    setBarcodeLabelShowPrice(settings.barcode_label_show_price ?? true);
+    setBarcodeLabelShowSku(settings.barcode_label_show_sku ?? true);
+    setBarcodeLabelCustomText(settings.barcode_label_custom_text || '');
+    setLockDashboardFinances(Boolean(settings.lock_dashboard_finances));
+    setAutoLaunchKiosk(settings.auto_launch_kiosk ?? false);
+    setKioskWindowMode(settings.kiosk_window_mode || 'fullscreen');
+    setKioskBrowser(settings.kiosk_browser || 'auto');
+  };
+
+  const isFormDirty = useMemo(() => {
+    if (!settings) return false;
+    if (bizName !== (settings.business_name || '')) return true;
+    if (bizPhone !== (settings.phone || '')) return true;
+    if (bizAddress !== (settings.address || '')) return true;
+    if (currency !== (settings.currency || 'Rs.')) return true;
+    if (showSku !== (settings.show_sku ?? true)) return true;
+    if (showBarcode !== (settings.show_barcode ?? true)) return true;
+    if (taxEnabled !== (settings.tax_enabled || false)) return true;
+    if (Number(defaultTaxRate) !== Number(settings.default_tax_rate || 0)) return true;
+    if (dateFormat !== (settings.date_format || 'YYYY-MM-DD')) return true;
+    if (formatPricesWithCommas !== (settings.format_prices_with_commas ?? true)) return true;
+    if (receiptType !== (settings.receipt_type || 'thermal')) return true;
+    if (showLetterhead !== (settings.show_letterhead ?? false)) return true;
+    if (hideHeaderTextWithLetterhead !== (settings.hide_header_text_with_letterhead ?? false)) return true;
+    if (letterheadImage !== (settings.receipt_letterhead_path || '')) return true;
+    if (invoiceTitle.trim() !== (settings.invoice_title || 'TAX INVOICE').trim()) return true;
+    if (enableQuotations !== (settings.enable_quotations ?? true)) return true;
+    if (enableNavigationHub !== (settings.enable_navigation_hub ?? true)) return true;
+    if (enablePosQuickPay !== (settings.enable_pos_quick_pay ?? true)) return true;
+    if (enableBillTemplates !== (settings.enable_bill_templates ?? true)) return true;
+    if (receiptHeader !== (settings.receipt_header || '')) return true;
+    if (receiptFooter !== (settings.receipt_footer || '')) return true;
+    if (printerType !== (settings.receipt_printer_type || '80mm')) return true;
+    if (thermalPrintMode !== (settings.thermal_print_mode || 'direct_escpos')) return true;
+    if (thermalHeaderStyle !== (settings.thermal_header_style || 'logo_text')) return true;
+    if (thermalLayout !== (settings.thermal_layout || 'classic')) return true;
+    if (thermalDarkness !== (settings.thermal_darkness || 'normal')) return true;
+    if (thermalPrinterProfile !== (settings.thermal_printer_profile || 'standard_escpos')) return true;
+    if (thermalCutMode !== (settings.thermal_cut_mode || 'partial')) return true;
+    if (thermalFeedLines !== (settings.thermal_feed_lines ?? 4)) return true;
+    if (selectedThermalPrinter !== (settings.selected_thermal_printer || '')) return true;
+    if (selectedA4Printer !== (settings.selected_a4_printer || '')) return true;
+    if (skipReceiptPreview !== Boolean(settings.skip_receipt_preview)) return true;
+    if (thermalRenderPipeline !== (settings.thermal_render_pipeline || 'raster_canvas')) return true;
+    if (thermalBeepEnabled !== (settings.thermal_beep_enabled ?? true)) return true;
+    if (themeMode !== (settings.theme_mode || 'light')) return true;
+    if (colorTheme !== (settings.color_theme || 'emerald')) return true;
+    if (invoiceTerms !== (settings.invoice_terms || '1. Goods once sold will be accepted for return within 7 days in original condition.\n2. Warranty claims require presenting this invoice.\n3. Thank you for your business!')) return true;
+    if (quotationTerms !== (settings.quotation_terms || '1. This quotation is an estimate and valid for 15 days from issue date.\n2. Stock is subject to physical availability upon confirmation.\n3. This document does not constitute a tax invoice until approved.')) return true;
+    if (enableBarcodeScanner !== (settings.enable_barcode_scanner ?? true)) return true;
+    if (enableBarcodePrinter !== (settings.enable_barcode_printer ?? true)) return true;
+    if (barcodeLabelSize !== (settings.barcode_label_size || '50x25mm')) return true;
+    if (barcodeLabelShowBusinessName !== (settings.barcode_label_show_business_name ?? true)) return true;
+    if (barcodeLabelShowProductName !== (settings.barcode_label_show_product_name ?? true)) return true;
+    if (barcodeLabelShowPrice !== (settings.barcode_label_show_price ?? true)) return true;
+    if (barcodeLabelShowSku !== (settings.barcode_label_show_sku ?? true)) return true;
+    if (barcodeLabelCustomText.trim() !== (settings.barcode_label_custom_text || '').trim()) return true;
+    if (autoLaunchKiosk !== (settings.auto_launch_kiosk ?? false)) return true;
+    if (kioskWindowMode !== (settings.kiosk_window_mode || 'fullscreen')) return true;
+    if (kioskBrowser !== (settings.kiosk_browser || 'auto')) return true;
+    return false;
+  }, [
+    settings, bizName, bizPhone, bizAddress, currency, showSku, showBarcode,
+    taxEnabled, defaultTaxRate, dateFormat, formatPricesWithCommas, receiptType,
+    showLetterhead, hideHeaderTextWithLetterhead, letterheadImage, invoiceTitle,
+    enableQuotations, enableNavigationHub, enablePosQuickPay, enableBillTemplates,
+    receiptHeader, receiptFooter, printerType, thermalPrintMode, thermalHeaderStyle,
+    thermalLayout, thermalDarkness, thermalPrinterProfile, thermalCutMode, thermalFeedLines,
+    selectedThermalPrinter, selectedA4Printer, skipReceiptPreview, thermalRenderPipeline,
+    thermalBeepEnabled, themeMode, colorTheme, invoiceTerms, quotationTerms,
+    enableBarcodeScanner, enableBarcodePrinter, barcodeLabelSize,
+    barcodeLabelShowBusinessName, barcodeLabelShowProductName, barcodeLabelShowPrice,
+    barcodeLabelShowSku, barcodeLabelCustomText, autoLaunchKiosk,
+    kioskWindowMode, kioskBrowser
+  ]);
 
   const handleSavePaymentAccounts = async (accountsToSave: string[]) => {
     setSavingAccounts(true);
@@ -1857,6 +1995,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             icon: <Database className="h-5 w-5 text-rose-600 dark:text-rose-400" />,
             activeColor: 'border-rose-600 bg-rose-50/70 dark:bg-rose-950/40 text-rose-900 dark:text-rose-100',
           },
+          {
+            id: 'templates' as const,
+            label: 'Bill Templates',
+            subtitle: enableBillTemplates ? 'Product kits & solar/AC packages' : 'Disabled in POS',
+            icon: <Layers className="h-5 w-5 text-teal-600 dark:text-teal-400" />,
+            activeColor: 'border-teal-600 bg-teal-50/70 dark:bg-teal-950/40 text-teal-900 dark:text-teal-100',
+          },
         ];
 
         const HARDWARE_SUBTABS = [
@@ -1868,60 +2013,94 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
         return (
           <>
-            {/* 1. Global Quick-Find Search Bar */}
-            <div className="relative">
-              <div className="relative flex items-center">
-                <Search className="absolute left-4 h-4 w-4 text-slate-400 pointer-events-none" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search all settings (e.g. tax, currency, easypaisa, 80mm, direct print, logo, dark mode, pin, backup)..."
-                  className="w-full pl-11 pr-10 py-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-medium text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-3.5 p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
-                    title="Clear search"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                  </button>
+            {/* 1. Global Quick-Find Search Bar & Reactive Header Actions */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <div className="relative flex-1">
+                <div className="relative flex items-center">
+                  <Search className="absolute left-4 h-4 w-4 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search all settings (e.g. tax, currency, easypaisa, 80mm, direct print, logo, dark mode, pin, backup)..."
+                    className="w-full pl-11 pr-10 py-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-medium text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3.5 p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
+                      title="Clear search"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Live Search Results Dropdown Overlay */}
+                {searchQuery.trim() && (
+                  <div className="absolute top-full left-0 right-0 mt-2 p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl max-h-96 overflow-y-auto space-y-1 z-30">
+                    {filteredSearchResults.length > 0 ? (
+                      filteredSearchResults.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => handleSelectSearchResult(item)}
+                          className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/80 transition text-left group"
+                        >
+                          <div className="space-y-0.5">
+                            <div className="font-bold text-xs text-slate-800 dark:text-slate-100 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition flex items-center gap-2">
+                              <span>{item.title}</span>
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                {item.categoryLabel}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 dark:text-slate-500 leading-snug">
+                              {item.description}
+                            </p>
+                          </div>
+                          <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 opacity-0 group-hover:opacity-100 transition shrink-0 pl-2">
+                            Go →
+                          </span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="py-6 text-center text-xs text-slate-400 dark:text-slate-500">
+                        No matching settings found for "{searchQuery}". Try searching for <span className="font-semibold text-emerald-600">currency</span>, <span className="font-semibold text-emerald-600">tax</span>, <span className="font-semibold text-emerald-600">easypaisa</span>, or <span className="font-semibold text-emerald-600">printer</span>.
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 
-              {/* Live Search Results Dropdown Overlay */}
-              {searchQuery.trim() && (
-                <div className="absolute top-full left-0 right-0 mt-2 p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl max-h-96 overflow-y-auto space-y-1 z-30">
-                  {filteredSearchResults.length > 0 ? (
-                    filteredSearchResults.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => handleSelectSearchResult(item)}
-                        className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/80 transition text-left group"
-                      >
-                        <div className="space-y-0.5">
-                          <div className="font-bold text-xs text-slate-800 dark:text-slate-100 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition flex items-center gap-2">
-                            <span>{item.title}</span>
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                              {item.categoryLabel}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-400 dark:text-slate-500 leading-snug">
-                            {item.description}
-                          </p>
-                        </div>
-                        <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 opacity-0 group-hover:opacity-100 transition shrink-0 pl-2">
-                          Go →
-                        </span>
-                      </button>
-                    ))
-                  ) : (
-                    <div className="py-6 text-center text-xs text-slate-400 dark:text-slate-500">
-                      No matching settings found for "{searchQuery}". Try searching for <span className="font-semibold text-emerald-600">currency</span>, <span className="font-semibold text-emerald-600">tax</span>, <span className="font-semibold text-emerald-600">easypaisa</span>, or <span className="font-semibold text-emerald-600">printer</span>.
-                    </div>
-                  )}
+              {/* Reactive Header Apply Actions (Shown when anything is changed) */}
+              {isFormDirty && (
+                <div className="flex items-center gap-2 shrink-0 animate-in fade-in zoom-in-95 duration-150">
+                  <button
+                    type="button"
+                    onClick={handleDiscardChanges}
+                    disabled={saving}
+                    className="px-3.5 py-2.5 rounded-2xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition"
+                  >
+                    Discard
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSaveSettings()}
+                    disabled={saving}
+                    className="px-4 py-2.5 rounded-2xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 transition shadow-md shadow-emerald-700/20 flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {saving ? (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        <span>Applying...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-3.5 w-3.5" />
+                        <span>Apply</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               )}
             </div>
@@ -2241,6 +2420,23 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   </span>
                   <span className="text-slate-500 text-[11px] leading-relaxed">
                     When pressing Ctrl+Enter in POS, opens a fast pop-up dialogue to enter the amount paid, preview change or remaining due, and finalize on Enter. Pressing Esc closes the dialogue and preserves the sale on screen.
+                  </span>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-3 p-3.5 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition">
+                <input
+                  type="checkbox"
+                  checked={enableBillTemplates}
+                  onChange={(e) => setEnableBillTemplates(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                />
+                <div className="text-xs">
+                  <span className="font-bold text-slate-800 block">
+                    Enable Bill & Product Kit Templates
+                  </span>
+                  <span className="text-slate-500 text-[11px] leading-relaxed">
+                    Show the "Templates" dropdown and "Save as Template" buttons on the POS checkout screen. When turned off, standard retail checkout is used without template controls.
                   </span>
                 </div>
               </label>
@@ -4877,8 +5073,65 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </div>
                   </div>
                 )}
+
+                {/* CATEGORY 7: BILL & PRODUCT TEMPLATES */}
+                {activeCategory === 'templates' && (
+                  <BillTemplatesTab
+                    onSettingsUpdated={onSettingsUpdated}
+                    enabled={enableBillTemplates}
+                    onToggleEnabled={(nextVal) => setEnableBillTemplates(nextVal)}
+                    isDirty={enableBillTemplates !== (settings?.enable_bill_templates ?? true)}
+                    onApply={() => handleSaveSettings()}
+                    saving={saving}
+                  />
+                )}
               </div>
             </div>
+
+            {/* Floating Quick-Apply Bar at Bottom of Screen (Appears when anything is changed) */}
+            {isFormDirty && (
+              <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-5 fade-in duration-200">
+                <div className="bg-slate-900/95 dark:bg-slate-800/95 text-white shadow-2xl border border-slate-700/80 backdrop-blur-md px-5 py-3 rounded-2xl flex items-center gap-4 sm:gap-6 ring-4 ring-black/10">
+                  <div className="flex items-center gap-2.5">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                    </span>
+                    <span className="text-xs sm:text-sm font-semibold text-slate-100 whitespace-nowrap">
+                      Unsaved changes detected
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleDiscardChanges}
+                      disabled={saving}
+                      className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 dark:hover:bg-slate-700 transition"
+                    >
+                      Discard
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSaveSettings()}
+                      disabled={saving}
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 transition shadow-lg shadow-emerald-900/30 flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {saving ? (
+                        <>
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          <span>Applying...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="h-3.5 w-3.5" />
+                          <span>Apply</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         );
       })()}

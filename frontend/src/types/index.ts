@@ -35,6 +35,7 @@ export interface BusinessSettings {
   hide_header_text_with_letterhead?: boolean;
   invoice_title?: string;
   enable_quotations?: boolean;
+  enable_bill_templates?: boolean;
   enable_navigation_hub?: boolean;
   theme_mode?: 'light' | 'dark' | 'system';
   color_theme?: 'emerald' | 'indigo' | 'sky' | 'rose' | 'slate';
@@ -144,6 +145,7 @@ export interface Product {
   purchase_price: number;
   selling_price: number;
   current_stock: number;
+  is_service?: boolean;
   is_active: boolean;
   custom_fields?: CustomValueDto[];
   created_at: string;
@@ -231,6 +233,7 @@ export interface SaleItem {
   returned_quantity?: number;
   remaining_returnable_quantity?: number;
   batches?: SaleItemBatch[];
+  notes?: string | null;
 }
 
 export interface SalePayment {
@@ -421,6 +424,13 @@ export interface Expense {
   created_at: string;
 }
 
+export interface DaySalesAccountBreakdown {
+  account: string;
+  sales_amount: number;
+  debt_amount: number;
+  total_collected: number;
+}
+
 export interface DashboardKPIs {
   today_sales_revenue: number;
   today_sales_cash?: number;
@@ -433,6 +443,7 @@ export interface DashboardKPIs {
   customer_outstanding: number;
   supplier_outstanding: number;
   bills_needing_attention_count: number;
+  today_account_breakdown?: DaySalesAccountBreakdown[];
 }
 
 export type DashboardStats = DashboardKPIs;
@@ -470,7 +481,35 @@ export interface DaySalesDetail {
   date: string;
   sales_revenue: number;
   transaction_count: number;
+  sales_collected_cash?: number;
+  debt_collected_cash?: number;
+  account_breakdown?: DaySalesAccountBreakdown[];
   sales: Sale[];
+}
+
+export interface AccountBalance {
+  account: string;
+  current_balance: number;
+  total_sales_inflow: number;
+  today_sales_inflow: number;
+  net_transfers: number;
+}
+
+export interface AccountTransfer {
+  id: number;
+  transfer_number: string;
+  from_account: string;
+  to_account: string;
+  amount: number;
+  notes?: string | null;
+  transfer_date: string;
+  created_at: string;
+}
+
+export interface CashFlowSummary {
+  total_business_funds: number;
+  accounts: AccountBalance[];
+  recent_transfers: AccountTransfer[];
 }
 
 export interface InventoryMovement {
@@ -752,6 +791,46 @@ export interface ConnectedClientsResponse {
   online_count: number;
   total_count: number;
   clients: ConnectedClientItem[];
+}
+
+export interface BillTemplateItem {
+  id?: number;
+  template_id?: number;
+  display_order: number;
+  slot_name: string;
+  category_id?: number | null;
+  category_name?: string | null;
+  default_product_id?: number | null;
+  default_quantity: number;
+  is_optional?: boolean;
+  default_product_name?: string | null;
+  default_product_sku?: string | null;
+  default_product_selling_price?: number | null;
+  default_product_current_stock?: number | null;
+}
+
+export interface BillTemplate {
+  id: number;
+  name: string;
+  description?: string | null;
+  is_active: boolean;
+  items: BillTemplateItem[];
+  created_at?: string;
+  updated_at?: string | null;
+}
+
+export interface BillTemplateCreate {
+  name: string;
+  description?: string;
+  items: Array<{
+    display_order?: number;
+    slot_name: string;
+    category_id?: number | null;
+    category_name?: string | null;
+    default_product_id?: number | null;
+    default_quantity: number;
+    is_optional?: boolean;
+  }>;
 }
 
 

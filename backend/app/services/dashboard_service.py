@@ -1,7 +1,7 @@
 from datetime import date, datetime, time
 from decimal import Decimal
 import calendar
-from typing import List, Optional
+from typing import List, Optional, Dict
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
@@ -11,7 +11,7 @@ from backend.app.models.customer import Customer
 from backend.app.models.supplier import Supplier
 from backend.app.models.bills import Bill
 from backend.app.schemas.dashboard import (
-    DashboardStatsResponse, MonthlySalesDataPoint, MonthlySalesChartResponse, DaySalesDetailResponse
+    DashboardStatsResponse, MonthlySalesDataPoint, MonthlySalesChartResponse, DaySalesDetailResponse, DaySalesAccountBreakdown
 )
 from backend.app.services.customer_service import list_customers
 from backend.app.services.supplier_service import list_suppliers
@@ -83,6 +83,32 @@ def get_dashboard_stats(db: Session) -> DashboardStatsResponse:
     today_gross_cash = sum((p.amount for p in today_payments), Decimal("0.00"))
     today_collected_cash = max(Decimal("0.00"), today_gross_cash - cash_refunds_today)
 
+    # 2b. Account breakdown for today's collections
+    today_account_map: Dict[str, Dict[str, Decimal]] = {}
+    for p in today_payments:
+        acc_name = (p.payment_method or "Cash").strip()
+        if acc_name.lower() in ("split", "split payment", "mix", "mixed", "__split__"):
+            acc_name = "Cash"
+        elif acc_name.lower() == "cash":
+            acc_name = "Cash"
+        if acc_name not in today_account_map:
+            today_account_map[acc_name] = {"sales": Decimal("0.00"), "debt": Decimal("0.00")}
+        is_past_debt = bool(p.sale and (p.sale.created_at < start_of_today or p.sale.created_at > end_of_today))
+        if is_past_debt:
+            today_account_map[acc_name]["debt"] += p.amount
+        else:
+            today_account_map[acc_name]["sales"] += p.amount
+
+    today_account_breakdown = [
+        DaySalesAccountBreakdown(
+            account=acc,
+            sales_amount=data["sales"].quantize(Decimal("0.01")),
+            debt_amount=data["debt"].quantize(Decimal("0.01")),
+            total_collected=(data["sales"] + data["debt"]).quantize(Decimal("0.01"))
+        )
+        for acc, data in sorted(today_account_map.items(), key=lambda x: (x[1]["sales"] + x[1]["debt"]), reverse=True)
+    ]
+
     # 3. Total Customer Outstanding
     all_customers = list_customers(db, is_active=True)
     customer_outstanding = sum((c.current_due for c in all_customers), Decimal("0.00"))
@@ -106,7 +132,8 @@ def get_dashboard_stats(db: Session) -> DashboardStatsResponse:
         today_past_debt_profit=today_past_debt_profit,
         customer_outstanding=customer_outstanding,
         supplier_outstanding=supplier_outstanding,
-        bills_needing_attention_count=bills_count
+        bills_needing_attention_count=bills_count,
+        today_account_breakdown=today_account_breakdown
     )
 
 def _parse_item_date(val) -> Optional[datetime]:
@@ -192,9 +219,61 @@ def get_day_sales_detail(db: Session, target_date: date) -> DaySalesDetailRespon
     net_revenue = max(Decimal("0.00"), gross_revenue - ret_revenue)
     count = len(matching_sales)
 
+    start_of_target = datetime.combine(target_date, time.min)
+    end_of_target = datetime.combine(target_date, time.max)
+
+    day_payments = db.query(SalePayment).options(joinedload(SalePayment.sale)).filter(
+        SalePayment.created_at >= start_of_target,
+        SalePayment.created_at <= end_of_target
+    ).all()
+
+    day_account_map: Dict[str, Dict[str, Decimal]] = {}
+    sales_collected_cash = Decimal("0.00")
+    debt_collected_cash = Decimal("0.00")
+
+    for p in day_payments:
+        acc_name = (p.payment_method or "Cash").strip()
+        if acc_name.lower() in ("split", "split payment", "mix", "mixed", "__split__"):
+            acc_name = "Cash"
+        elif acc_name.lower() == "cash":
+            acc_name = "Cash"
+        if acc_name not in day_account_map:
+            day_account_map[acc_name] = {"sales": Decimal("0.00"), "debt": Decimal("0.00")}
+        is_past_debt = bool(p.sale and (p.sale.created_at < start_of_target or p.sale.created_at > end_of_target))
+        if is_past_debt:
+            day_account_map[acc_name]["debt"] += p.amount
+            debt_collected_cash += p.amount
+        else:
+            day_account_map[acc_name]["sales"] += p.amount
+            sales_collected_cash += p.amount
+
+    # Also include any accounts that were tendered in matching sales on that day
+    for s in matching_sales:
+        for p in (s.payments or []):
+            acc_name = (p.payment_method or "Cash").strip()
+            if acc_name.lower() in ("split", "split payment", "mix", "mixed", "__split__"):
+                acc_name = "Cash"
+            elif acc_name.lower() == "cash":
+                acc_name = "Cash"
+            if acc_name not in day_account_map:
+                day_account_map[acc_name] = {"sales": Decimal("0.00"), "debt": Decimal("0.00")}
+
+    account_breakdown = [
+        DaySalesAccountBreakdown(
+            account=acc,
+            sales_amount=data["sales"].quantize(Decimal("0.01")),
+            debt_amount=data["debt"].quantize(Decimal("0.01")),
+            total_collected=(data["sales"] + data["debt"]).quantize(Decimal("0.01"))
+        )
+        for acc, data in sorted(day_account_map.items(), key=lambda x: (x[1]["sales"] + x[1]["debt"]), reverse=True)
+    ]
+
     return DaySalesDetailResponse(
         date=target_date.isoformat(),
         sales_revenue=net_revenue,
         transaction_count=count,
+        sales_collected_cash=sales_collected_cash.quantize(Decimal("0.01")),
+        debt_collected_cash=debt_collected_cash.quantize(Decimal("0.01")),
+        account_breakdown=account_breakdown,
         sales=[_format_sale_response(s) for s in matching_sales]
     )

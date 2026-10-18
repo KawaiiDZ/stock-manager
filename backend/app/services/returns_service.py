@@ -105,31 +105,32 @@ def create_sales_return(db: Session, data: SalesReturnCreate) -> SalesReturnResp
         line_return_amount = (item_data.quantity * effective_unit_price).quantize(Decimal("0.01"))
         total_return_amount += line_return_amount
 
-        # Increase current stock
-        product.current_stock += item_data.quantity
+        if not getattr(product, "is_service", False):
+            # Increase current stock
+            product.current_stock += item_data.quantity
 
-        # Create a new inventory batch for the returned goods
-        return_cost = (sale_item.unit_cost if original_sale and sale_item else product.purchase_price)
-        batch = InventoryBatch(
-            product_id=product.id,
-            purchase_id=None,
-            quantity_received=item_data.quantity,
-            quantity_remaining=item_data.quantity,
-            unit_cost=return_cost
-        )
-        db.add(batch)
+            # Create a new inventory batch for the returned goods
+            return_cost = (sale_item.unit_cost if original_sale and sale_item else product.purchase_price)
+            batch = InventoryBatch(
+                product_id=product.id,
+                purchase_id=None,
+                quantity_received=item_data.quantity,
+                quantity_remaining=item_data.quantity,
+                unit_cost=return_cost
+            )
+            db.add(batch)
 
-        # Log inventory movement
-        movement = InventoryMovement(
-            product_id=product.id,
-            movement_type="CUSTOMER_RETURN",
-            quantity=item_data.quantity,
-            unit_cost=return_cost,
-            reference_type="CUSTOMER_RETURN",
-            reference_id=ret_num,
-            notes=f"Customer return ({ret_num})"
-        )
-        db.add(movement)
+            # Log inventory movement
+            movement = InventoryMovement(
+                product_id=product.id,
+                movement_type="CUSTOMER_RETURN",
+                quantity=item_data.quantity,
+                unit_cost=return_cost,
+                reference_type="CUSTOMER_RETURN",
+                reference_id=ret_num,
+                notes=f"Customer return ({ret_num})"
+            )
+            db.add(movement)
 
         processed_items.append({
             "product_id": product.id,

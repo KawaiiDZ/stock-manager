@@ -13,9 +13,12 @@ from backend.app.models.expenses import ExpenseCategory, Expense
 from backend.app.models.quotation import Quotation, QuotationItem
 from backend.app.models.google_backup import GoogleBackupSettings
 from backend.app.models.sync import ProcessedSyncCommit
+from backend.app.models.template import BillTemplate, BillTemplateItem
+from backend.app.models.account_transfer import AccountTransfer
 
 __all__ = [
     "Base",
+    "AccountTransfer",
     "User",
     "BusinessSettings",
     "ProductCategory",
@@ -48,5 +51,7 @@ __all__ = [
     "QuotationItem",
     "GoogleBackupSettings",
     "ProcessedSyncCommit",
+    "BillTemplate",
+    "BillTemplateItem",
 ]
 

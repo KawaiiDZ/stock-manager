@@ -931,8 +931,13 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                       <input
                         type="number"
                         min="1"
-                        value={item.quantity}
-                        onChange={(e) => updateItem(idx, 'quantity', Number(e.target.value))}
+                        placeholder="1"
+                        value={item.quantity || ''}
+                        onFocus={(e) => requestAnimationFrame(() => e.target.select())}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/^0+(?=[1-9])/, '');
+                          updateItem(idx, 'quantity', raw === '' ? 0 : Number(raw));
+                        }}
                         className="w-full bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900 dark:text-white focus:outline-none transition text-center"
                         required
                       />
@@ -954,8 +959,13 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                         type="number"
                         step="0.01"
                         min="0"
-                        value={item.unit_cost}
-                        onChange={(e) => updateItem(idx, 'unit_cost', Number(e.target.value))}
+                        placeholder="0.00"
+                        value={item.unit_cost === 0 ? '' : item.unit_cost}
+                        onFocus={(e) => requestAnimationFrame(() => e.target.select())}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/^0+(?=[1-9])/, '');
+                          updateItem(idx, 'unit_cost', raw === '' ? 0 : Number(raw));
+                        }}
                         className={`w-full bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900 dark:text-white focus:outline-none transition text-right ${
                           isCostDifferent ? 'border-amber-400 dark:border-amber-500 bg-amber-50/30 dark:bg-amber-950/20' : 'border-slate-200 dark:border-slate-700 focus:border-brand-500'
                         }`}
@@ -979,12 +989,16 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                         type="number"
                         step="0.01"
                         min="0"
-                        value={item.selling_price}
-                        onChange={(e) => updateItem(idx, 'selling_price', Number(e.target.value))}
+                        placeholder="0.00"
+                        value={item.selling_price === 0 ? '' : item.selling_price}
+                        onFocus={(e) => requestAnimationFrame(() => e.target.select())}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/^0+(?=[1-9])/, '');
+                          updateItem(idx, 'selling_price', raw === '' ? 0 : Number(raw));
+                        }}
                         className={`w-full bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900 dark:text-white focus:outline-none transition text-right ${
                           isSellDifferent ? 'border-brand-400 dark:border-brand-500 bg-brand-50/30 dark:bg-brand-950/20' : 'border-slate-200 dark:border-slate-700 focus:border-brand-500'
                         }`}
-                        required
                       />
                     </div>
 

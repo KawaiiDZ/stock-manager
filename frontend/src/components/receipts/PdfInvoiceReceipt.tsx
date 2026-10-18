@@ -250,6 +250,11 @@ export const PdfInvoiceReceipt: React.FC<PdfInvoiceReceiptProps> = ({
                         </span>
                       )}
                     </div>
+                    {item.notes && (
+                      <div className="text-[11px] text-slate-500 font-normal mt-0.5 whitespace-pre-line">
+                        {item.notes}
+                      </div>
+                    )}
                   </td>
                   <td className="py-2.5 px-3 text-right font-medium whitespace-nowrap">
                     {isFullyReturned ? (

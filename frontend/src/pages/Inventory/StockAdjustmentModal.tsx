@@ -94,8 +94,9 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
           label="Actual Physical Stock Count *"
           type="number"
           min="0"
+          placeholder="0"
           value={newStock}
-          onChange={(e) => setNewStock(Number(e.target.value))}
+          onChange={(e) => setNewStock(Number(e.target.value.replace(/^0+(?=[1-9])/, '')))}
           required
           autoFocus
         />

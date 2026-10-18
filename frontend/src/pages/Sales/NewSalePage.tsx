@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../../services/api';
-import { Product, Customer, BusinessSettings, Sale, Quotation, QuotationCreate, Category, PaymentSplit } from '../../types';
+import { Product, Customer, BusinessSettings, Sale, Quotation, QuotationCreate, Category, PaymentSplit, BillTemplate, BillTemplateItem } from '../../types';
 import {
   Search,
   Plus,
@@ -17,6 +17,12 @@ import {
   FileText,
   CreditCard,
   Wallet,
+  Layers,
+  BookmarkPlus,
+  ChevronDown,
+  Check,
+  ArrowRight,
+  X,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -35,12 +41,15 @@ import { formatCurrency, formatMoney, formatQty } from '../../utils/format';
 import { rasterizeReceiptFast, rasterizeReceiptOffscreen } from '../../utils/receiptRasterizer';
 import { playCheckoutSuccessBeep } from '../../utils/audio';
 import { PrinterDiagnosticsModal } from '../../components/printing/PrinterDiagnosticsModal';
+import { SaveTemplateModal } from '../../components/pos/SaveTemplateModal';
+import { SlotProductPicker, PosTemplateSlot } from '../../components/pos/SlotProductPicker';
 
 interface CartItem {
   product: Product;
   quantity: number;
   unit_price: number;
   discount_amount: number;
+  notes?: string;
 }
 
 interface NewSalePageProps {
@@ -58,6 +67,13 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Bill / Product Kit Templates State
+  const [availableTemplates, setAvailableTemplates] = useState<BillTemplate[]>([]);
+  const [activeTemplate, setActiveTemplate] = useState<BillTemplate | null>(null);
+  const [templateSlots, setTemplateSlots] = useState<PosTemplateSlot[]>([]);
+  const [isTemplateDropdownOpen, setIsTemplateDropdownOpen] = useState(false);
+  const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
 
   // Customer Management on Sale
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
@@ -159,8 +175,19 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   // Keyboard navigation target: 'search', or cart item index (0, 1, ...), or null (no arrow active)
   const [keyboardActiveTarget, setKeyboardActiveTarget] = useState<'search' | number | null>(null);
 
+  // Active template slot picker index (when open for searching products via keyboard)
+  const [activeSlotPickerIndex, setActiveSlotPickerIndex] = useState<number | null>(null);
+
   // Search dropdown active item index for keyboard arrow navigation (-1 = input, 0, 1, ... = dropdown items)
   const [dropdownActiveIndex, setDropdownActiveIndex] = useState<number>(-1);
+
+  // Keep highlighted template slot row scrolled into view
+  useEffect(() => {
+    if (activeTemplate && typeof keyboardActiveTarget === 'number') {
+      const el = document.getElementById(`template-slot-row-${keyboardActiveTarget}`);
+      el?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [activeTemplate, keyboardActiveTarget]);
 
   // Reset dropdown active index whenever search query changes
   useEffect(() => {
@@ -210,7 +237,8 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   };
 
   const handleCartNavigateDown = (fromIndex: number) => {
-    if (fromIndex < cart.length - 1) {
+    const maxIdx = (activeTemplate ? templateSlots.length : cart.length) - 1;
+    if (fromIndex < maxIdx) {
       setKeyboardActiveTarget(fromIndex + 1);
     }
   };
@@ -219,6 +247,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   const showSku = settings?.show_sku !== false;
   const showBarcode = settings?.show_barcode !== false;
   const scannerEnabled = settings?.enable_barcode_scanner !== false;
+  const templatesEnabled = settings?.enable_bill_templates !== false;
 
   // Initial load & silent window focus background refresh
   const refreshCatalog = async () => {
@@ -233,14 +262,16 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   useEffect(() => {
     const init = async () => {
       try {
-        const [prods, custs, cats] = await Promise.all([
+        const [prods, custs, cats, tpls] = await Promise.all([
           api.getProducts({ is_active: true }),
           api.getCustomers({ is_active: true }),
           api.getCategories(true),
+          api.getBillTemplates().catch(() => []),
         ]);
         setProducts(prods || []);
         setCustomers(custs || []);
         setCategories(cats || []);
+        setAvailableTemplates(tpls || []);
       } catch (err) {
         console.error('Failed to load initial sales data:', err);
       }
@@ -283,7 +314,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
     );
 
     if (localMatch) {
-      if (Number(localMatch.current_stock || 0) <= 0) {
+      if (!localMatch.is_service && Number(localMatch.current_stock || 0) <= 0) {
         setOutOfStockProduct(localMatch);
         return;
       }
@@ -296,7 +327,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       const remoteProd = await api.getProductByBarcode(code);
       if (remoteProd) {
         setProducts((prev) => (prev.some((p) => p.id === remoteProd.id) ? prev : [...prev, remoteProd]));
-        if (Number(remoteProd.current_stock || 0) <= 0) {
+        if (!remoteProd.is_service && Number(remoteProd.current_stock || 0) <= 0) {
           setOutOfStockProduct(remoteProd);
           return;
         }
@@ -319,11 +350,12 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   // Global POS Keyboard Shortcuts & Arrow Navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // If any dialogue modal is open, avoid triggering global checkout shortcuts
-      if (showQuickPayModal || Boolean(outOfStockProduct) || Boolean(unregisteredBarcode) || Boolean(quickAddBarcode) || showAddCustomerModal) {
-        if (e.key === 'Escape' && showQuickPayModal) {
+      // If any dialogue modal or in-slot picker is open, avoid triggering global checkout shortcuts
+      if (showQuickPayModal || Boolean(outOfStockProduct) || Boolean(unregisteredBarcode) || Boolean(quickAddBarcode) || showAddCustomerModal || activeSlotPickerIndex !== null) {
+        if (e.key === 'Escape') {
           e.preventDefault();
-          setShowQuickPayModal(false);
+          if (showQuickPayModal) setShowQuickPayModal(false);
+          if (activeSlotPickerIndex !== null) setActiveSlotPickerIndex(null);
           searchInputRef.current?.focus();
         }
         return;
@@ -383,20 +415,17 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         return;
       }
 
+      const activeListLength = activeTemplate ? templateSlots.length : cart.length;
+
       // Arrow navigation
       if (e.key === 'ArrowDown') {
-        if (cart.length > 0) {
-          if (keyboardActiveTarget === null) {
-            e.preventDefault();
-            setKeyboardActiveTarget(cart.length - 1);
-            searchInputRef.current?.blur();
-          } else if (keyboardActiveTarget === 'search') {
-            e.preventDefault();
+        if (activeListLength > 0) {
+          e.preventDefault();
+          if (keyboardActiveTarget === null || keyboardActiveTarget === 'search') {
             setKeyboardActiveTarget(0);
             searchInputRef.current?.blur();
           } else if (typeof keyboardActiveTarget === 'number') {
-            e.preventDefault();
-            if (keyboardActiveTarget < cart.length - 1) {
+            if (keyboardActiveTarget < activeListLength - 1) {
               setKeyboardActiveTarget(keyboardActiveTarget + 1);
             }
           }
@@ -410,7 +439,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
           if (keyboardActiveTarget > 0) {
             setKeyboardActiveTarget(keyboardActiveTarget - 1);
           } else {
-            // Reached top cart item -> move active target up to search bar
+            // Reached top item (cart or template) -> move active target up to search bar
             setKeyboardActiveTarget('search');
             searchInputRef.current?.focus();
             searchInputRef.current?.select();
@@ -420,30 +449,67 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       }
 
       if (e.key === 'ArrowLeft') {
-        if (typeof keyboardActiveTarget === 'number' && cart[keyboardActiveTarget]) {
+        if (typeof keyboardActiveTarget === 'number') {
           e.preventDefault();
-          const targetItem = cart[keyboardActiveTarget];
-          updateQuantity(targetItem.product.id, targetItem.quantity - 1);
+          if (activeTemplate) {
+            const slot = templateSlots[keyboardActiveTarget];
+            if (slot && slot.quantity > 1) {
+              handleSlotQuantityChange(keyboardActiveTarget, slot.quantity - 1);
+            }
+          } else if (cart[keyboardActiveTarget]) {
+            const targetItem = cart[keyboardActiveTarget];
+            updateQuantity(targetItem.product.id, targetItem.quantity - 1);
+          }
         }
         return;
       }
 
       if (e.key === 'ArrowRight') {
-        if (typeof keyboardActiveTarget === 'number' && cart[keyboardActiveTarget]) {
+        if (typeof keyboardActiveTarget === 'number') {
           e.preventDefault();
-          const targetItem = cart[keyboardActiveTarget];
-          updateQuantity(targetItem.product.id, targetItem.quantity + 1);
+          if (activeTemplate) {
+            const slot = templateSlots[keyboardActiveTarget];
+            if (slot) {
+              handleSlotQuantityChange(keyboardActiveTarget, slot.quantity + 1);
+            }
+          } else if (cart[keyboardActiveTarget]) {
+            const targetItem = cart[keyboardActiveTarget];
+            updateQuantity(targetItem.product.id, targetItem.quantity + 1);
+          }
         }
         return;
       }
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (typeof keyboardActiveTarget === 'number' && cart[keyboardActiveTarget]) {
+        if (typeof keyboardActiveTarget === 'number') {
           e.preventDefault();
-          const targetItem = cart[keyboardActiveTarget];
-          removeItem(targetItem.product.id);
+          if (activeTemplate) {
+            const slot = templateSlots[keyboardActiveTarget];
+            if (slot) {
+              if (slot.selected_product) {
+                handleSlotClearProduct(keyboardActiveTarget);
+              } else if (templateSlots.length > 1) {
+                handleSlotRemove(keyboardActiveTarget);
+                if (keyboardActiveTarget >= templateSlots.length - 1) {
+                  setKeyboardActiveTarget(Math.max(0, templateSlots.length - 2));
+                }
+              }
+            }
+          } else if (cart[keyboardActiveTarget]) {
+            const targetItem = cart[keyboardActiveTarget];
+            removeItem(targetItem.product.id);
+          }
         }
         return;
+      }
+
+      // Enter or Space on an active template slot row opens in-slot product search
+      if (e.key === 'Enter' || e.key === ' ') {
+        if (activeTemplate && typeof keyboardActiveTarget === 'number' && templateSlots[keyboardActiveTarget]) {
+          e.preventDefault();
+          setActiveSlotPickerIndex(keyboardActiveTarget);
+          return;
+        }
       }
 
       // "typing in the POS area should always go in the search bar"
@@ -464,18 +530,58 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cart, keyboardActiveTarget, paidAmount, isPaidAmountCustomized, inlineCustomerName, selectedCustomerId, searchQuery]);
+  }, [cart, activeTemplate, templateSlots, keyboardActiveTarget, activeSlotPickerIndex, paidAmount, isPaidAmountCustomized, inlineCustomerName, selectedCustomerId, searchQuery]);
 
   // Add product to cart
   const addToCart = (product: Product) => {
     setErrorMsg(null);
+
+    // If a Bill Template is active, assign to a matching unfilled slot or append
+    if (activeTemplate) {
+      const unfilledIdx = templateSlots.findIndex(
+        (s) =>
+          !s.selected_product &&
+          (s.category_id !== null && s.category_id !== undefined
+            ? s.category_id === product.category_id
+            : true)
+      );
+
+      if (unfilledIdx >= 0) {
+        handleSlotSelectProduct(unfilledIdx, product);
+        setSuccessToast(`Filled slot "${templateSlots[unfilledIdx].slot_name}" with ${product.name}.`);
+        return;
+      }
+
+      // If no unfilled slot matches category, append an extra slot with this product
+      const catName =
+        (product as any).category?.name ||
+        categories.find((c) => c.id === product.category_id)?.name ||
+        'Component';
+
+      setTemplateSlots((prev) => [
+        ...prev,
+        {
+          slot_id: `extra-${Date.now()}`,
+          display_order: prev.length + 1,
+          slot_name: catName,
+          category_id: product.category_id || null,
+          category_name: catName,
+          selected_product: product,
+          quantity: 1,
+          unit_price: Number(product.selling_price || 0),
+        },
+      ]);
+      setSuccessToast(`Added ${product.name} to template.`);
+      return;
+    }
+
     const existingIndex = cart.findIndex((item) => item.product.id === product.id);
 
     const availableStock = Number(product.current_stock || 0);
 
     if (existingIndex >= 0) {
       const currentQty = cart[existingIndex].quantity;
-      if (currentQty + 1 > availableStock) {
+      if (!product.is_service && currentQty + 1 > availableStock) {
         if (availableStock <= 0) {
           setOutOfStockProduct(product);
           return;
@@ -489,7 +595,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       updatedCart[existingIndex].quantity += 1;
       setCart(updatedCart);
     } else {
-      if (availableStock < 1) {
+      if (!product.is_service && availableStock < 1) {
         setOutOfStockProduct(product);
         return;
       }
@@ -514,7 +620,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
     const availableStock = Math.max(0, Number(item.product.current_stock || 0));
 
     let finalQty = qty;
-    if (finalQty > availableStock) {
+    if (!item.product.is_service && finalQty > availableStock) {
       finalQty = availableStock;
       setErrorMsg(
         `Quantity capped to maximum available stock (${availableStock} units of ${item.product.name}).`
@@ -546,6 +652,116 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
     if (typeof keyboardActiveTarget === 'number' && keyboardActiveTarget >= newCart.length) {
       setKeyboardActiveTarget(newCart.length > 0 ? newCart.length - 1 : null);
     }
+  };
+
+  // Bill Template Handlers
+  const handleSelectTemplate = (tpl: BillTemplate) => {
+    setActiveTemplate(tpl);
+    setIsTemplateDropdownOpen(false);
+
+    const initialSlots: PosTemplateSlot[] = (tpl.items || []).map((item, idx) => {
+      const matchingProduct = item.default_product_id
+        ? products.find((p) => p.id === item.default_product_id) || null
+        : null;
+
+      return {
+        slot_id: item.id || `slot-${idx}-${Date.now()}`,
+        display_order: item.display_order || idx + 1,
+        slot_name: item.slot_name,
+        category_id: item.category_id || null,
+        category_name: item.category_name || '',
+        selected_product: matchingProduct,
+        quantity: item.default_quantity || 1,
+        unit_price: matchingProduct ? Number(matchingProduct.selling_price || 0) : 0,
+      };
+    });
+
+    setTemplateSlots(initialSlots);
+    setSuccessToast(`Loaded template "${tpl.name}" (${initialSlots.length} slots).`);
+  };
+
+  const handleClearTemplate = () => {
+    setActiveTemplate(null);
+    setTemplateSlots([]);
+  };
+
+  useEffect(() => {
+    if (!templatesEnabled && activeTemplate) {
+      handleClearTemplate();
+    }
+  }, [templatesEnabled, activeTemplate]);
+
+  const handleSlotSelectProduct = (idx: number, prod: Product) => {
+    setTemplateSlots((prev) => {
+      const copy = [...prev];
+      const slot = copy[idx];
+      if (!slot) return prev;
+      copy[idx] = {
+        ...slot,
+        selected_product: prod,
+        unit_price: Number(prod.selling_price || 0),
+      };
+      return copy;
+    });
+  };
+
+  const handleSlotClearProduct = (idx: number) => {
+    setTemplateSlots((prev) => {
+      const copy = [...prev];
+      if (!copy[idx]) return prev;
+      copy[idx] = {
+        ...copy[idx],
+        selected_product: null,
+        unit_price: 0,
+      };
+      return copy;
+    });
+  };
+
+  const handleSlotQuantityChange = (idx: number, qty: number) => {
+    setTemplateSlots((prev) => {
+      const copy = [...prev];
+      if (!copy[idx]) return prev;
+      const validQty = Math.max(1, isNaN(qty) ? 1 : qty);
+      copy[idx] = {
+        ...copy[idx],
+        quantity: validQty,
+      };
+      return copy;
+    });
+  };
+
+  const handleSlotPriceChange = (idx: number, price: number) => {
+    setTemplateSlots((prev) => {
+      const copy = [...prev];
+      if (!copy[idx]) return prev;
+      copy[idx] = {
+        ...copy[idx],
+        unit_price: Math.max(0, isNaN(price) ? 0 : price),
+      };
+      return copy;
+    });
+  };
+
+  const handleSlotRemove = (idx: number) => {
+    setTemplateSlots((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleAddExtraSlot = () => {
+    const firstCat = categories[0];
+    setTemplateSlots((prev) => [
+      ...prev,
+      {
+        slot_id: `slot-extra-${Date.now()}`,
+        display_order: prev.length + 1,
+        slot_name: firstCat ? firstCat.name : 'Component',
+        category_id: firstCat ? firstCat.id : null,
+        category_name: firstCat ? firstCat.name : '',
+        selected_product: null,
+        quantity: 1,
+        unit_price: 0,
+      },
+    ]);
   };
 
   // Filter products for live search across name, barcode, sku, and all custom attributes
@@ -599,14 +815,13 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         setDropdownActiveIndex((prev) =>
           prev < filteredProducts.length - 1 ? prev + 1 : 0
         );
-      } else if (cart.length > 0) {
-        // Dropdown closed -> jump down into cart items
-        if (keyboardActiveTarget === 'search') {
+      } else {
+        const itemsCount = activeTemplate ? templateSlots.length : cart.length;
+        if (itemsCount > 0) {
+          // Dropdown closed -> jump down into cart or template items
           setKeyboardActiveTarget(0);
-        } else {
-          setKeyboardActiveTarget(cart.length - 1);
+          searchInputRef.current?.blur();
         }
-        searchInputRef.current?.blur();
       }
       return;
     }
@@ -648,8 +863,28 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
     }
   };
 
+  // Effective items for calculations and checkout:
+  // When activeTemplate is set, ONLY FILLED SLOTS (with a product selected and qty > 0) are used!
+  // Any rows that are left blank are COMPLETELY OMITTED from the bill and receipt!
+  const effectiveCartItems = useMemo(() => {
+    if (activeTemplate) {
+      return templateSlots
+        .filter((slot) => slot.selected_product !== null && Number(slot.quantity) > 0)
+        .map((slot) => ({
+          product: slot.selected_product!,
+          quantity: Number(slot.quantity),
+          unit_price: slot.selected_product!.is_service
+            ? Number(slot.unit_price !== undefined ? slot.unit_price : slot.selected_product!.selling_price || 0)
+            : Number(slot.selected_product!.selling_price || 0),
+          discount_amount: 0,
+          notes: '',
+        }));
+    }
+    return cart;
+  }, [activeTemplate, templateSlots, cart]);
+
   // Financial Calculations
-  const subtotal = cart.reduce(
+  const subtotal = effectiveCartItems.reduce(
     (sum, item) =>
       sum + item.quantity * Number(item.unit_price) - Number(item.discount_amount || 0),
     0
@@ -680,8 +915,12 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   // Trigger Quick-Pay Modal if enabled, or complete immediately
   const handleOpenQuickPayOrComplete = () => {
     if (isPrintingReceipt) return;
-    if (cart.length === 0) {
-      setErrorMsg('Cannot complete an empty sale. Please add items to cart.');
+    if (effectiveCartItems.length === 0) {
+      setErrorMsg(
+        activeTemplate
+          ? 'Template has no filled items. Please select products for at least one slot.'
+          : 'Cannot complete an empty sale. Please add items to cart.'
+      );
       return;
     }
     const isQuickPayEnabled = settings?.enable_pos_quick_pay ?? true;
@@ -712,8 +951,12 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
     overridePaymentSplits?: PaymentSplit[]
   ) => {
     if (completing || isCompletingRef.current || isPrintingReceipt) return;
-    if (cart.length === 0) {
-      setErrorMsg('Cannot complete an empty sale. Please add items to cart.');
+    if (effectiveCartItems.length === 0) {
+      setErrorMsg(
+        activeTemplate
+          ? 'Template has no filled items. Please select products for at least one slot.'
+          : 'Cannot complete an empty sale. Please add items to cart.'
+      );
       return;
     }
 
@@ -749,11 +992,12 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
 
     try {
       const payload: any = {
-        items: cart.map((i) => ({
+        items: effectiveCartItems.map((i) => ({
           product_id: i.product.id,
           quantity: i.quantity,
           unit_price: Number(i.unit_price),
           discount_amount: Number(i.discount_amount || 0),
+          notes: (i as any).notes || undefined,
         })),
         discount_amount: Number(saleDiscount || 0),
         tax_rate: Number(taxRate || 0),
@@ -879,8 +1123,10 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         setShowReceipt(true);
       }
 
-      // Reset cart and fields
+      // Reset cart, template and fields
       setCart([]);
+      setActiveTemplate(null);
+      setTemplateSlots([]);
       setSelectedCustomerId(null);
       setInlineCustomerName('');
       setInlineCustomerPhone('');
@@ -911,8 +1157,12 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
 
   // Create Quotation (No stock deduction, no money/accounts touched)
   const handleSaveQuotation = async () => {
-    if (cart.length === 0) {
-      setErrorMsg('Cannot create an empty quotation. Please add items to cart.');
+    if (effectiveCartItems.length === 0) {
+      setErrorMsg(
+        activeTemplate
+          ? 'Template has no filled items. Please select products for at least one slot.'
+          : 'Cannot create an empty quotation. Please add items to cart.'
+      );
       return;
     }
 
@@ -934,11 +1184,12 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         customer_name: custName,
         customer_phone: custPhone,
         customer_address: selectedCust ? (selectedCust.address || undefined) : undefined,
-        items: cart.map((i) => ({
+        items: effectiveCartItems.map((i) => ({
           product_id: i.product.id,
           quantity: i.quantity,
           unit_price: Number(i.unit_price),
           discount_amount: Number(i.discount_amount || 0),
+          notes: (i as any).notes || undefined,
         })),
         discount_amount: Number(saleDiscount || 0),
         tax_rate: Number(taxRate || 0),
@@ -949,8 +1200,10 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       setCreatedQuotation(res);
       setShowQuotationModal(true);
 
-      // Reset cart and fields
+      // Reset cart, template and fields
       setCart([]);
+      setActiveTemplate(null);
+      setTemplateSlots([]);
       setSelectedCustomerId(null);
       setInlineCustomerName('');
       setInlineCustomerPhone('');
@@ -1117,35 +1370,121 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Left Column: Product Search & Cart */}
         <div className="lg:col-span-7 space-y-4">
-          {/* Live Search & Barcode Input */}
+          {/* Live Search & Barcode Input + Bill Template Dropdown */}
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm relative transition-all">
-            <Input
-              ref={searchInputRef}
-              placeholder={`Search by Product name, ID${showSku ? ', SKU' : ''}${showBarcode ? ', or scan barcode' : ''}... (Press Enter to add)`}
-              prefix={
-                <Search
-                  className={`h-5 w-5 transition-colors ${
+            <div className="flex items-center gap-2">
+              <div className="flex-1 relative">
+                <Input
+                  ref={searchInputRef}
+                  placeholder={`Search by Product name, ID${showSku ? ', SKU' : ''}${showBarcode ? ', or scan barcode' : ''}... (Press Enter to add)`}
+                  prefix={
+                    <Search
+                      className={`h-5 w-5 transition-colors ${
+                        keyboardActiveTarget === 'search'
+                          ? 'text-brand-600 stroke-[2.5]'
+                          : 'text-brand-500'
+                      }`}
+                    />
+                  }
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={handleSearchKeyDown}
+                  onClick={() => {
+                    if (keyboardActiveTarget === 'search') {
+                      setKeyboardActiveTarget(null);
+                    }
+                  }}
+                  className={`text-base py-3 rounded-2xl font-medium transition-all ${
                     keyboardActiveTarget === 'search'
-                      ? 'text-brand-600 stroke-[2.5]'
-                      : 'text-brand-500'
+                      ? '!border-2 !border-brand-500 !ring-4 !ring-brand-500/25 !bg-brand-50/25 dark:!bg-brand-950/30 shadow-md !text-slate-900 dark:!text-slate-100'
+                      : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                   }`}
+                  autoFocus
                 />
-              }
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={handleSearchKeyDown}
-              onClick={() => {
-                if (keyboardActiveTarget === 'search') {
-                  setKeyboardActiveTarget(null);
-                }
-              }}
-              className={`text-base py-3 rounded-2xl font-medium transition-all ${
-                keyboardActiveTarget === 'search'
-                  ? '!border-2 !border-brand-500 !ring-4 !ring-brand-500/25 !bg-brand-50/25 dark:!bg-brand-950/30 shadow-md !text-slate-900 dark:!text-slate-100'
-                  : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-              }`}
-              autoFocus
-            />
+              </div>
+
+              {/* Bill / Product Kit Template Selector Dropdown */}
+              {templatesEnabled && (
+                <div className="relative shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setIsTemplateDropdownOpen((prev) => !prev)}
+                    className={`h-[48px] px-3.5 rounded-2xl flex items-center gap-2 font-bold text-xs transition border shadow-xs ${
+                      activeTemplate
+                        ? 'bg-teal-600 text-white border-teal-600 ring-2 ring-teal-500/30 shadow-teal-700/20'
+                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/80'
+                    }`}
+                    title="Autofill POS with structured Product Kit Templates (Solar, AC, etc.)"
+                  >
+                    <Layers className={`h-4 w-4 ${activeTemplate ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`} />
+                    <span className="hidden sm:inline">
+                      {activeTemplate ? activeTemplate.name : 'Templates'}
+                    </span>
+                    <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                  </button>
+
+                  {isTemplateDropdownOpen && (
+                    <div className="absolute right-0 top-14 z-40 w-72 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl p-2 space-y-1.5 animate-in fade-in zoom-in-95 duration-100">
+                      <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                        <span className="flex items-center gap-1.5">
+                          <Layers className="h-3.5 w-3.5 text-teal-500" />
+                          Bill Templates
+                        </span>
+                        <span>{availableTemplates.length} saved</span>
+                      </div>
+
+                      {activeTemplate && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleClearTemplate();
+                            setIsTemplateDropdownOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition flex items-center gap-2"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                          <span>Exit Template Mode (Return to Regular Cart)</span>
+                        </button>
+                      )}
+
+                      {availableTemplates.length === 0 ? (
+                        <div className="p-4 text-center text-xs text-slate-400 dark:text-slate-500 space-y-1">
+                          <p className="font-semibold text-slate-600 dark:text-slate-300">No templates saved yet</p>
+                          <p className="text-[11px]">
+                            Define templates in <strong>Settings → Bill Templates</strong> or save an active bill!
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                          {availableTemplates.map((tpl) => (
+                            <button
+                              key={tpl.id}
+                              type="button"
+                              onClick={() => handleSelectTemplate(tpl)}
+                              className={`w-full text-left p-2.5 rounded-xl transition flex items-center justify-between text-xs ${
+                                activeTemplate?.id === tpl.id
+                                  ? 'bg-teal-50 dark:bg-teal-950/40 text-teal-900 dark:text-teal-200 font-bold border border-teal-200 dark:border-teal-800'
+                                  : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200'
+                              }`}
+                            >
+                              <div className="min-w-0 mr-2">
+                                <div className="font-bold truncate">{tpl.name}</div>
+                                {tpl.description && (
+                                  <div className="text-[10px] text-slate-400 truncate">{tpl.description}</div>
+                                )}
+                              </div>
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 shrink-0 font-medium">
+                                {tpl.items?.length || 0} slots
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Live Search Results Dropdown */}
             {searchQuery.trim().length > 0 && (
@@ -1177,13 +1516,18 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                       >
                         <div>
                           <div
-                            className={`font-bold text-sm ${
+                            className={`font-bold text-sm flex items-center gap-1.5 ${
                               isDropdownActive
                                 ? 'text-brand-950 dark:text-brand-200 font-extrabold'
                                 : 'text-slate-800 dark:text-slate-100 group-hover:text-brand-900 dark:group-hover:text-brand-300'
                             }`}
                           >
-                            {prod.name}
+                            <span>{prod.name}</span>
+                            {prod.is_service && (
+                              <span className="inline-flex items-center px-1.5 py-0.2 text-[10px] font-semibold bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded border border-blue-200 dark:border-blue-800/60 shrink-0">
+                                No-Stock
+                              </span>
+                            )}
                           </div>
                           <div className="text-xs text-slate-400 dark:text-slate-500 flex flex-wrap items-center gap-1.5 mt-0.5">
                             <span>ID: {prod.product_id}</span>
@@ -1204,17 +1548,23 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                           <div className="font-black text-slate-900 dark:text-slate-100 text-sm">
                             {formatCurrency(prod.selling_price, currency)}
                           </div>
-                          <div
-                            className={`text-xs font-semibold ${
-                              Number(prod.current_stock) > 5
-                                ? 'text-emerald-600 dark:text-emerald-400'
-                                : Number(prod.current_stock) > 0
-                                ? 'text-amber-600 dark:text-amber-400'
-                                : 'text-rose-600 dark:text-rose-400'
-                            }`}
-                          >
-                            Stock: {prod.current_stock}
-                          </div>
+                          {prod.is_service ? (
+                            <div className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">
+                              No-Stock Item
+                            </div>
+                          ) : (
+                            <div
+                              className={`text-xs font-semibold ${
+                                Number(prod.current_stock) > 5
+                                  ? 'text-emerald-600 dark:text-emerald-400'
+                                  : Number(prod.current_stock) > 0
+                                  ? 'text-amber-600 dark:text-amber-400'
+                                  : 'text-rose-600 dark:text-rose-400'
+                              }`}
+                            >
+                              Stock: {prod.current_stock}
+                            </div>
+                          )}
                         </div>
                       </button>
                     );
@@ -1224,121 +1574,361 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
             )}
           </div>
 
-          {/* Cart Table */}
+          {/* Main POS Cart / Template Items Card */}
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden min-h-[380px] flex flex-col">
-            <div className="p-4 bg-slate-50/80 dark:bg-slate-800/80 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                Cart Items ({cart.reduce((sum, i) => sum + i.quantity, 0)} units)
+            <div className="p-3.5 sm:p-4 bg-slate-50/80 dark:bg-slate-800/80 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate mr-2">
+                {activeTemplate
+                  ? `Template: ${activeTemplate.name}`
+                  : `Cart Items (${cart.reduce((sum, i) => sum + i.quantity, 0)} units)`}
               </span>
-              {cart.length > 0 && (
-                <button
-                  onClick={() => setCart([])}
-                  className="text-xs text-rose-600 dark:text-rose-400 font-bold hover:underline"
-                >
-                  Clear All
-                </button>
-              )}
-            </div>
 
-            <div className="flex-1 overflow-y-auto max-h-[480px]">
-              {cart.length === 0 ? (
-                <div className="py-24 text-center text-slate-400 dark:text-slate-500 flex flex-col items-center">
-                  <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 mb-3">
-                    <Barcode className="h-6 w-6" />
-                  </div>
-                  <p className="font-semibold text-slate-600 dark:text-slate-300 text-sm">Cart is empty</p>
-                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                    {showBarcode
-                      ? 'Scan a product barcode or use search above'
-                      : 'Search products above to add to cart'}
-                  </p>
-                </div>
-              ) : (
-                <div className="divide-y divide-slate-100 dark:divide-slate-800 p-2 space-y-1">
-                  {cart.map((item, idx) => (
-                    <div
-                      key={item.product.id}
-                      onClick={() => setKeyboardActiveTarget(idx)}
-                      className={`p-3.5 transition-all flex items-center justify-between gap-3 rounded-2xl cursor-pointer ${
-                        keyboardActiveTarget === idx
-                          ? 'bg-brand-50/80 dark:bg-brand-950/50 border-2 border-brand-500 shadow-xs ring-2 ring-brand-500/20'
-                          : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/60 border-2 border-transparent'
-                      }`}
+              <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                {activeTemplate ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleAddExtraSlot}
+                      className="text-xs text-teal-600 dark:text-teal-400 font-bold hover:underline flex items-center gap-1"
                     >
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-slate-800 dark:text-slate-100 text-sm truncate">
-                          {item.product.name}
-                        </div>
-                        <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                          Unit Price: {formatCurrency(item.unit_price, currency)} • Stock:{' '}
-                          {item.product.current_stock}
-                        </div>
-                      </div>
-
-                      {/* Quantity Controls */}
-                      <div
-                        className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                          className="h-7 w-7 rounded-lg bg-white dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 shadow-sm font-bold transition disabled:opacity-40"
-                          title="Decrease quantity"
-                        >
-                          <Minus className="h-3.5 w-3.5" />
-                        </button>
-                        <CartQuantityInput
-                          productId={item.product.id}
-                          productName={item.product.name}
-                          quantity={item.quantity}
-                          availableStock={Number(item.product.current_stock || 0)}
-                          isActive={keyboardActiveTarget === idx}
-                          onUpdateQuantity={updateQuantity}
-                          onNotifyCapped={(maxStock, prodName) => {
-                            setErrorMsg(
-                              `Quantity capped to maximum available stock (${maxStock} units of ${prodName}).`
-                            );
-                          }}
-                          onNavigateUp={() => handleCartNavigateUp(idx)}
-                          onNavigateDown={() => handleCartNavigateDown(idx)}
-                          onFocusItem={() => setKeyboardActiveTarget(idx)}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                          className="h-7 w-7 rounded-lg bg-white dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 shadow-sm font-bold transition disabled:opacity-40"
-                          title="Increase quantity"
-                          disabled={item.quantity >= Number(item.product.current_stock || 0)}
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-
-                      {/* Item Total */}
-                      <div className="w-24 text-right">
-                        <span className="font-black text-slate-900 dark:text-slate-100 text-sm">
-                          {formatCurrency(item.quantity * Number(item.unit_price), currency)}
-                        </span>
-                      </div>
-
-                      {/* Remove Button */}
+                      <Plus className="h-3.5 w-3.5" />
+                      Add Row
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowSaveTemplateModal(true)}
+                      className="text-xs text-teal-600 dark:text-teal-400 font-bold hover:underline flex items-center gap-1"
+                    >
+                      <BookmarkPlus className="h-3.5 w-3.5" />
+                      Save as Template
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleClearTemplate}
+                      className="text-xs text-rose-600 dark:text-rose-400 font-bold hover:underline"
+                    >
+                      Exit Template
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {templatesEnabled && cart.length > 0 && (
                       <button
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeItem(item.product.id);
-                        }}
-                        className="text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 p-1 transition"
-                        title="Remove"
+                        onClick={() => setShowSaveTemplateModal(true)}
+                        className="text-xs text-teal-600 dark:text-teal-400 font-bold hover:underline flex items-center gap-1"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <BookmarkPlus className="h-3.5 w-3.5" />
+                        Save as Template
                       </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    )}
+                    {cart.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setCart([])}
+                        className="text-xs text-rose-600 dark:text-rose-400 font-bold hover:underline"
+                      >
+                        Clear All
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
+
+            {activeTemplate ? (
+              <div className="flex-1 overflow-x-auto max-h-[520px]">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 uppercase font-bold text-[10px] tracking-wider">
+                      <th className="py-2.5 px-2 w-8 text-center">#</th>
+                      <th className="py-2.5 px-2 w-28">Category</th>
+                      <th className="py-2.5 px-2">Product</th>
+                      <th className="py-2.5 px-1.5 w-20 text-center">Qty</th>
+                      <th className="py-2.5 px-2 w-24 text-right">Price</th>
+                      <th className="py-2.5 px-2 w-24 text-right">Total</th>
+                      <th className="py-2.5 px-1.5 w-7 text-center"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                    {templateSlots.map((slot, idx) => (
+                      <tr
+                        key={slot.slot_id}
+                        id={`template-slot-row-${idx}`}
+                        onClick={() => setKeyboardActiveTarget(idx)}
+                        className={`transition-colors cursor-pointer ${
+                          keyboardActiveTarget === idx
+                            ? 'bg-brand-50/90 dark:bg-brand-950/60 ring-2 ring-inset ring-brand-500 border-l-4 border-l-brand-600'
+                            : slot.selected_product
+                            ? 'hover:bg-slate-50/80 dark:hover:bg-slate-800/50'
+                            : 'bg-slate-50/30 dark:bg-slate-900/30 text-slate-400'
+                        }`}
+                      >
+                        {/* # */}
+                        <td className="py-2 px-2 text-center font-bold text-slate-400 text-xs">
+                          {idx + 1}
+                        </td>
+
+                        {/* Category */}
+                        <td className="py-2 px-2">
+                          <div
+                            className="font-semibold text-slate-800 dark:text-slate-200 text-xs truncate max-w-[110px]"
+                            title={slot.category_name || slot.slot_name}
+                          >
+                            {slot.category_name || slot.slot_name}
+                          </div>
+                        </td>
+
+                        {/* Product Selection */}
+                        <td className="py-1.5 px-2">
+                          <SlotProductPicker
+                            slot={slot}
+                            allProducts={products}
+                            currency={currency}
+                            onSelectProduct={(prod) => {
+                              handleSlotSelectProduct(idx, prod);
+                              setActiveSlotPickerIndex(null);
+                            }}
+                            onClearProduct={() => handleSlotClearProduct(idx)}
+                            isPickerOpen={activeSlotPickerIndex === idx}
+                            onTogglePicker={(open) => setActiveSlotPickerIndex(open ? idx : null)}
+                          />
+                        </td>
+
+                        {/* Qty Stepper */}
+                        <td className="py-1.5 px-1.5 text-center" onClick={(e) => e.stopPropagation()}>
+                          <div className="inline-flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg">
+                            <button
+                              type="button"
+                              onClick={() => handleSlotQuantityChange(idx, slot.quantity - 1)}
+                              disabled={slot.quantity <= 1}
+                              className="w-5 h-5 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center font-bold text-xs disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              -
+                            </button>
+                            <input
+                              type="number"
+                              min="1"
+                              value={slot.quantity}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value, 10);
+                                handleSlotQuantityChange(idx, isNaN(val) || val < 1 ? 1 : val);
+                              }}
+                              onBlur={(e) => {
+                                const val = parseInt(e.target.value, 10);
+                                if (isNaN(val) || val < 1) {
+                                  handleSlotQuantityChange(idx, 1);
+                                }
+                              }}
+                              className="w-7 text-center text-xs font-bold bg-transparent border-none outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSlotQuantityChange(idx, slot.quantity + 1)}
+                              className="w-5 h-5 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center font-bold text-xs"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </td>
+
+                        {/* Price */}
+                        <td className="py-2 px-2 text-right font-medium text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          {slot.selected_product ? (
+                            slot.selected_product.is_service ? (
+                              <div className="inline-flex items-center justify-end">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="any"
+                                  placeholder="0.00"
+                                  value={(slot.unit_price !== undefined ? slot.unit_price : slot.selected_product.selling_price) || ''}
+                                  onFocus={(e) => requestAnimationFrame(() => e.target.select())}
+                                  onChange={(e) => {
+                                    const raw = e.target.value.replace(/^0+(?=[1-9])/, '');
+                                    const val = parseFloat(raw);
+                                    handleSlotPriceChange(idx, isNaN(val) ? 0 : val);
+                                  }}
+                                  className="w-16 px-1.5 py-0.5 text-right text-xs font-bold bg-white dark:bg-slate-800 border border-teal-300 dark:border-teal-700 rounded text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                  title="Rate (editable)"
+                                />
+                              </div>
+                            ) : (
+                              formatCurrency(slot.selected_product.selling_price, currency)
+                            )
+                          ) : (
+                            <span className="text-slate-300 dark:text-slate-600 font-normal">—</span>
+                          )}
+                        </td>
+
+                        {/* Total */}
+                        <td className="py-2 px-2 text-right font-bold text-slate-900 dark:text-white text-xs whitespace-nowrap">
+                          {slot.selected_product && slot.quantity > 0 ? (
+                            formatCurrency(
+                              slot.quantity *
+                                Number(
+                                  slot.selected_product.is_service
+                                    ? (slot.unit_price !== undefined ? slot.unit_price : slot.selected_product.selling_price || 0)
+                                    : slot.selected_product.selling_price || 0
+                                ),
+                              currency
+                            )
+                          ) : (
+                            <span className="text-slate-300 dark:text-slate-600 font-normal">—</span>
+                          )}
+                        </td>
+
+                        {/* Remove */}
+                        <td className="py-2 px-1.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleSlotRemove(idx)}
+                            className="p-1 text-slate-300 hover:text-rose-500 transition"
+                            title="Remove row"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+
+              <div className="flex-1 overflow-y-auto max-h-[480px]">
+                {cart.length === 0 ? (
+                  <div className="py-24 text-center text-slate-400 dark:text-slate-500 flex flex-col items-center">
+                    <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 mb-3">
+                      <Barcode className="h-6 w-6" />
+                    </div>
+                    <p className="font-semibold text-slate-600 dark:text-slate-300 text-sm">Cart is empty</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                      {showBarcode
+                        ? 'Scan a product barcode or use search above'
+                        : 'Search products above to add to cart'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100 dark:divide-slate-800 p-2 space-y-1">
+                    {cart.map((item, idx) => (
+                      <div
+                        key={item.product.id}
+                        onClick={() => setKeyboardActiveTarget(idx)}
+                        className={`p-3.5 transition-all flex items-center justify-between gap-3 rounded-2xl cursor-pointer ${
+                          keyboardActiveTarget === idx
+                            ? 'bg-brand-50/80 dark:bg-brand-950/50 border-2 border-brand-500 shadow-xs ring-2 ring-brand-500/20'
+                            : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/60 border-2 border-transparent'
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-100 text-sm truncate">
+                            <span className="truncate">{item.product.name}</span>
+                            {item.product.is_service && (
+                              <span className="inline-flex items-center px-1.5 py-0.2 text-[10px] font-semibold bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded border border-blue-200 dark:border-blue-800/60 shrink-0">
+                                No-Stock
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                            {item.product.is_service ? (
+                              <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                <span className="text-slate-500 font-medium">Rate:</span>
+                                <div className="inline-flex items-center bg-white dark:bg-slate-800 border border-teal-300 dark:border-teal-700 rounded-lg px-2 py-0.5 shadow-2xs">
+                                  <span className="text-[11px] font-bold text-slate-400 mr-1">{currency}</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    placeholder="0.00"
+                                    value={item.unit_price || ''}
+                                    onFocus={(e) => requestAnimationFrame(() => e.target.select())}
+                                    onChange={(e) => {
+                                      const raw = e.target.value.replace(/^0+(?=[1-9])/, '');
+                                      const val = parseFloat(raw);
+                                      updateItemPrice(item.product.id, isNaN(val) ? 0 : val);
+                                    }}
+                                    className="w-16 text-xs font-bold text-slate-900 dark:text-slate-100 bg-transparent border-none outline-none focus:ring-0 p-0"
+                                    title="Edit service rate"
+                                  />
+                                </div>
+                                <span className="text-[11px] text-teal-600 dark:text-teal-400 font-medium">(No Stock)</span>
+                              </div>
+                            ) : (
+                              <span>
+                                Unit Price: {formatCurrency(item.unit_price, currency)} • Stock:{' '}
+                                {item.product.current_stock}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Quantity Controls */}
+                        <div
+                          className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
+                            className="h-7 w-7 rounded-lg bg-white dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 shadow-sm font-bold transition disabled:opacity-40"
+                            title="Decrease quantity"
+                          >
+                            <Minus className="h-3.5 w-3.5" />
+                          </button>
+                          <CartQuantityInput
+                            productId={item.product.id}
+                            productName={item.product.name}
+                            quantity={item.quantity}
+                            availableStock={Number(item.product.current_stock || 0)}
+                            isService={item.product.is_service}
+                            isActive={keyboardActiveTarget === idx}
+                            onUpdateQuantity={updateQuantity}
+                            onNotifyCapped={(maxStock, prodName) => {
+                              setErrorMsg(
+                                `Quantity capped to maximum available stock (${maxStock} units of ${prodName}).`
+                              );
+                            }}
+                            onNavigateUp={() => handleCartNavigateUp(idx)}
+                            onNavigateDown={() => handleCartNavigateDown(idx)}
+                            onFocusItem={() => setKeyboardActiveTarget(idx)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
+                            className="h-7 w-7 rounded-lg bg-white dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 shadow-sm font-bold transition disabled:opacity-40"
+                            title="Increase quantity"
+                            disabled={!item.product.is_service && item.quantity >= Number(item.product.current_stock || 0)}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Item Total */}
+                        <div className="w-24 text-right">
+                          <span className="font-black text-slate-900 dark:text-slate-100 text-sm">
+                            {formatCurrency(item.quantity * Number(item.unit_price), currency)}
+                          </span>
+                        </div>
+
+                        {/* Remove Button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeItem(item.product.id);
+                          }}
+                          className="text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 p-1 transition"
+                          title="Remove"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -1582,7 +2172,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                   size="lg"
                   icon={<FileText className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
                   onClick={handleSaveQuotation}
-                  disabled={cart.length === 0 || savingQuotation || completing}
+                  disabled={effectiveCartItems.length === 0 || savingQuotation || completing}
                   loading={savingQuotation}
                   className="py-3.5 text-sm font-bold border-indigo-200 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200 bg-indigo-50/50 dark:bg-indigo-950/40 hover:bg-indigo-100/60 dark:hover:bg-indigo-900/60 rounded-2xl whitespace-nowrap"
                   title="Create uncharged quotation (does not deduct stock or money)"
@@ -1596,7 +2186,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                 variant="primary"
                 size="lg"
                 onClick={() => handleCompleteSale()}
-                disabled={cart.length === 0 || completing || savingQuotation || Boolean(isPrintingReceipt)}
+                disabled={effectiveCartItems.length === 0 || completing || savingQuotation || Boolean(isPrintingReceipt)}
                 loading={completing || Boolean(isPrintingReceipt)}
                 className="flex-1 py-3.5 text-base font-bold tracking-wide rounded-2xl shadow-lg shadow-brand-600/20 flex items-center justify-center gap-2"
               >
@@ -1883,7 +2473,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
             <div className="text-right">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Items in Cart</span>
               <span className="text-xs font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-600 inline-block mt-0.5">
-                {cart.reduce((sum, item) => sum + item.quantity, 0)} units ({cart.length} items)
+                {effectiveCartItems.reduce((sum, item) => sum + item.quantity, 0)} units ({effectiveCartItems.length} items)
               </span>
             </div>
           </div>
@@ -1987,9 +2577,11 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                   step="any"
                   min="0"
                   value={quickPayAmount === 0 && !quickPayTouched ? '' : quickPayAmount}
+                  onFocus={(e) => requestAnimationFrame(() => e.target.select())}
                   onChange={(e) => {
                     setQuickPayTouched(true);
-                    const val = parseFloat(e.target.value);
+                    const raw = e.target.value.replace(/^0+(?=[1-9])/, '');
+                    const val = parseFloat(raw);
                     setQuickPayAmount(isNaN(val) ? 0 : val);
                   }}
                   onKeyDown={(e) => {
@@ -2103,8 +2695,10 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                             step="any"
                             min="0"
                             value={split.amount === 0 ? '' : split.amount}
+                            onFocus={(e) => requestAnimationFrame(() => e.target.select())}
                             onChange={(e) => {
-                              const val = parseFloat(e.target.value);
+                              const raw = e.target.value.replace(/^0+(?=[1-9])/, '');
+                              const val = parseFloat(raw);
                               const updated = [...quickPaySplits];
                               updated[sIdx].amount = isNaN(val) ? 0 : val;
                               setQuickPaySplits(updated);
@@ -2257,6 +2851,32 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
           </div>
         </div>
       </Modal>
+
+      {/* Save Active Cart / Template as New Bill Template Modal */}
+      <SaveTemplateModal
+        isOpen={templatesEnabled && showSaveTemplateModal}
+        onClose={() => setShowSaveTemplateModal(false)}
+        cartItems={
+          activeTemplate
+            ? templateSlots
+                .filter((s) => s.selected_product !== null && s.quantity > 0)
+                .map((s) => ({
+                  product: s.selected_product!,
+                  quantity: s.quantity,
+                  unit_price: Number(s.selected_product!.selling_price || 0),
+                }))
+            : cart.map((i) => ({
+                product: i.product,
+                quantity: i.quantity,
+                unit_price: Number(i.product.selling_price || i.unit_price || 0),
+              }))
+        }
+        onTemplateSaved={(newTpl) => {
+          setAvailableTemplates((prev) => [newTpl, ...prev.filter((t) => t.id !== newTpl.id)]);
+          setSuccessToast(`Template "${newTpl.name}" saved successfully!`);
+          setShowSaveTemplateModal(false);
+        }}
+      />
     </div>
   );
 };

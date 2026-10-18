@@ -39,6 +39,7 @@ def find_available_port(start_port: int = DEFAULT_PORT, max_tries: int = 10) -> 
     for port in range(start_port, start_port + max_tries):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 s.bind(('0.0.0.0', port))
                 return port
             except OSError:

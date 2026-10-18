@@ -8,6 +8,7 @@ interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, '
   hint?: string;
   prefix?: string | React.ReactNode;
   suffix?: string | React.ReactNode;
+  emptyOnZero?: boolean;
 }
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
@@ -18,23 +19,44 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
   suffix,
   className,
   id,
+  emptyOnZero,
+  value,
+  placeholder,
   ...props
 }, ref) => {
   const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
 
+  const isNumeric = props.type === 'number' || props.inputMode === 'numeric' || props.inputMode === 'decimal';
+  const shouldEmptyOnZero = emptyOnZero !== undefined ? emptyOnZero : isNumeric;
+  const displayValue = shouldEmptyOnZero && (value === 0 || value === '0') ? '' : value;
+  const effectivePlaceholder = placeholder !== undefined ? placeholder : (isNumeric ? (props.step === '1' ? '0' : '0.00') : undefined);
+
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-    if (props.type === 'number' || props.inputMode === 'numeric' || props.inputMode === 'decimal') {
-      if (e.target.value === '0' || e.target.value === '0.00' || e.target.value === '0.0') {
+    if (isNumeric) {
+      requestAnimationFrame(() => {
         e.target.select();
-      }
+      });
     }
     props.onFocus?.(e);
   };
 
+  const handleClick = (e: React.MouseEvent<HTMLInputElement>) => {
+    if (isNumeric) {
+      const val = e.currentTarget.value;
+      if (val === '0' || val === '0.00' || val === '0.0') {
+        requestAnimationFrame(() => {
+          e.currentTarget.select();
+        });
+      }
+    }
+    props.onClick?.(e);
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (props.type === 'number') {
+    if (isNumeric) {
       const val = e.target.value;
-      if (/^0\d+/.test(val) && !val.startsWith('0.')) {
+      // Strip leading zeros like 01 -> 1, 005 -> 5, preserving 0.5, 0.05
+      if (/^0+[1-9]/.test(val)) {
         e.target.value = val.replace(/^0+/, '');
       }
     }
@@ -57,6 +79,8 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
         <input
           id={inputId}
           ref={ref}
+          value={displayValue}
+          placeholder={effectivePlaceholder}
           className={twMerge(
             clsx(
               'block w-full rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-2.5 text-sm text-slate-800 dark:text-slate-100 transition duration-150',
@@ -70,6 +94,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
           )}
           {...props}
           onFocus={handleFocus}
+          onClick={handleClick}
           onChange={handleChange}
         />
         {suffix && (

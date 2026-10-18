@@ -8,6 +8,7 @@ class SaleItemCreate(BaseModel):
     quantity: Decimal
     unit_price: Decimal
     discount_amount: Decimal = Decimal("0.00")
+    notes: Optional[str] = None
 
 class PaymentSplit(BaseModel):
     payment_method: str
@@ -50,6 +51,7 @@ class SaleItemResponse(BaseModel):
     returned_quantity: Decimal = Decimal("0.00")
     remaining_returnable_quantity: Decimal = Decimal("0.00")
     batches: Optional[List[SaleItemBatchResponse]] = None
+    notes: Optional[str] = None
 
     class Config:
         from_attributes = True

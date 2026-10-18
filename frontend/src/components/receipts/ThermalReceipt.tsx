@@ -258,6 +258,11 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
                           {item.product_name}
                           {isFullyReturned && ' [RET]'}
                           {isPartiallyReturned && ` [${retQty}R]`}
+                          {item.notes && item.notes.trim() !== item.product_name?.trim() && (
+                            <div className="text-[9px] font-normal text-slate-600 leading-tight">
+                              {item.notes}
+                            </div>
+                          )}
                         </td>
                         <td className="py-1 text-right tabular-nums font-bold whitespace-nowrap">
                           {isPartiallyReturned ? remQty : origQty}
@@ -370,6 +375,11 @@ export const ThermalReceipt: React.FC<ThermalReceiptProps> = ({
                       {isFullyReturned && ' (RETURNED)'}
                       {isPartiallyReturned && ` (${retQty} RET)`}
                     </div>
+                    {item.notes && item.notes.trim() !== item.product_name?.trim() && (
+                      <div className="text-[9.5px] font-normal text-slate-700 leading-tight">
+                        {item.notes}
+                      </div>
+                    )}
 
                     <div className="flex justify-between items-baseline mt-0.5">
                       <span className="text-black font-bold">

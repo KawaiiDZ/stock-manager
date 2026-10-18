@@ -240,7 +240,7 @@ def check_quotation_conversion(db: Session, quotation_id: int) -> QuotationConve
         if price_changed:
             has_price_changes = True
 
-        shortage = current_stock < item.quantity
+        shortage = (not getattr(prod, 'is_service', False)) and (current_stock < item.quantity)
         if shortage:
             has_stock_shortages = True
 
@@ -281,7 +281,7 @@ def convert_quotation_to_sale(db: Session, quotation_id: int, request: Quotation
             raise EntityNotFoundException('Product', str(it.product_id))
         if hasattr(p, 'is_active') and not p.is_active:
             raise BusinessRuleException(f"Product '{p.name}' is archived/inactive and cannot be converted to sale.")
-        if p.current_stock < it.quantity:
+        if not getattr(p, 'is_service', False) and p.current_stock < it.quantity:
             raise InsufficientStockException(
                 product_name=p.name,
                 available=float(p.current_stock),

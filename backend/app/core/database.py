@@ -188,4 +188,57 @@ def auto_upgrade_schema(target_engine=None):
         except Exception as e:
             print("Auto-upgrade error (FIFO batch auto-healing):", e)
 
+        # 6. Service / No-Stock Item category auto-healing
+        try:
+            conn.execute(text("""
+                INSERT OR IGNORE INTO product_categories (name, is_active, created_at)
+                SELECT 'No-Stock Item', 1, datetime('now')
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM product_categories WHERE lower(name) in ('no-stock item', 'no-stock items', 'no stock item')
+                )
+            """))
+            cat_row = conn.execute(text("SELECT id FROM product_categories WHERE lower(name) in ('no-stock item', 'no-stock items', 'no stock item') LIMIT 1")).fetchone()
+            if cat_row:
+                no_stock_cat_id = cat_row[0]
+                conn.execute(text("""
+                    UPDATE products
+                    SET category_id = :cat_id, barcode = NULL
+                    WHERE is_service = 1 AND (category_id != :cat_id OR category_id IS NULL OR barcode IS NOT NULL)
+                """), {'cat_id': no_stock_cat_id})
+            conn.commit()
+        except Exception as e:
+            print("Auto-upgrade error (No-Stock Item category healing):", e)
+
+        # 7. Account transfers table creation & indexes
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS account_transfers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    transfer_number VARCHAR(30) UNIQUE NOT NULL,
+                    from_account VARCHAR(100) NOT NULL,
+                    to_account VARCHAR(100) NOT NULL,
+                    amount NUMERIC(12, 2) NOT NULL,
+                    transfer_date DATETIME,
+                    notes TEXT NULL,
+                    created_at DATETIME
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_account_transfers_id ON account_transfers (id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_account_transfers_transfer_number ON account_transfers (transfer_number)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_account_transfers_from_account ON account_transfers (from_account)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_account_transfers_to_account ON account_transfers (to_account)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_account_transfers_transfer_date ON account_transfers (transfer_date)"))
+            conn.commit()
+        except Exception as e:
+            print("Auto-upgrade error (account_transfers table):", e)
+
+        # 8. Sanitize any legacy sale payments with method 'Split' to 'Cash'
+        try:
+            conn.execute(text("UPDATE sale_payments SET payment_method = 'Cash' WHERE LOWER(payment_method) IN ('split', 'split payment', 'mix', 'mixed')"))
+            conn.commit()
+        except Exception as e:
+            print("Auto-upgrade error (sanitize split payment methods):", e)
+
+
+
 

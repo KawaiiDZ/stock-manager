@@ -10,13 +10,36 @@ from backend.app.models.purchase import PurchaseItem, PurchaseReturnItem
 from backend.app.models.quotation import QuotationItem
 from backend.app.schemas.product import (
     ProductCreate, ProductUpdate, CategoryCreate, CustomFieldCreate, CustomFieldUpdate,
-    CustomFieldResponse, CustomValueDto, StockAdjustmentRequest, BulkProductsResponse
+    CustomFieldResponse, CustomValueDto, StockAdjustmentRequest, BulkProductsResponse,
+    ProductBulkUpdateItem, BulkProductUpdateResponse
 )
 from backend.app.services.id_generator import generate_product_id
 from backend.app.core.errors import DuplicateBarcodeException, EntityNotFoundException, BusinessRuleException
 
 # Categories
+def get_or_create_no_stock_category(db: Session) -> ProductCategory:
+    cat = db.query(ProductCategory).filter(
+        func.lower(ProductCategory.name) == "no-stock item"
+    ).first()
+    if not cat:
+        cat = db.query(ProductCategory).filter(
+            or_(
+                func.lower(ProductCategory.name) == "no-stock items",
+                func.lower(ProductCategory.name) == "no stock item"
+            )
+        ).first()
+    if not cat:
+        cat = ProductCategory(name="No-Stock Item", is_active=True)
+        db.add(cat)
+        db.flush()
+    elif not cat.is_active:
+        cat.is_active = True
+        db.flush()
+    return cat
+
 def list_categories(db: Session, active_only: bool = True) -> List[ProductCategory]:
+    # Ensure No-Stock Item category exists
+    get_or_create_no_stock_category(db)
     q = db.query(ProductCategory)
     if active_only:
         q = q.filter(ProductCategory.is_active == True)
@@ -25,14 +48,17 @@ def list_categories(db: Session, active_only: bool = True) -> List[ProductCatego
 def create_category(db: Session, data: CategoryCreate) -> ProductCategory:
     if not data.name or not data.name.strip():
         raise BusinessRuleException("Category name cannot be empty.")
-    existing = db.query(ProductCategory).filter(ProductCategory.name == data.name.strip()).first()
+    clean_name = data.name.strip()
+    if clean_name.lower() in ("no-stock item", "no-stock items", "no stock item"):
+        return get_or_create_no_stock_category(db)
+    existing = db.query(ProductCategory).filter(ProductCategory.name == clean_name).first()
     if existing:
         if not existing.is_active:
             existing.is_active = True
             db.commit()
             return existing
         raise BusinessRuleException(f"Category '{data.name}' already exists.")
-    cat = ProductCategory(name=data.name.strip(), is_active=True)
+    cat = ProductCategory(name=clean_name, is_active=True)
     db.add(cat)
     db.commit()
     db.refresh(cat)
@@ -44,6 +70,8 @@ def update_category(db: Session, cat_id: int, name: str, is_active: Optional[boo
         raise EntityNotFoundException("Category", str(cat_id))
     if not name or not name.strip():
         raise BusinessRuleException("Category name cannot be empty.")
+    if cat.name.strip().lower() in ("no-stock item", "no-stock items", "no stock item") and name.strip().lower() not in ("no-stock item", "no-stock items", "no stock item"):
+        raise BusinessRuleException("The system 'No-Stock Item' category cannot be renamed.")
     cat.name = name.strip()
     if is_active is not None:
         cat.is_active = is_active
@@ -55,6 +83,8 @@ def delete_category(db: Session, cat_id: int) -> None:
     cat = db.query(ProductCategory).filter(ProductCategory.id == cat_id).first()
     if not cat:
         raise EntityNotFoundException("Category", str(cat_id))
+    if cat.name.strip().lower() in ("no-stock item", "no-stock items", "no stock item"):
+        raise BusinessRuleException("The system 'No-Stock Item' category cannot be deleted.")
 
     # 1. Find all products belonging to this category
     products = db.query(Product).filter(Product.category_id == cat_id).all()
@@ -227,6 +257,7 @@ def _format_product_response(product: Product) -> dict:
         "purchase_price": product.purchase_price,
         "selling_price": product.selling_price,
         "current_stock": product.current_stock,
+        "is_service": bool(getattr(product, "is_service", False)),
         "is_active": product.is_active,
         "custom_fields": custom_vals,
         "created_at": product.created_at,
@@ -328,35 +359,48 @@ def create_product(db: Session, data: ProductCreate) -> dict:
 
     new_pid = generate_product_id(db)
 
+    is_service = bool(data.is_service)
+    purchase_price = Decimal("0.00") if is_service else data.purchase_price
+    opening_stock = Decimal("0.00") if is_service else data.opening_stock
+
+    if is_service:
+        no_stock_cat = get_or_create_no_stock_category(db)
+        category_id = no_stock_cat.id
+        barcode = None
+    else:
+        category_id = data.category_id if data.category_id and data.category_id > 0 else None
+        barcode = data.barcode.strip() if data.barcode else None
+
     product = Product(
         product_id=new_pid,
         name=data.name.strip(),
         sku=data.sku.strip() if data.sku else None,
-        barcode=data.barcode.strip() if data.barcode else None,
-        category_id=data.category_id if data.category_id and data.category_id > 0 else None,
-        purchase_price=data.purchase_price,
+        barcode=barcode,
+        category_id=category_id,
+        purchase_price=purchase_price,
         selling_price=data.selling_price,
-        current_stock=data.opening_stock,
+        current_stock=opening_stock,
+        is_service=is_service,
         is_active=True
     )
     db.add(product)
     db.flush()
 
-    if data.opening_stock > Decimal("0.00"):
+    if not is_service and opening_stock > Decimal("0.00"):
         batch = InventoryBatch(
             product_id=product.id,
             purchase_id=None,
-            quantity_received=data.opening_stock,
-            quantity_remaining=data.opening_stock,
-            unit_cost=data.purchase_price
+            quantity_received=opening_stock,
+            quantity_remaining=opening_stock,
+            unit_cost=purchase_price
         )
         db.add(batch)
 
         movement = InventoryMovement(
             product_id=product.id,
             movement_type="OPENING_STOCK",
-            quantity=data.opening_stock,
-            unit_cost=data.purchase_price,
+            quantity=opening_stock,
+            unit_cost=purchase_price,
             reference_type="OPENING",
             reference_id=product.product_id,
             notes="Initial opening stock on product creation"
@@ -411,35 +455,48 @@ def create_products_bulk(db: Session, products_data: List[ProductCreate]) -> Bul
 
         new_pid = generate_product_id(db)
 
+        is_service = bool(item.is_service)
+        purchase_price = Decimal("0.00") if is_service else item.purchase_price
+        opening_stock = Decimal("0.00") if is_service else item.opening_stock
+
+        if is_service:
+            no_stock_cat = get_or_create_no_stock_category(db)
+            cat_id = no_stock_cat.id
+            item_barcode = None
+        else:
+            cat_id = item.category_id if item.category_id and item.category_id > 0 else None
+            item_barcode = barcode
+
         product = Product(
             product_id=new_pid,
             name=name,
             sku=item.sku.strip() if item.sku else None,
-            barcode=barcode,
-            category_id=item.category_id if item.category_id and item.category_id > 0 else None,
-            purchase_price=item.purchase_price,
+            barcode=item_barcode,
+            category_id=cat_id,
+            purchase_price=purchase_price,
             selling_price=item.selling_price,
-            current_stock=item.opening_stock,
+            current_stock=opening_stock,
+            is_service=is_service,
             is_active=True
         )
         db.add(product)
         db.flush()
 
-        if item.opening_stock > Decimal("0.00"):
+        if not is_service and opening_stock > Decimal("0.00"):
             batch = InventoryBatch(
                 product_id=product.id,
                 purchase_id=None,
-                quantity_received=item.opening_stock,
-                quantity_remaining=item.opening_stock,
-                unit_cost=item.purchase_price
+                quantity_received=opening_stock,
+                quantity_remaining=opening_stock,
+                unit_cost=purchase_price
             )
             db.add(batch)
 
             movement = InventoryMovement(
                 product_id=product.id,
                 movement_type="OPENING_STOCK",
-                quantity=item.opening_stock,
-                unit_cost=item.purchase_price,
+                quantity=opening_stock,
+                unit_cost=purchase_price,
                 reference_type="OPENING",
                 reference_id=product.product_id,
                 notes="Bulk opening stock"
@@ -530,26 +587,37 @@ def update_product(db: Session, product_id: int, data: ProductUpdate) -> dict:
     if not product:
         raise EntityNotFoundException("Product", str(product_id))
 
-    if data.barcode is not None:
-        bc_val = data.barcode.strip() if data.barcode else None
-        if bc_val:
-            conflict = db.query(Product).filter(Product.barcode == bc_val, Product.id != product_id).first()
-            if conflict:
-                raise DuplicateBarcodeException(bc_val, conflict.name)
-        product.barcode = bc_val
-
     if data.name is not None:
         if not data.name.strip():
             raise BusinessRuleException("Product name cannot be empty.")
         product.name = data.name.strip()
     if data.sku is not None:
         product.sku = data.sku.strip() if data.sku else None
-    if data.category_id is not None:
-        product.category_id = data.category_id if data.category_id > 0 else None
-    if data.purchase_price is not None:
-        if data.purchase_price < Decimal("0.00"):
-            raise BusinessRuleException("Purchase price cannot be negative.")
-        product.purchase_price = data.purchase_price
+
+    if data.is_service is not None:
+        product.is_service = data.is_service
+
+    if product.is_service:
+        no_stock_cat = get_or_create_no_stock_category(db)
+        product.category_id = no_stock_cat.id
+        product.barcode = None
+        product.purchase_price = Decimal("0.00")
+        product.current_stock = Decimal("0.00")
+    else:
+        if data.barcode is not None:
+            bc_val = data.barcode.strip() if data.barcode else None
+            if bc_val:
+                conflict = db.query(Product).filter(Product.barcode == bc_val, Product.id != product_id).first()
+                if conflict:
+                    raise DuplicateBarcodeException(bc_val, conflict.name)
+            product.barcode = bc_val
+        if data.category_id is not None:
+            product.category_id = data.category_id if data.category_id > 0 else None
+        if data.purchase_price is not None:
+            if data.purchase_price < Decimal("0.00"):
+                raise BusinessRuleException("Purchase price cannot be negative.")
+            product.purchase_price = data.purchase_price
+
     if data.selling_price is not None:
         if data.selling_price < Decimal("0.00"):
             raise BusinessRuleException("Selling price cannot be negative.")
@@ -614,4 +682,132 @@ def delete_product_permanent(db: Session, product_id: int) -> None:
 
     db.delete(product)
     db.commit()
+
+
+def update_products_bulk(db: Session, updates: List[ProductBulkUpdateItem]) -> BulkProductUpdateResponse:
+    if not updates:
+        raise BusinessRuleException("No product updates provided.")
+
+    updated_ids = []
+    barcodes_in_batch = {}
+
+    # Check for duplicate barcodes within the update batch itself
+    for item in updates:
+        if item.barcode and item.barcode.strip():
+            clean_bc = item.barcode.strip()
+            if clean_bc in barcodes_in_batch:
+                raise DuplicateBarcodeException(clean_bc, f"Multiple products in this batch have barcode '{clean_bc}'")
+            barcodes_in_batch[clean_bc] = item.id
+
+    for item in updates:
+        product = db.query(Product).filter(Product.id == item.id).first()
+        if not product:
+            raise EntityNotFoundException("Product", str(item.id))
+
+        if item.name is not None:
+            clean_name = item.name.strip()
+            if not clean_name:
+                raise BusinessRuleException(f"Product #{item.id} name cannot be empty.")
+            product.name = clean_name
+
+        if item.sku is not None:
+            product.sku = item.sku.strip() if item.sku else None
+
+        if item.selling_price is not None:
+            if item.selling_price < Decimal("0.00"):
+                raise BusinessRuleException(f"Selling price for '{product.name}' cannot be negative.")
+            product.selling_price = item.selling_price
+
+        if item.is_service is not None:
+            product.is_service = item.is_service
+
+        if product.is_service:
+            no_stock_cat = get_or_create_no_stock_category(db)
+            product.category_id = no_stock_cat.id
+            product.barcode = None
+            product.purchase_price = Decimal("0.00")
+            product.current_stock = Decimal("0.00")
+        else:
+            if item.barcode is not None:
+                clean_bc = item.barcode.strip() if item.barcode else None
+                if clean_bc:
+                    conflict = db.query(Product).filter(Product.barcode == clean_bc, Product.id != item.id).first()
+                    if conflict:
+                        raise DuplicateBarcodeException(clean_bc, conflict.name)
+                product.barcode = clean_bc
+            if item.category_id is not None:
+                product.category_id = item.category_id if item.category_id > 0 else None
+            if item.purchase_price is not None:
+                if item.purchase_price < Decimal("0.00"):
+                    raise BusinessRuleException(f"Cost price for '{product.name}' cannot be negative.")
+                product.purchase_price = item.purchase_price
+
+        # Stock adjustment if current_stock differs (only for non-service products)
+        if not product.is_service and item.current_stock is not None:
+            if item.current_stock < Decimal("0.00"):
+                raise BusinessRuleException(f"Stock for '{product.name}' cannot be negative.")
+            old_stock = product.current_stock or Decimal("0.00")
+            diff = item.current_stock - old_stock
+            if diff != Decimal("0.00"):
+                product.current_stock = item.current_stock
+                if diff > Decimal("0.00"):
+                    batch = InventoryBatch(
+                        product_id=product.id,
+                        purchase_id=None,
+                        quantity_received=diff,
+                        quantity_remaining=diff,
+                        unit_cost=product.purchase_price
+                    )
+                    db.add(batch)
+                else:
+                    qty_to_deduct = abs(diff)
+                    batches = db.query(InventoryBatch).filter(
+                        InventoryBatch.product_id == product.id,
+                        InventoryBatch.quantity_remaining > Decimal("0.00")
+                    ).order_by(InventoryBatch.created_at.desc(), InventoryBatch.id.desc()).all()
+                    for b in batches:
+                        if qty_to_deduct <= Decimal("0.00"):
+                            break
+                        deduct_amt = min(qty_to_deduct, b.quantity_remaining)
+                        b.quantity_remaining -= deduct_amt
+                        qty_to_deduct -= deduct_amt
+
+                movement = InventoryMovement(
+                    product_id=product.id,
+                    movement_type="ADJUSTMENT",
+                    quantity=diff,
+                    unit_cost=product.purchase_price,
+                    reference_type="BULK_EDIT",
+                    reference_id=f"BULK-ADJ-{product.product_id}",
+                    notes=f"Bulk edit stock adjustment from {old_stock} to {item.current_stock}"
+                )
+                db.add(movement)
+
+        # Custom fields update
+        if item.custom_fields is not None:
+            db.query(ProductCustomValue).filter(ProductCustomValue.product_id == item.id).delete()
+            for cf in item.custom_fields:
+                if cf.value and cf.value.strip():
+                    field_exists = db.query(ProductCustomField).filter(ProductCustomField.id == cf.field_id).first()
+                    if not field_exists:
+                        continue
+                    val = ProductCustomValue(
+                        product_id=product.id,
+                        field_id=cf.field_id,
+                        value=cf.value.strip()
+                    )
+                    db.add(val)
+
+        updated_ids.append(product.id)
+
+    db.commit()
+
+    saved_products = [get_product(db, pid) for pid in updated_ids]
+    return BulkProductUpdateResponse(
+        success=True,
+        count=len(saved_products),
+        products=saved_products,
+        message=f"Successfully updated {len(saved_products)} products."
+    )
+
 

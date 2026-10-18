@@ -78,7 +78,8 @@ def _format_sale_response(sale: Sale) -> SaleResponse:
             realized_profit=item_realized_profit,
             returned_quantity=ret_qty,
             remaining_returnable_quantity=rem_ret_qty,
-            batches=batch_links
+            batches=batch_links,
+            notes=item.notes
         ))
 
     payments_dto = []
@@ -216,8 +217,8 @@ def _execute_create_sale(db: Session, data: SaleCreate) -> SaleResponse:
         if item_data.discount_amount < Decimal("0.00"):
             raise BusinessRuleException(f"Discount for {product.name} cannot be negative.")
 
-        # Stock check
-        if product.current_stock < item_data.quantity:
+        # Stock check (only for physical products)
+        if not product.is_service and product.current_stock < item_data.quantity:
             raise InsufficientStockException(
                 product_name=product.name,
                 available=float(product.current_stock),
@@ -230,66 +231,73 @@ def _execute_create_sale(db: Session, data: SaleCreate) -> SaleResponse:
 
         subtotal += item_total_price
 
-        # FIFO Batch Consumption
-        batches = db.query(InventoryBatch).filter(
-            InventoryBatch.product_id == product.id,
-            InventoryBatch.quantity_remaining > Decimal("0.00")
-        ).order_by(InventoryBatch.created_at.asc(), InventoryBatch.id.asc()).all()
+        if product.is_service:
+            # Services have no cost, no batch tracking, and do not decrement inventory stock
+            item_fifo_cost = Decimal("0.00")
+            item_unit_cost = Decimal("0.00")
+            batch_links_to_create = []
+        else:
+            # FIFO Batch Consumption
+            batches = db.query(InventoryBatch).filter(
+                InventoryBatch.product_id == product.id,
+                InventoryBatch.quantity_remaining > Decimal("0.00")
+            ).order_by(InventoryBatch.created_at.asc(), InventoryBatch.id.asc()).all()
 
-        qty_needed = item_data.quantity
-        item_fifo_cost = Decimal("0.00")
-        batch_links_to_create = []
+            qty_needed = item_data.quantity
+            item_fifo_cost = Decimal("0.00")
+            batch_links_to_create = []
 
-        for b in batches:
-            if qty_needed <= Decimal("0.00"):
-                break
-            consume_qty = min(qty_needed, b.quantity_remaining)
-            b.quantity_remaining -= consume_qty
-            item_fifo_cost += (consume_qty * b.unit_cost)
-            qty_needed -= consume_qty
-            batch_links_to_create.append({
-                "batch_id": b.id,
-                "quantity": consume_qty,
-                "unit_cost": b.unit_cost
-            })
+            for b in batches:
+                if qty_needed <= Decimal("0.00"):
+                    break
+                consume_qty = min(qty_needed, b.quantity_remaining)
+                b.quantity_remaining -= consume_qty
+                item_fifo_cost += (consume_qty * b.unit_cost)
+                qty_needed -= consume_qty
+                batch_links_to_create.append({
+                    "batch_id": b.id,
+                    "quantity": consume_qty,
+                    "unit_cost": b.unit_cost
+                })
 
-        if qty_needed > Decimal("0.00"):
-            # Auto-heal FIFO batch deficit if physical stock was available
-            fallback_batch = InventoryBatch(
+            if qty_needed > Decimal("0.00"):
+                # Auto-heal FIFO batch deficit if physical stock was available
+                fallback_batch = InventoryBatch(
+                    product_id=product.id,
+                    purchase_id=None,
+                    quantity_received=qty_needed,
+                    quantity_remaining=Decimal("0.00"),
+                    unit_cost=product.purchase_price
+                )
+                db.add(fallback_batch)
+                db.flush()
+
+                item_fifo_cost += (qty_needed * product.purchase_price)
+                batch_links_to_create.append({
+                    "batch_id": fallback_batch.id,
+                    "quantity": qty_needed,
+                    "unit_cost": product.purchase_price
+                })
+                qty_needed = Decimal("0.00")
+
+            product.current_stock -= item_data.quantity
+
+            item_unit_cost = (item_fifo_cost / item_data.quantity).quantize(Decimal("0.01"))
+
+            # Log Inventory Movement
+            movement = InventoryMovement(
                 product_id=product.id,
-                purchase_id=None,
-                quantity_received=qty_needed,
-                quantity_remaining=Decimal("0.00"),
-                unit_cost=product.purchase_price
+                movement_type="SALE",
+                quantity=-item_data.quantity,
+                unit_cost=item_unit_cost,
+                reference_type="SALE",
+                reference_id=receipt_no,
+                notes=f"Sold in receipt {receipt_no}"
             )
-            db.add(fallback_batch)
-            db.flush()
+            db.add(movement)
 
-            item_fifo_cost += (qty_needed * product.purchase_price)
-            batch_links_to_create.append({
-                "batch_id": fallback_batch.id,
-                "quantity": qty_needed,
-                "unit_cost": product.purchase_price
-            })
-            qty_needed = Decimal("0.00")
-
-        product.current_stock -= item_data.quantity
-
-        item_unit_cost = (item_fifo_cost / item_data.quantity).quantize(Decimal("0.01"))
         item_gross_profit = item_total_price - item_fifo_cost
         total_sale_cost += item_fifo_cost
-
-        # Log Inventory Movement
-        movement = InventoryMovement(
-            product_id=product.id,
-            movement_type="SALE",
-            quantity=-item_data.quantity,
-            unit_cost=item_unit_cost,
-            reference_type="SALE",
-            reference_id=receipt_no,
-            notes=f"Sold in receipt {receipt_no}"
-        )
-        db.add(movement)
 
         processed_items.append({
             "product_id": product.id,
@@ -301,7 +309,8 @@ def _execute_create_sale(db: Session, data: SaleCreate) -> SaleResponse:
             "unit_cost": item_unit_cost,
             "total_cost": item_fifo_cost,
             "gross_profit": item_gross_profit,
-            "batches": batch_links_to_create
+            "batches": batch_links_to_create,
+            "notes": item_data.notes,
         })
 
     # 5. Calculate Sale Totals
@@ -364,7 +373,8 @@ def _execute_create_sale(db: Session, data: SaleCreate) -> SaleResponse:
             total_price=p_item["total_price"],
             unit_cost=p_item["unit_cost"],
             total_cost=p_item["total_cost"],
-            gross_profit=p_item["gross_profit"]
+            gross_profit=p_item["gross_profit"],
+            notes=p_item.get("notes")
         )
         db.add(sale_item)
         db.flush()
@@ -395,10 +405,13 @@ def _execute_create_sale(db: Session, data: SaleCreate) -> SaleResponse:
                 db.add(payment)
                 remaining_to_allocate -= alloc_amount
         else:
+            method = data.payment_method or "Cash"
+            if method.strip().lower() in ("split", "split payment", "mix", "mixed", "__split__"):
+                method = "Cash"
             payment = SalePayment(
                 sale_id=sale.id,
                 amount=paid_amount,
-                payment_method=data.payment_method or "Cash",
+                payment_method=method,
                 created_at=sale.created_at
             )
             db.add(payment)

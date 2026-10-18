@@ -58,3 +58,8 @@ def generate_bill_number(db: Session) -> str:
 def generate_quotation_number(db: Session) -> str:
     return _generate_unique_code(db, Quotation, Quotation.quotation_number, "Q")
 
+def generate_transfer_number(db: Session) -> str:
+    from backend.app.models.account_transfer import AccountTransfer
+    return _generate_unique_code(db, AccountTransfer, AccountTransfer.transfer_number, "TR")
+
+

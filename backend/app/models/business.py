@@ -41,6 +41,7 @@ class BusinessSettings(Base):
     hide_header_text_with_letterhead = Column(Boolean, nullable=False, default=False)
     invoice_title = Column(String(100), nullable=False, default="TAX INVOICE")
     enable_quotations = Column(Boolean, nullable=False, default=True)
+    enable_bill_templates = Column(Boolean, nullable=False, default=True)
     enable_navigation_hub = Column(Boolean, nullable=False, default=True)
     theme_mode = Column(String(20), nullable=False, default="light")  # light, dark, system
     color_theme = Column(String(30), nullable=False, default="emerald")  # emerald, indigo, sky, rose, slate

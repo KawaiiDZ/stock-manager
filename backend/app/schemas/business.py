@@ -41,6 +41,7 @@ class BusinessSettingsResponse(BaseModel):
     hide_header_text_with_letterhead: bool = False
     invoice_title: str = "TAX INVOICE"
     enable_quotations: bool = True
+    enable_bill_templates: bool = True
     enable_navigation_hub: bool = True
     theme_mode: str = "light"
     color_theme: str = "emerald"
@@ -121,6 +122,7 @@ class BusinessSettingsUpdate(BaseModel):
     hide_header_text_with_letterhead: Optional[bool] = None
     invoice_title: Optional[str] = None
     enable_quotations: Optional[bool] = None
+    enable_bill_templates: Optional[bool] = None
     enable_navigation_hub: Optional[bool] = None
     theme_mode: Optional[str] = None
     color_theme: Optional[str] = None

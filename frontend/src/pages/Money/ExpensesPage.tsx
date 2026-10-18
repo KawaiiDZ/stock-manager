@@ -293,8 +293,9 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ settings }) => {
               step="0.01"
               min="1"
               prefix={currency}
+              placeholder="0.00"
               value={amount || ''}
-              onChange={(e) => setAmount(Number(e.target.value))}
+              onChange={(e) => setAmount(Number(e.target.value.replace(/^0+(?=[1-9])/, '')))}
               required
             />
 

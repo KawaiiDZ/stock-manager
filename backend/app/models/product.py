@@ -25,6 +25,7 @@ class Product(Base):
     purchase_price = Column(Numeric(12, 2), nullable=False, default=0.00)
     selling_price = Column(Numeric(12, 2), nullable=False, default=0.00)
     current_stock = Column(Numeric(12, 2), nullable=False, default=0.00)
+    is_service = Column(Boolean, nullable=False, default=False, index=True)
     is_active = Column(Boolean, nullable=False, default=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -73,6 +73,7 @@ class ProductCreate(BaseModel):
     purchase_price: Decimal = Decimal("0.00")
     selling_price: Decimal = Decimal("0.00")
     opening_stock: Decimal = Decimal("0.00")
+    is_service: bool = False
     custom_fields: Optional[List[CustomValueDto]] = None
 
 class ProductUpdate(BaseModel):
@@ -82,6 +83,7 @@ class ProductUpdate(BaseModel):
     category_id: Optional[int] = None
     purchase_price: Optional[Decimal] = None
     selling_price: Optional[Decimal] = None
+    is_service: Optional[bool] = None
     custom_fields: Optional[List[CustomValueDto]] = None
 
 class StockAdjustmentRequest(BaseModel):
@@ -99,6 +101,7 @@ class ProductResponse(BaseModel):
     purchase_price: Decimal
     selling_price: Decimal
     current_stock: Decimal
+    is_service: bool = False
     is_active: bool
     custom_fields: Optional[List[CustomValueDto]] = None
     created_at: datetime
@@ -112,3 +115,22 @@ class BulkProductsResponse(BaseModel):
     count: int
     products: List[ProductResponse]
     message: str
+
+class ProductBulkUpdateItem(BaseModel):
+    id: int
+    name: Optional[str] = None
+    sku: Optional[str] = None
+    barcode: Optional[str] = None
+    category_id: Optional[int] = None
+    purchase_price: Optional[Decimal] = None
+    selling_price: Optional[Decimal] = None
+    current_stock: Optional[Decimal] = None
+    is_service: Optional[bool] = None
+    custom_fields: Optional[List[CustomValueDto]] = None
+
+class BulkProductUpdateResponse(BaseModel):
+    success: bool
+    count: int
+    products: List[ProductResponse]
+    message: str
+

@@ -5,6 +5,7 @@ interface CartQuantityInputProps {
   productName: string;
   quantity: number;
   availableStock: number;
+  isService?: boolean;
   isActive: boolean;
   onUpdateQuantity: (productId: number, qty: number) => void;
   onNotifyCapped?: (maxStock: number, productName: string) => void;
@@ -21,6 +22,7 @@ export const CartQuantityInput: React.FC<CartQuantityInputProps> = ({
   productName,
   quantity,
   availableStock,
+  isService = false,
   isActive,
   onUpdateQuantity,
   onNotifyCapped,
@@ -36,7 +38,7 @@ export const CartQuantityInput: React.FC<CartQuantityInputProps> = ({
   const [justCapped, setJustCapped] = useState<boolean>(false);
   const internalRef = useRef<HTMLInputElement | null>(null);
 
-  const maxStock = Math.max(0, Math.floor(availableStock));
+  const maxStock = isService ? 999999 : Math.max(0, Math.floor(availableStock));
 
   // Sync external quantity changes when not actively editing
   useEffect(() => {
@@ -57,7 +59,7 @@ export const CartQuantityInput: React.FC<CartQuantityInputProps> = ({
 
     const parsed = parseInt(raw, 10);
 
-    if (parsed > maxStock) {
+    if (!isService && parsed > maxStock) {
       // Automatically cap to max available stock
       setLocalVal(String(maxStock));
       onUpdateQuantity(productId, maxStock);

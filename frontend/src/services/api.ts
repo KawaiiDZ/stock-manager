@@ -14,7 +14,9 @@ import {
   User, UserCreate, UserUpdate,
   SyncPushRequest, SyncPushResponse, SyncSnapshotResponse,
   NetworkInfo, DiscoveredHost, HostPingResponse, TestHostResponse,
-  ClientHeartbeatRequest, ConnectedClientItem, ConnectedClientsResponse
+  ClientHeartbeatRequest, ConnectedClientItem, ConnectedClientsResponse,
+  BillTemplate, BillTemplateCreate,
+  CashFlowSummary, AccountTransfer
 } from '../types';
 import { offlineStorage } from './offlineStorage';
 
@@ -206,6 +208,18 @@ export const api = {
       method: 'POST',
     }),
 
+  // Bill & Product Templates
+  getBillTemplates: (activeOnly = true) =>
+    request<BillTemplate[]>(`/templates?active_only=${activeOnly}`),
+  getBillTemplate: (id: number) =>
+    request<BillTemplate>(`/templates/${id}`),
+  createBillTemplate: (data: BillTemplateCreate) =>
+    request<BillTemplate>('/templates', { method: 'POST', body: JSON.stringify(data) }),
+  updateBillTemplate: (id: number, data: Partial<BillTemplateCreate>) =>
+    request<BillTemplate>(`/templates/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteBillTemplate: (id: number) =>
+    request<{ message: string }>(`/templates/${id}`, { method: 'DELETE' }),
+
   // Products
   getProducts: async (params?: { search?: string; category_id?: number; is_active?: boolean; skip?: number; limit?: number }) => {
     if (_isKnownOffline && getRemoteHostUrl()) {
@@ -260,6 +274,7 @@ export const api = {
     purchase_price: number;
     selling_price: number;
     opening_stock?: number;
+    is_service?: boolean;
     custom_fields?: CustomValueDto[];
   }) => request<Product>('/products', { method: 'POST', body: JSON.stringify(data) }),
   bulkCreateProducts: (products: Array<{
@@ -270,10 +285,26 @@ export const api = {
     purchase_price: number;
     selling_price: number;
     opening_stock?: number;
+    is_service?: boolean;
     custom_fields?: CustomValueDto[];
   }>) => request<{ success: boolean; count: number; products: Product[]; message: string }>('/products/bulk', {
     method: 'POST',
     body: JSON.stringify(products),
+  }),
+  bulkUpdateProducts: (updates: Array<{
+    id: number;
+    name?: string;
+    sku?: string;
+    barcode?: string;
+    category_id?: number;
+    purchase_price?: number;
+    selling_price?: number;
+    current_stock?: number;
+    is_service?: boolean;
+    custom_fields?: CustomValueDto[];
+  }>) => request<{ success: boolean; count: number; products: Product[]; message: string }>('/products/bulk', {
+    method: 'PUT',
+    body: JSON.stringify(updates),
   }),
   updateProduct: (id: number, data: Partial<Product> & { custom_fields?: CustomValueDto[] }) =>
     request<Product>(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -676,6 +707,19 @@ export const api = {
         method: 'DELETE',
       }),
   },
+
+  // Accounts & Cash Flow
+  getCashFlowSummary: () => request<CashFlowSummary>('/accounts/summary'),
+  getAccountTransfers: (limit?: number) => request<AccountTransfer[]>(`/accounts/transfers${limit ? `?limit=${limit}` : ''}`),
+  createAccountTransfer: (data: { from_account: string; to_account: string; amount: number; notes?: string; transfer_date?: string }) =>
+    request<AccountTransfer>('/accounts/transfers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  deleteAccountTransfer: (id: number) =>
+    request<{ message: string }>(`/accounts/transfers/${id}`, {
+      method: 'DELETE',
+    }),
 
   // Git-like Additive Offline Sync
   sync: {

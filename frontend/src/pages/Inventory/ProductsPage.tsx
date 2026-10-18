@@ -16,6 +16,8 @@ import {
   Sliders,
   Check,
   ArrowUp,
+  Zap,
+  Package,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -24,6 +26,7 @@ import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { Badge } from '../../components/common/Badge';
 import { EmptyState } from '../../components/common/EmptyState';
 import { BulkAddProductsModal } from './BulkAddProductsModal';
+import { BulkEditProductsModal } from './BulkEditProductsModal';
 import { StockAdjustmentModal } from './StockAdjustmentModal';
 import { NewPurchaseModal } from './NewPurchaseModal';
 import { BarcodePrintModal } from '../../components/barcode/BarcodePrintModal';
@@ -56,14 +59,22 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
   const [stockUpdateProduct, setStockUpdateProduct] = useState<Product | null>(null);
   const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(null);
 
+  // Bulk Edit Category Modal
+  const [bulkEditCategory, setBulkEditCategory] = useState<{
+    id: number | null;
+    name: string;
+    products: Product[];
+  } | null>(null);
+
   // Barcode Label Print Modal
   const [showBarcodeModal, setShowBarcodeModal] = useState(false);
   const [barcodePrintProducts, setBarcodePrintProducts] = useState<Product[]>([]);
   const [barcodePrintCopies, setBarcodePrintCopies] = useState<number>(1);
 
-  // Unregistered Barcode & Scanner Visual Feedback
+  // Unregistered Barcode & Scanner / Bulk Edit Visual Feedback
   const [unregisteredBarcode, setUnregisteredBarcode] = useState<string | null>(null);
   const [highlightedProductId, setHighlightedProductId] = useState<number | null>(null);
+  const [highlightedProductIds, setHighlightedProductIds] = useState<number[]>([]);
   const [scanToast, setScanToast] = useState<string | null>(null);
   const [generatingBarcode, setGeneratingBarcode] = useState(false);
 
@@ -77,6 +88,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
     purchase_price: 0,
     selling_price: 0,
     opening_stock: 0,
+    is_service: false,
   });
   const [customFieldValues, setCustomFieldValues] = useState<Record<number, string>>({});
   const [modalError, setModalError] = useState<string | null>(null);
@@ -136,6 +148,15 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
     if (mainEl) {
       mainEl.scrollTo({ top: 0, behavior: 'smooth' });
     }
+  };
+
+  const handleProductsBulkUpdated = (updatedIds: number[]) => {
+    loadData();
+    setHighlightedProductIds(updatedIds);
+    setScanToast(`Successfully updated ${updatedIds.length} product(s).`);
+    setTimeout(() => {
+      setHighlightedProductIds([]);
+    }, 6000);
   };
 
   useEffect(() => {
@@ -234,14 +255,19 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
 
   const handleOpenAdd = (prefillBarcode?: string) => {
     setEditingProduct(null);
+    const noStockCat = categories.find(
+      (c) => c.name.toLowerCase() === 'no-stock item' || c.name.toLowerCase() === 'no-stock items'
+    );
+    const isNoStockPreselected = Boolean(selectedCategory && noStockCat && selectedCategory === noStockCat.id);
     setFormData({
       name: '',
       sku: '',
       barcode: typeof prefillBarcode === 'string' ? prefillBarcode : '',
-      category_id: selectedCategory || 0,
+      category_id: isNoStockPreselected ? noStockCat!.id : (selectedCategory || 0),
       purchase_price: 0,
       selling_price: 0,
       opening_stock: 0,
+      is_service: isNoStockPreselected,
     });
     setCustomFieldValues({});
     setModalError(null);
@@ -267,6 +293,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
       purchase_price: p.purchase_price,
       selling_price: p.selling_price,
       opening_stock: 0,
+      is_service: Boolean(p.is_service),
     });
     const cfMap: Record<number, string> = {};
     p.custom_fields?.forEach((cf) => {
@@ -297,21 +324,23 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
         savedProduct = await api.updateProduct(editingProduct.id, {
           name: formData.name.trim(),
           sku: showSku ? (formData.sku.trim() || undefined) : editingProduct.sku,
-          barcode: showBarcode ? (formData.barcode.trim() || undefined) : editingProduct.barcode,
-          category_id: formData.category_id > 0 ? formData.category_id : undefined,
-          purchase_price: formData.purchase_price,
+          barcode: formData.is_service ? undefined : (showBarcode ? (formData.barcode.trim() || undefined) : editingProduct.barcode),
+          category_id: formData.is_service ? undefined : (formData.category_id > 0 ? formData.category_id : undefined),
+          purchase_price: formData.is_service ? 0 : formData.purchase_price,
           selling_price: formData.selling_price,
+          is_service: formData.is_service,
           custom_fields: customDto,
         });
       } else {
         savedProduct = await api.createProduct({
           name: formData.name.trim(),
           sku: showSku ? (formData.sku.trim() || undefined) : undefined,
-          barcode: showBarcode ? (formData.barcode.trim() || undefined) : undefined,
-          category_id: formData.category_id > 0 ? formData.category_id : undefined,
-          purchase_price: formData.purchase_price,
+          barcode: formData.is_service ? undefined : (showBarcode ? (formData.barcode.trim() || undefined) : undefined),
+          category_id: formData.is_service ? undefined : (formData.category_id > 0 ? formData.category_id : undefined),
+          purchase_price: formData.is_service ? 0 : formData.purchase_price,
           selling_price: formData.selling_price,
-          opening_stock: formData.opening_stock,
+          opening_stock: formData.is_service ? 0 : formData.opening_stock,
+          is_service: formData.is_service,
           custom_fields: customDto,
         });
       }
@@ -434,14 +463,14 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
     }
   };
 
-  // Out of stock calculations for Restock Queue
+  // Out of stock calculations for Restock Queue (excluding services)
   const totalOutOfStockCount = useMemo(() => {
-    return products.filter((p) => p.is_active && Number(p.current_stock || 0) <= 0).length;
+    return products.filter((p) => p.is_active && !p.is_service && Number(p.current_stock || 0) <= 0).length;
   }, [products]);
 
   const restockFilteredProducts = useMemo(() => {
     const filtered = products.filter((p) => {
-      if (!p.is_active || Number(p.current_stock || 0) > 0) return false;
+      if (!p.is_active || p.is_service || Number(p.current_stock || 0) > 0) return false;
       if (selectedCategory && p.category_id !== selectedCategory) return false;
       if (search.trim()) {
         const q = search.trim().toLowerCase();
@@ -462,41 +491,85 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
     const sortAlphabetically = (items: Product[]) =>
       [...items].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
+    const noStockCat = categories.find(
+      (c) => c.name.toLowerCase() === 'no-stock item' || c.name.toLowerCase() === 'no-stock items'
+    );
+    const isNoStockSelected = Boolean(selectedCategory && noStockCat && selectedCategory === noStockCat.id);
+
+    if (isNoStockSelected) {
+      const noStockProds = products.filter(
+        (p) => p.is_service || (noStockCat && p.category_id === noStockCat.id)
+      );
+      return [
+        {
+          id: noStockCat!.id,
+          name: 'No-Stock Item',
+          products: sortAlphabetically(noStockProds),
+          is_no_stock: true,
+        },
+      ];
+    }
+
     if (selectedCategory) {
       const cat = categories.find((c) => c.id === selectedCategory);
-      const catProds = products.filter((p) => p.category_id === selectedCategory);
+      const catProds = products.filter((p) => !p.is_service && p.category_id === selectedCategory);
       return [
         {
           id: selectedCategory,
           name: cat ? cat.name : 'Category',
           products: sortAlphabetically(catProds),
+          is_no_stock: false,
         },
       ];
     }
 
-    const groups: { id: number | null; name: string; products: Product[] }[] = [];
+    const groups: { id: number | null; name: string; products: Product[]; is_no_stock?: boolean }[] = [];
 
     const categoryIds = new Set(categories.map((c) => c.id));
 
-    // Categories in order
-    categories.forEach((cat) => {
-      const catProds = products.filter((p) => p.category_id === cat.id);
-      if (catProds.length > 0) {
-        groups.push({
-          id: cat.id,
-          name: cat.name,
-          products: sortAlphabetically(catProds),
-        });
-      }
-    });
+    // 1. Regular physical Categories in order (excluding No-Stock Item category)
+    categories
+      .filter(
+        (c) =>
+          c.name.toLowerCase() !== 'no-stock item' &&
+          c.name.toLowerCase() !== 'no-stock items' &&
+          c.name.toLowerCase() !== 'no stock item'
+      )
+      .forEach((cat) => {
+        const catProds = products.filter((p) => !p.is_service && p.category_id === cat.id);
+        if (catProds.length > 0) {
+          groups.push({
+            id: cat.id,
+            name: cat.name,
+            products: sortAlphabetically(catProds),
+            is_no_stock: false,
+          });
+        }
+      });
 
-    // Uncategorized products (no category or orphaned category)
-    const uncategorized = products.filter((p) => !p.category_id || !categoryIds.has(p.category_id));
+    // 2. Uncategorized physical products (no category or orphaned category)
+    const uncategorized = products.filter(
+      (p) => !p.is_service && (!p.category_id || !categoryIds.has(p.category_id))
+    );
     if (uncategorized.length > 0) {
       groups.push({
         id: null,
         name: 'General / Uncategorized',
         products: sortAlphabetically(uncategorized),
+        is_no_stock: false,
+      });
+    }
+
+    // 3. Dedicated No-Stock Item Category Section
+    const noStockProds = products.filter(
+      (p) => p.is_service || (noStockCat && p.category_id === noStockCat.id)
+    );
+    if (noStockProds.length > 0) {
+      groups.push({
+        id: noStockCat ? noStockCat.id : null,
+        name: 'No-Stock Item',
+        products: sortAlphabetically(noStockProds),
+        is_no_stock: true,
       });
     }
 
@@ -736,7 +809,9 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
                           key={p.id}
                           id={`product-row-${p.id}`}
                           className={`transition-all duration-300 ${
-                            highlightedProductId === p.id
+                            highlightedProductIds.includes(p.id)
+                              ? 'bg-amber-100/70 dark:bg-amber-950/60 ring-2 ring-amber-500 shadow-sm border-l-4 border-l-amber-500'
+                              : highlightedProductId === p.id
                               ? 'bg-brand-100/70 dark:bg-brand-950/60 ring-2 ring-brand-500 shadow-sm'
                               : 'hover:bg-slate-50/60 dark:hover:bg-slate-800/50'
                           }`}
@@ -842,7 +917,24 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
               >
                 {/* Unified Category Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-4 border-b border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900">
-                  <h2 className="text-base font-extrabold text-slate-900 dark:text-white">{group.name}</h2>
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-base font-extrabold text-slate-900 dark:text-white">{group.name}</h2>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setBulkEditCategory({
+                          id: group.id,
+                          name: group.name,
+                          products: group.products,
+                        })
+                      }
+                      className="px-2.5 py-1 rounded-xl text-brand-700 dark:text-brand-300 hover:text-brand-800 dark:hover:text-brand-200 bg-brand-50/80 dark:bg-brand-950/60 hover:bg-brand-100 dark:hover:bg-brand-900/60 border border-brand-200 dark:border-brand-800/80 transition flex items-center gap-1.5 text-xs font-bold cursor-pointer shadow-2xs"
+                      title={`Bulk edit products in ${group.name}`}
+                    >
+                      <Edit2 className="h-3.5 w-3.5 text-brand-600 dark:text-brand-400" />
+                      <span>Bulk Edit</span>
+                    </button>
+                  </div>
 
                   {/* Quick Category Summary Stats */}
                   <div className="flex items-center gap-3 text-xs font-semibold text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 px-3.5 py-1.5 rounded-xl border border-slate-200/60 dark:border-slate-700 self-start sm:self-auto">
@@ -850,11 +942,15 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
                       Products:{' '}
                       <strong className="text-slate-900 dark:text-white font-bold">{group.products.length}</strong>
                     </span>
-                    <span className="text-slate-300 dark:text-slate-600">•</span>
-                    <span>
-                      Total Stock:{' '}
-                      <strong className="text-slate-900 dark:text-white font-bold">{totalStock} units</strong>
-                    </span>
+                    {!group.is_no_stock && (
+                      <>
+                        <span className="text-slate-300 dark:text-slate-600">•</span>
+                        <span>
+                          Total Stock:{' '}
+                          <strong className="text-slate-900 dark:text-white font-bold">{totalStock} units</strong>
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -899,14 +995,23 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
                             key={p.id}
                             id={`product-row-${p.id}`}
                             className={`transition-all duration-300 ${
-                              highlightedProductId === p.id
+                              highlightedProductIds.includes(p.id)
+                                ? 'bg-amber-100/70 dark:bg-amber-950/60 ring-2 ring-amber-500 shadow-sm border-l-4 border-l-amber-500'
+                                : highlightedProductId === p.id
                                 ? 'bg-brand-100/70 dark:bg-brand-950/60 ring-2 ring-brand-500 shadow-sm'
                                 : 'hover:bg-slate-50/60 dark:hover:bg-slate-800/50'
                             }`}
                           >
                             <td className="py-4 px-6 font-bold text-slate-900 dark:text-white whitespace-nowrap">{p.product_id}</td>
                             <td className="py-4 px-6 font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap">
-                              {p.name}
+                              <div className="flex items-center gap-2">
+                                <span>{p.name}</span>
+                                {p.is_service && !group.is_no_stock && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shadow-2xs">
+                                    No-Stock
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             {groupCustomFields.map((cf) => {
                               const customVal = p.custom_fields?.find((cv) => cv.field_id === cf.id)?.value;
@@ -935,55 +1040,71 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
                               </td>
                             )}
                             <td className="py-4 px-6 text-right text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                              {formatCurrency(p.purchase_price, currency)}
+                              {p.is_service ? (
+                                <span className="text-slate-300 dark:text-slate-600 font-bold">—</span>
+                              ) : (
+                                formatCurrency(p.purchase_price, currency)
+                              )}
                             </td>
                             <td className="py-4 px-6 text-right font-bold text-slate-900 dark:text-white whitespace-nowrap">
                               {formatCurrency(p.selling_price, currency)}
                             </td>
                             <td className="py-4 px-6 text-right whitespace-nowrap">
-                              <div className="flex items-center justify-end gap-2">
-                                <span
-                                  className={`font-black text-sm ${
-                                    p.current_stock > 5
-                                      ? 'text-emerald-600 dark:text-emerald-400'
-                                      : p.current_stock > 0
-                                      ? 'text-amber-600 dark:text-amber-400'
-                                      : 'text-rose-600 dark:text-rose-400'
-                                  }`}
-                                >
-                                  {p.current_stock}
+                              {p.is_service ? (
+                                <span className="text-slate-400 dark:text-slate-500 font-semibold text-xs">
+                                  No Stock
                                 </span>
-                                {p.is_active && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setStockUpdateProduct(p);
-                                      setShowStockUpdateModal(true);
-                                    }}
-                                    className="inline-flex items-center justify-center h-6 w-6 rounded-md bg-brand-50 dark:bg-brand-950/40 hover:bg-brand-600 text-brand-700 dark:text-brand-300 hover:text-white border border-brand-300/80 dark:border-brand-800 shadow-2xs transition group"
-                                    title={`Add / Update stock for ${p.name}`}
+                              ) : (
+                                <div className="flex items-center justify-end gap-2">
+                                  <span
+                                    className={`font-black text-sm ${
+                                      p.current_stock > 5
+                                        ? 'text-emerald-600 dark:text-emerald-400'
+                                        : p.current_stock > 0
+                                        ? 'text-amber-600 dark:text-amber-400'
+                                        : 'text-rose-600 dark:text-rose-400'
+                                    }`}
                                   >
-                                    <Plus className="h-3.5 w-3.5 transition group-hover:scale-110" />
-                                  </button>
-                                )}
-                              </div>
+                                    {p.current_stock}
+                                  </span>
+                                  {p.is_active && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setStockUpdateProduct(p);
+                                        setShowStockUpdateModal(true);
+                                      }}
+                                      className="inline-flex items-center justify-center h-6 w-6 rounded-md bg-brand-50 dark:bg-brand-950/40 hover:bg-brand-600 text-brand-700 dark:text-brand-300 hover:text-white border border-brand-300/80 dark:border-brand-800 shadow-2xs transition group"
+                                      title={`Add / Update stock for ${p.name}`}
+                                    >
+                                      <Plus className="h-3.5 w-3.5 transition group-hover:scale-110" />
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </td>
                             <td className="py-4 px-6 text-center whitespace-nowrap">
-                              <Badge
-                                status={
-                                  p.current_stock > 5
-                                    ? 'IN_STOCK'
-                                    : p.current_stock > 0
-                                    ? 'LOW_STOCK'
-                                    : 'OUT_OF_STOCK'
-                                }
-                              />
+                              {p.is_service ? (
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shadow-2xs">
+                                  No-Stock
+                                </span>
+                              ) : (
+                                <Badge
+                                  status={
+                                    p.current_stock > 5
+                                      ? 'IN_STOCK'
+                                      : p.current_stock > 0
+                                      ? 'LOW_STOCK'
+                                      : 'OUT_OF_STOCK'
+                                  }
+                                />
+                              )}
                             </td>
                             <td className="py-4 px-6 text-right whitespace-nowrap">
                               {p.is_active ? (
                                 <div className="flex items-center justify-end gap-2">
                                   {/* Direct SELL Button */}
-                                  {onSellProduct && p.current_stock > 0 && (
+                                  {onSellProduct && (p.is_service || p.current_stock > 0) && (
                                     <Button
                                       variant="primary"
                                       size="sm"
@@ -1077,6 +1198,44 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
             </div>
           )}
 
+          {/* Product Type Toggle: Standard Product vs No-Stock Item */}
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => setFormData({ ...formData, is_service: false })}
+              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center ${
+                !formData.is_service
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <span>Standard Product</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const noStockCat = categories.find(
+                  (c) => c.name.toLowerCase() === 'no-stock item' || c.name.toLowerCase() === 'no-stock items'
+                );
+                setFormData({
+                  ...formData,
+                  is_service: true,
+                  barcode: '',
+                  purchase_price: 0,
+                  opening_stock: 0,
+                  category_id: noStockCat ? noStockCat.id : formData.category_id,
+                });
+              }}
+              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center ${
+                formData.is_service
+                  ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <span>No-Stock Item</span>
+            </button>
+          </div>
+
           <Input
             label="Product Name *"
             placeholder="e.g. Standard Product Name / Model"
@@ -1087,34 +1246,52 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
           />
 
           <div className={showSku ? "grid grid-cols-1 sm:grid-cols-2 gap-3" : "space-y-3"}>
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+            {!formData.is_service ? (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                    Category
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddCatModal(true)}
+                    className="text-xs text-brand-600 dark:text-brand-400 hover:underline font-semibold"
+                  >
+                    + Add Category
+                  </button>
+                </div>
+                <select
+                  value={formData.category_id}
+                  onChange={(e) =>
+                    setFormData({ ...formData, category_id: Number(e.target.value) })
+                  }
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:border-brand-500 shadow-sm"
+                >
+                  <option value={0}>No Category</option>
+                  {categories
+                    .filter(
+                      (c) =>
+                        c.name.toLowerCase() !== 'no-stock item' &&
+                        c.name.toLowerCase() !== 'no-stock items' &&
+                        c.name.toLowerCase() !== 'no stock item'
+                    )
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
                   Category
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setShowAddCatModal(true)}
-                  className="text-xs text-brand-600 dark:text-brand-400 hover:underline font-semibold"
-                >
-                  + Add Category
-                </button>
+                <div className="w-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  No-Stock Item
+                </div>
               </div>
-              <select
-                value={formData.category_id}
-                onChange={(e) =>
-                  setFormData({ ...formData, category_id: Number(e.target.value) })
-                }
-                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:border-brand-500 shadow-sm"
-              >
-                <option value={0}>No Category</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            )}
 
             {showSku && (
               <Input
@@ -1220,7 +1397,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
             );
           })()}
 
-          {showBarcode && (
+          {showBarcode && !formData.is_service && (
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
@@ -1244,46 +1421,68 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
             </div>
           )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <Input
-              label="Cost Price *"
-              type="number"
-              step="0.01"
-              min="0"
-              prefix={currency}
-              value={formData.purchase_price}
-              onChange={(e) =>
-                setFormData({ ...formData, purchase_price: Number(e.target.value) })
-              }
-              required
-            />
-
-            <Input
-              label="Selling Price *"
-              type="number"
-              step="0.01"
-              min="0"
-              prefix={currency}
-              value={formData.selling_price}
-              onChange={(e) =>
-                setFormData({ ...formData, selling_price: Number(e.target.value) })
-              }
-              required
-            />
-
-            {!editingProduct && (
+          {formData.is_service ? (
+            <div>
               <Input
-                label="Opening Stock"
+                label="Price *"
                 type="number"
+                step="0.01"
                 min="0"
-                value={formData.opening_stock}
+                prefix={currency}
+                placeholder="0.00"
+                value={formData.selling_price}
                 onChange={(e) =>
-                  setFormData({ ...formData, opening_stock: Number(e.target.value) })
+                  setFormData({ ...formData, selling_price: Number(e.target.value.replace(/^0+(?=[1-9])/, '')) })
                 }
-                hint="Initial units in shop"
+                hint="Default rate defined in catalog (editable on-the-fly at POS)"
+                required
               />
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <Input
+                label="Cost Price *"
+                type="number"
+                step="0.01"
+                min="0"
+                prefix={currency}
+                placeholder="0.00"
+                value={formData.purchase_price}
+                onChange={(e) =>
+                  setFormData({ ...formData, purchase_price: Number(e.target.value.replace(/^0+(?=[1-9])/, '')) })
+                }
+                required
+              />
+
+              <Input
+                label="Selling Price *"
+                type="number"
+                step="0.01"
+                min="0"
+                prefix={currency}
+                placeholder="0.00"
+                value={formData.selling_price}
+                onChange={(e) =>
+                  setFormData({ ...formData, selling_price: Number(e.target.value.replace(/^0+(?=[1-9])/, '')) })
+                }
+                required
+              />
+
+              {!editingProduct && (
+                <Input
+                  label="Opening Stock"
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  value={formData.opening_stock}
+                  onChange={(e) =>
+                    setFormData({ ...formData, opening_stock: Number(e.target.value.replace(/^0+(?=[1-9])/, '')) })
+                  }
+                  hint="Initial units in shop"
+                />
+              )}
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center justify-end gap-3 pt-3 border-t border-slate-100">
             <Button
@@ -1293,7 +1492,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
             >
               Cancel
             </Button>
-            {enableBarcodePrinter && (
+            {enableBarcodePrinter && !formData.is_service && (
               <Button
                 type="button"
                 variant="secondary"
@@ -1448,6 +1647,20 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
           handleOpenAdd(code);
         }}
       />
+
+      {/* Category Bulk Edit Modal */}
+      {bulkEditCategory && (
+        <BulkEditProductsModal
+          isOpen={Boolean(bulkEditCategory)}
+          onClose={() => setBulkEditCategory(null)}
+          categoryId={bulkEditCategory.id}
+          categoryName={bulkEditCategory.name}
+          products={bulkEditCategory.products}
+          customFields={customFields}
+          settings={settings}
+          onProductsUpdated={handleProductsBulkUpdated}
+        />
+      )}
 
       {/* Floating Scanner Feedback Toast */}
       {scanToast && (

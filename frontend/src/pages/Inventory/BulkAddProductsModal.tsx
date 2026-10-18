@@ -731,10 +731,12 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                         data-bulk-cell={`${idx}-purchase_price`}
                         value={row.purchase_price || ''}
                         placeholder="0.00"
+                        onFocus={(e) => requestAnimationFrame(() => e.target.select())}
                         onKeyDown={(e) => handleCellKeyDown(e, idx, 'purchase_price')}
-                        onChange={(e) =>
-                          handleUpdateCell(idx, 'purchase_price', Number(e.target.value))
-                        }
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/^0+(?=[1-9])/, '');
+                          handleUpdateCell(idx, 'purchase_price', raw === '' ? 0 : Number(raw));
+                        }}
                         className="w-full text-right bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-lg px-2 py-1.5 font-semibold text-slate-800 dark:text-slate-200 text-xs focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </td>
@@ -751,10 +753,12 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                         data-bulk-cell={`${idx}-selling_price`}
                         value={row.selling_price || ''}
                         placeholder="0.00"
+                        onFocus={(e) => requestAnimationFrame(() => e.target.select())}
                         onKeyDown={(e) => handleCellKeyDown(e, idx, 'selling_price')}
-                        onChange={(e) =>
-                          handleUpdateCell(idx, 'selling_price', Number(e.target.value))
-                        }
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/^0+(?=[1-9])/, '');
+                          handleUpdateCell(idx, 'selling_price', raw === '' ? 0 : Number(raw));
+                        }}
                         className="w-full text-right bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-lg px-2 py-1.5 font-black text-slate-900 dark:text-white text-xs focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </td>
@@ -770,10 +774,12 @@ export const BulkAddProductsModal: React.FC<BulkAddProductsModalProps> = ({
                         data-bulk-cell={`${idx}-opening_stock`}
                         value={row.opening_stock || ''}
                         placeholder="0"
+                        onFocus={(e) => requestAnimationFrame(() => e.target.select())}
                         onKeyDown={(e) => handleCellKeyDown(e, idx, 'opening_stock')}
-                        onChange={(e) =>
-                          handleUpdateCell(idx, 'opening_stock', Number(e.target.value))
-                        }
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/^0+(?=[1-9])/, '');
+                          handleUpdateCell(idx, 'opening_stock', raw === '' ? 0 : Number(raw));
+                        }}
                         className="w-full text-right bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-brand-500 rounded-lg px-2 py-1.5 font-bold text-brand-600 dark:text-brand-400 text-xs focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </td>
