@@ -29,6 +29,12 @@ def update_settings(db: Session, update_data: BusinessSettingsUpdate) -> Busines
     if "currency" in data:
         val = (data["currency"] or "").strip()
         data["currency"] = val if val else "Rs."
+    if "ui_zoom" in data and data["ui_zoom"] is not None:
+        try:
+            val = int(data["ui_zoom"])
+            data["ui_zoom"] = max(70, min(160, val))
+        except (ValueError, TypeError):
+            data["ui_zoom"] = 100
     if "dashboard_financials_pin" in data:
         raw_pin = (data.pop("dashboard_financials_pin") or "").strip()
         if raw_pin:

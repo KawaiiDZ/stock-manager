@@ -483,16 +483,16 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
                       {/* Actions */}
                       <td className="py-4 px-6 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
-                          {/* Print A4 */}
+                          {/* Print / View */}
                           <Button
                             variant="secondary"
                             size="sm"
                             icon={<Printer className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />}
                             onClick={() => setPreviewQuotation(q)}
-                            title="View / Print A4 Quotation"
+                            title={settings?.enable_thermal_quotations !== false ? "View / Print Quotation (Thermal / A4)" : "View / Print A4 Quotation"}
                             className="font-semibold"
                           >
-                            A4
+                            {settings?.enable_thermal_quotations !== false ? "Print" : "A4"}
                           </Button>
 
                           {/* Edit / Revise Agreement Button */}

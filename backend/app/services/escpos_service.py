@@ -1071,7 +1071,11 @@ def generate_escpos_receipt(
     shop_address = getattr(settings, "address", "") or ""
     shop_phone = getattr(settings, "phone", "") or ""
     custom_header = getattr(settings, "receipt_header", "") or ""
-    footer_text = getattr(settings, "receipt_footer", "Thank you for your business!") or "Thank you for your business!"
+    is_quotation = bool(sale_data.get("is_quotation"))
+    if is_quotation:
+        footer_text = sale_data.get("terms") or getattr(settings, "quotation_terms", "") or "1. This quotation is an estimate and valid for 15 days from issue date.\n2. Stock is subject to physical availability upon confirmation.\n3. This document does not constitute a tax invoice."
+    else:
+        footer_text = getattr(settings, "receipt_footer", "Thank you for your business!") or "Thank you for your business!"
     currency = getattr(settings, "currency", "Rs.") or "Rs."
 
     is_escpos = (profile != "generic_plain")
@@ -1165,6 +1169,14 @@ def generate_escpos_receipt(
 
     buf.extend(cmd_align_left)
 
+    if is_quotation:
+        buf.extend(cmd_align_center)
+        buf.extend(cmd_bold_on)
+        buf.extend(safe_escpos_text("*** COMMERCIAL QUOTATION ***\n"))
+        buf.extend(safe_escpos_text("(ESTIMATE ONLY - NOT A TAX INVOICE)\n"))
+        buf.extend(cmd_bold_off)
+        buf.extend(cmd_align_left)
+
     # 3. Receipt Metadata & Info
     receipt_no = sale_data.get("receipt_number", "RECEIPT")
     created_at = sale_data.get("created_at")
@@ -1191,7 +1203,18 @@ def generate_escpos_receipt(
         if isinstance(p0, dict):
             payment_method = p0.get("payment_method", payment_method)
 
-    if layout_mode == "compact":
+    if is_quotation:
+        buf.extend(solid_div)
+        buf.extend(safe_escpos_text(format_row("Quote #:", receipt_no, col_width)))
+        buf.extend(safe_escpos_text(format_row("Date:", dt_str, col_width)))
+        valid_until = sale_data.get("valid_until")
+        if valid_until:
+            buf.extend(safe_escpos_text(format_row("Valid Until:", str(valid_until)[:10], col_width)))
+        buf.extend(safe_escpos_text(format_row("Customer:", cust_name, col_width)))
+        q_status = sale_data.get("quotation_status", "ACTIVE")
+        buf.extend(safe_escpos_text(format_row("Status:", str(q_status).upper(), col_width)))
+        buf.extend(solid_div)
+    elif layout_mode == "compact":
         buf.extend(solid_div)
         buf.extend(safe_escpos_text(f"#{receipt_no} | {dt_short} | {cust_name[:12]}\n"))
         buf.extend(solid_div)
@@ -1412,7 +1435,27 @@ def generate_escpos_receipt(
     due_amt = float(sale_data.get("due_amount", 0))
     payment_status = str(sale_data.get("payment_status", "PAID")).upper()
 
-    if layout_mode == "compact":
+    if is_quotation:
+        buf.extend(safe_escpos_text(format_row("Subtotal:", f"{currency} {subtotal:,.2f}", col_width)))
+        if discount > 0:
+            buf.extend(safe_escpos_text(format_row("Order Discount:", f"-{currency} {discount:,.2f}", col_width)))
+        if tax_amt > 0:
+            buf.extend(safe_escpos_text(format_row(f"Tax ({tax_rate}%):", f"+{currency} {tax_amt:,.2f}", col_width)))
+
+        buf.extend(double_solid_div)
+        buf.extend(cmd_bold_on)
+        buf.extend(cmd_double_height)
+        buf.extend(safe_escpos_text(format_row("ESTIMATED TOTAL:", f"{currency} {total_amt:,.2f}", col_width)))
+        buf.extend(cmd_normal_size)
+        buf.extend(cmd_bold_off)
+        buf.extend(double_solid_div)
+
+        q_status = sale_data.get("quotation_status", "ACTIVE")
+        buf.extend(safe_escpos_text(format_row("Status:", str(q_status).upper(), col_width)))
+        if sale_data.get("notes"):
+            buf.extend(safe_escpos_text(f"Notes: {sale_data['notes']}\n"))
+        buf.extend(solid_div)
+    elif layout_mode == "compact":
         # 2-line condensed financial totals
         disc_part = f" | DISC: {discount:,.2f}" if discount > 0 else ""
         tax_part = f" | TAX: {tax_amt:,.2f}" if tax_amt > 0 else ""

@@ -73,6 +73,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
 
   // Unregistered Barcode & Scanner / Bulk Edit Visual Feedback
   const [unregisteredBarcode, setUnregisteredBarcode] = useState<string | null>(null);
+  const [hoveredProductId, setHoveredProductId] = useState<number | null>(null);
   const [highlightedProductId, setHighlightedProductId] = useState<number | null>(null);
   const [highlightedProductIds, setHighlightedProductIds] = useState<number[]>([]);
   const [scanToast, setScanToast] = useState<string | null>(null);
@@ -324,7 +325,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
         savedProduct = await api.updateProduct(editingProduct.id, {
           name: formData.name.trim(),
           sku: showSku ? (formData.sku.trim() || undefined) : editingProduct.sku,
-          barcode: formData.is_service ? undefined : (showBarcode ? (formData.barcode.trim() || undefined) : editingProduct.barcode),
+          barcode: formData.is_service ? undefined : (formData.barcode.trim() || undefined),
           category_id: formData.is_service ? undefined : (formData.category_id > 0 ? formData.category_id : undefined),
           purchase_price: formData.is_service ? 0 : formData.purchase_price,
           selling_price: formData.selling_price,
@@ -335,7 +336,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
         savedProduct = await api.createProduct({
           name: formData.name.trim(),
           sku: showSku ? (formData.sku.trim() || undefined) : undefined,
-          barcode: formData.is_service ? undefined : (showBarcode ? (formData.barcode.trim() || undefined) : undefined),
+          barcode: formData.is_service ? undefined : (formData.barcode.trim() || undefined),
           category_id: formData.is_service ? undefined : (formData.category_id > 0 ? formData.category_id : undefined),
           purchase_price: formData.is_service ? 0 : formData.purchase_price,
           selling_price: formData.selling_price,
@@ -357,7 +358,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
         enqueueAddProduct({
           name: formData.name.trim(),
           sku: showSku ? (formData.sku.trim() || undefined) : undefined,
-          barcode: showBarcode ? (formData.barcode.trim() || undefined) : undefined,
+          barcode: formData.barcode.trim() || undefined,
           category_id: formData.category_id > 0 ? formData.category_id : undefined,
           purchase_price: formData.purchase_price,
           selling_price: formData.selling_price,
@@ -776,8 +777,8 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
                 />
               </div>
             ) : (
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="space-y-3">
+                <div className="px-6 py-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Depleted Stock Items Requiring Restock ({restockFilteredProducts.length})
                   </div>
@@ -787,92 +788,147 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
                   </span>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm border-collapse">
-                    <thead className="bg-slate-50/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                      <tr>
-                        <th className="py-3.5 px-6 whitespace-nowrap">Product ID</th>
-                        <th className="py-3.5 px-6 whitespace-nowrap">Product Name</th>
-                        <th className="py-3.5 px-6 whitespace-nowrap">Category</th>
-                        {(showSku || showBarcode) && (
-                          <th className="py-3.5 px-6 whitespace-nowrap">SKU / Barcode</th>
-                        )}
-                        <th className="py-3.5 px-6 text-right whitespace-nowrap">Cost Price</th>
-                        <th className="py-3.5 px-6 text-right whitespace-nowrap">Selling Price</th>
-                        <th className="py-3.5 px-6 text-center whitespace-nowrap">Current Stock</th>
-                        <th className="py-3.5 px-6 text-right whitespace-nowrap">Restock Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {restockFilteredProducts.map((p) => (
-                        <tr
-                          key={p.id}
-                          id={`product-row-${p.id}`}
-                          className={`transition-all duration-300 ${
-                            highlightedProductIds.includes(p.id)
-                              ? 'bg-amber-100/70 dark:bg-amber-950/60 ring-2 ring-amber-500 shadow-sm border-l-4 border-l-amber-500'
-                              : highlightedProductId === p.id
-                              ? 'bg-brand-100/70 dark:bg-brand-950/60 ring-2 ring-brand-500 shadow-sm'
-                              : 'hover:bg-slate-50/60 dark:hover:bg-slate-800/50'
-                          }`}
-                        >
-                          <td className="py-4 px-6 font-bold text-slate-900 dark:text-white whitespace-nowrap">{p.product_id}</td>
-                          <td className="py-4 px-6 font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap">
-                            <div>{p.name}</div>
-                          </td>
-                          <td className="py-4 px-6 text-xs font-semibold text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                            <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">
-                              {p.category_name || 'General'}
-                            </span>
-                          </td>
-                          {(showSku || showBarcode) && (
-                            <td className="py-4 px-6 text-slate-500 dark:text-slate-400 text-xs font-mono whitespace-nowrap">
-                              {showSku && p.sku && <div>SKU: {p.sku}</div>}
-                              {showBarcode && p.barcode && <div>BC: {p.barcode}</div>}
-                              {!p.sku && !p.barcode && '—'}
-                            </td>
-                          )}
-                          <td className="py-4 px-6 text-right text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                            {formatCurrency(p.purchase_price, currency)}
-                          </td>
-                          <td className="py-4 px-6 text-right font-bold text-slate-900 dark:text-white whitespace-nowrap">
-                            {formatCurrency(p.selling_price, currency)}
-                          </td>
-                          <td className="py-4 px-6 text-center whitespace-nowrap">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 shadow-2xs">
-                              0 units (Out of Stock)
-                            </span>
-                          </td>
-                          <td className="py-4 px-6 text-right whitespace-nowrap">
-                            <div className="flex items-center justify-end gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                icon={<Sliders className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />}
-                                onClick={() => setAdjustingProduct(p)}
-                                className="text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                                title="Quick physical stock count adjustment"
+                <div className="flex items-start gap-3">
+                  {/* Table 1: Scrollable specifications */}
+                  <div className="flex-1 min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm border-collapse">
+                        <thead className="bg-slate-50/80 dark:bg-slate-800/80 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
+                          <tr className="h-12">
+                            <th className="py-3.5 px-6 whitespace-nowrap">Product ID</th>
+                            <th className="py-3.5 px-6 whitespace-nowrap">Product Name</th>
+                            <th className="py-3.5 px-6 whitespace-nowrap">Category</th>
+                            {showSku && (
+                              <th className="py-3.5 px-6 whitespace-nowrap">SKU</th>
+                            )}
+                            <th className="py-3.5 px-6 text-right whitespace-nowrap">Cost Price</th>
+                            <th className="py-3.5 px-6 text-right whitespace-nowrap">Selling Price</th>
+                            <th className="py-3.5 px-6 text-center whitespace-nowrap">Current Stock</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                          {restockFilteredProducts.map((p) => {
+                            const isHighlighted = highlightedProductIds.includes(p.id);
+                            const isScanned = highlightedProductId === p.id;
+                            const isHovered = hoveredProductId === p.id;
+
+                            return (
+                              <tr
+                                key={p.id}
+                                id={`product-row-${p.id}`}
+                                onMouseEnter={() => setHoveredProductId(p.id)}
+                                onMouseLeave={() => setHoveredProductId(null)}
+                                className={`h-[60px] transition-colors duration-150 ${
+                                  isHighlighted
+                                    ? 'bg-amber-100/70 dark:bg-amber-950/60 ring-2 ring-amber-500 shadow-sm border-l-4 border-l-amber-500'
+                                    : isScanned
+                                    ? 'bg-brand-100/70 dark:bg-brand-950/60 ring-2 ring-brand-500 shadow-sm'
+                                    : isHovered
+                                    ? 'bg-slate-50/80 dark:bg-slate-800/60'
+                                    : ''
+                                }`}
                               >
-                                Quick Count
-                              </Button>
-                              <Button
-                                variant="primary"
-                                size="sm"
-                                icon={<Truck className="h-3.5 w-3.5" />}
-                                onClick={() => {
-                                  setStockUpdateProduct(p);
-                                  setShowStockUpdateModal(true);
-                                }}
-                                className="text-xs font-bold shadow-2xs"
-                              >
-                                Restock Now
-                              </Button>
-                            </div>
-                          </td>
+                                <td className="py-3.5 px-6 font-bold text-slate-900 dark:text-white whitespace-nowrap">{p.product_id}</td>
+                                <td className="py-3.5 px-6 font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEdit(p)}
+                                    className="text-left font-bold text-slate-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 hover:underline transition-colors cursor-pointer truncate max-w-[240px]"
+                                    title={`Click to edit ${p.name}`}
+                                  >
+                                    {p.name}
+                                  </button>
+                                </td>
+                                <td className="py-3.5 px-6 text-xs font-semibold text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                                  <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">
+                                    {p.category_name || 'General'}
+                                  </span>
+                                </td>
+                                {showSku && (
+                                  <td className="py-3.5 px-6 text-slate-500 dark:text-slate-400 text-xs font-mono whitespace-nowrap">
+                                    {p.sku || '—'}
+                                  </td>
+                                )}
+                                <td className="py-3.5 px-6 text-right text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                                  {formatCurrency(p.purchase_price, currency)}
+                                </td>
+                                <td className="py-3.5 px-6 text-right font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                                  {formatCurrency(p.selling_price, currency)}
+                                </td>
+                                <td className="py-3.5 px-6 text-center whitespace-nowrap">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 shadow-2xs">
+                                    0 units (Out of Stock)
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Table 2: Dedicated Actions Table */}
+                  <div className="w-[230px] flex-shrink-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+                    <table className="w-full text-left text-sm border-collapse">
+                      <thead className="bg-slate-50/80 dark:bg-slate-800/80 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
+                        <tr className="h-12">
+                          <th className="py-3.5 px-4 text-center whitespace-nowrap">Restock Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {restockFilteredProducts.map((p) => {
+                          const isHighlighted = highlightedProductIds.includes(p.id);
+                          const isScanned = highlightedProductId === p.id;
+                          const isHovered = hoveredProductId === p.id;
+
+                          return (
+                            <tr
+                              key={p.id}
+                              onMouseEnter={() => setHoveredProductId(p.id)}
+                              onMouseLeave={() => setHoveredProductId(null)}
+                              className={`h-[60px] transition-colors duration-150 ${
+                                isHighlighted
+                                  ? 'bg-amber-100/70 dark:bg-amber-950/60 ring-2 ring-amber-500 shadow-sm'
+                                  : isScanned
+                                  ? 'bg-brand-100/70 dark:bg-brand-950/60 ring-2 ring-brand-500 shadow-sm'
+                                  : isHovered
+                                  ? 'bg-slate-50/80 dark:bg-slate-800/60'
+                                  : ''
+                              }`}
+                            >
+                              <td className="py-3.5 px-4 whitespace-nowrap">
+                                <div className="flex items-center justify-end gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    icon={<Sliders className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />}
+                                    onClick={() => setAdjustingProduct(p)}
+                                    className="text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                    title="Quick physical stock count adjustment"
+                                  >
+                                    Quick Count
+                                  </Button>
+                                  <Button
+                                    variant="primary"
+                                    size="sm"
+                                    icon={<Truck className="h-3.5 w-3.5" />}
+                                    onClick={() => {
+                                      setStockUpdateProduct(p);
+                                      setShowStockUpdateModal(true);
+                                    }}
+                                    className="text-xs font-bold shadow-2xs"
+                                  >
+                                    Restock Now
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
@@ -913,10 +969,10 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
             return (
               <div
                 key={group.id ?? 'uncategorized'}
-                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden"
+                className="space-y-3"
               >
                 {/* Unified Category Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-4 border-b border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
                   <div className="flex items-center gap-3">
                     <h2 className="text-base font-extrabold text-slate-900 dark:text-white">{group.name}</h2>
                     <button
@@ -954,227 +1010,275 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
                   </div>
                 </div>
 
-                {/* Dedicated Category Table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm border-collapse">
-                    <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                      <tr>
-                        <th className="py-3.5 px-6 whitespace-nowrap">Product ID</th>
-                        <th className="py-3.5 px-6 whitespace-nowrap">Product Name</th>
-                        {groupCustomFields.map((cf) => (
-                          <th
-                            key={cf.id}
-                            className="py-3.5 px-4 text-slate-700 dark:text-slate-300 whitespace-nowrap text-[11px] font-bold uppercase tracking-wider"
-                          >
-                            <div className="flex items-center gap-1.5">
-                              <span>{cf.name}</span>
-                              {!cf.category_id && (
-                                <span className="text-[9px] px-1 py-0.2 rounded bg-slate-200/70 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold normal-case">
-                                  Global
-                                </span>
-                              )}
-                            </div>
-                          </th>
-                        ))}
-                        {(showSku || showBarcode) && (
-                          <th className="py-3.5 px-6 whitespace-nowrap">
-                            {showSku && showBarcode ? 'SKU / Barcode' : showSku ? 'SKU' : 'Barcode'}
-                          </th>
-                        )}
-                        <th className="py-3.5 px-6 text-right whitespace-nowrap">Cost Price</th>
-                        <th className="py-3.5 px-6 text-right whitespace-nowrap">Selling Price</th>
-                        <th className="py-3.5 px-6 text-right whitespace-nowrap">Current Stock</th>
-                        <th className="py-3.5 px-6 text-center whitespace-nowrap">Status</th>
-                        <th className="py-3.5 px-6 text-right whitespace-nowrap">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {group.products.map((p) => {
-                        return (
-                          <tr
-                            key={p.id}
-                            id={`product-row-${p.id}`}
-                            className={`transition-all duration-300 ${
-                              highlightedProductIds.includes(p.id)
-                                ? 'bg-amber-100/70 dark:bg-amber-950/60 ring-2 ring-amber-500 shadow-sm border-l-4 border-l-amber-500'
-                                : highlightedProductId === p.id
-                                ? 'bg-brand-100/70 dark:bg-brand-950/60 ring-2 ring-brand-500 shadow-sm'
-                                : 'hover:bg-slate-50/60 dark:hover:bg-slate-800/50'
-                            }`}
-                          >
-                            <td className="py-4 px-6 font-bold text-slate-900 dark:text-white whitespace-nowrap">{p.product_id}</td>
-                            <td className="py-4 px-6 font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap">
-                              <div className="flex items-center gap-2">
-                                <span>{p.name}</span>
-                                {p.is_service && !group.is_no_stock && (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shadow-2xs">
-                                    No-Stock
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            {groupCustomFields.map((cf) => {
-                              const customVal = p.custom_fields?.find((cv) => cv.field_id === cf.id)?.value;
-                              return (
-                                <td key={cf.id} className="py-4 px-4 text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                                  {customVal ? (
-                                    <span className="inline-block bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2.5 py-1 rounded-lg font-semibold text-xs border border-slate-200/60 dark:border-slate-700">
-                                      {customVal}
+                {/* Dual Tables: Scrollable Data Table + Dedicated Actions Table */}
+                <div className="flex items-start gap-3">
+                  {/* Table 1: Scrollable Specifications & Inventory (Scroll is ONLY on this table) */}
+                  <div className="flex-1 min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm border-collapse">
+                        <thead className="bg-slate-50 dark:bg-slate-800 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
+                          <tr className="h-12">
+                            <th className="py-3.5 px-6 whitespace-nowrap">Product ID</th>
+                            <th className="py-3.5 px-6 whitespace-nowrap">Product Name</th>
+                            {groupCustomFields.map((cf) => (
+                              <th
+                                key={cf.id}
+                                className="py-3.5 px-4 text-slate-700 dark:text-slate-300 whitespace-nowrap text-[11px] font-bold uppercase tracking-wider"
+                              >
+                                <div className="flex items-center gap-1.5">
+                                  <span>{cf.name}</span>
+                                  {!cf.category_id && (
+                                    <span className="text-[9px] px-1 py-0.2 rounded bg-slate-200/70 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold normal-case">
+                                      Global
                                     </span>
-                                  ) : (
+                                  )}
+                                </div>
+                              </th>
+                            ))}
+                            {showSku && (
+                              <th className="py-3.5 px-6 whitespace-nowrap">
+                                SKU
+                              </th>
+                            )}
+                            <th className="py-3.5 px-6 text-right whitespace-nowrap">Cost Price</th>
+                            <th className="py-3.5 px-6 text-right whitespace-nowrap">Selling Price</th>
+                            <th className="py-3.5 px-6 text-right whitespace-nowrap">Current Stock</th>
+                            <th className="py-3.5 px-6 text-center whitespace-nowrap">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                          {group.products.map((p) => {
+                            const isHighlighted = highlightedProductIds.includes(p.id);
+                            const isScanned = highlightedProductId === p.id;
+                            const isHovered = hoveredProductId === p.id;
+
+                            return (
+                              <tr
+                                key={p.id}
+                                id={`product-row-${p.id}`}
+                                onMouseEnter={() => setHoveredProductId(p.id)}
+                                onMouseLeave={() => setHoveredProductId(null)}
+                                className={`h-[60px] transition-colors duration-150 ${
+                                  isHighlighted
+                                    ? 'bg-amber-100/70 dark:bg-amber-950/60 ring-2 ring-amber-500 shadow-sm border-l-4 border-l-amber-500'
+                                    : isScanned
+                                    ? 'bg-brand-100/70 dark:bg-brand-950/60 ring-2 ring-brand-500 shadow-sm'
+                                    : isHovered
+                                    ? 'bg-slate-50/80 dark:bg-slate-800/60'
+                                    : ''
+                                }`}
+                              >
+                                <td className="py-3.5 px-6 font-bold text-slate-900 dark:text-white whitespace-nowrap">{p.product_id}</td>
+                                <td className="py-3.5 px-6 font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap">
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEdit(p)}
+                                      className="text-left font-bold text-slate-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 hover:underline transition-colors cursor-pointer truncate max-w-[240px]"
+                                      title={`Click to edit ${p.name}`}
+                                    >
+                                      {p.name}
+                                    </button>
+                                    {p.is_service && !group.is_no_stock && (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shadow-2xs">
+                                        No-Stock
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                {groupCustomFields.map((cf) => {
+                                  const customVal = p.custom_fields?.find((cv) => cv.field_id === cf.id)?.value;
+                                  return (
+                                    <td key={cf.id} className="py-3.5 px-4 text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                                      {customVal ? (
+                                        <span className="inline-block bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2.5 py-0.5 rounded-lg font-semibold text-xs border border-slate-200/60 dark:border-slate-700">
+                                          {customVal}
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-300 dark:text-slate-600 font-bold">—</span>
+                                      )}
+                                    </td>
+                                  );
+                                })}
+                                {showSku && (
+                                  <td className="py-3.5 px-6 text-slate-500 dark:text-slate-400 text-xs font-mono whitespace-nowrap">
+                                    {p.sku || '—'}
+                                  </td>
+                                )}
+                                <td className="py-3.5 px-6 text-right text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                                  {p.is_service ? (
                                     <span className="text-slate-300 dark:text-slate-600 font-bold">—</span>
+                                  ) : (
+                                    formatCurrency(p.purchase_price, currency)
                                   )}
                                 </td>
-                              );
-                            })}
-                            {(showSku || showBarcode) && (
-                              <td className="py-4 px-6 text-slate-500 dark:text-slate-400 text-xs font-mono whitespace-nowrap">
-                                {(showSku && p.sku) || (showBarcode && p.barcode) ? (
-                                  <div>
-                                    {showSku && p.sku && <div>SKU: {p.sku}</div>}
-                                    {showBarcode && p.barcode && <div>BC: {p.barcode}</div>}
+                                <td className="py-3.5 px-6 text-right font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                                  {formatCurrency(p.selling_price, currency)}
+                                </td>
+                                <td className="py-3.5 px-6 text-right whitespace-nowrap">
+                                  {p.is_service ? (
+                                    <span className="text-slate-400 dark:text-slate-500 font-semibold text-xs">
+                                      No Stock
+                                    </span>
+                                  ) : (
+                                    <div className="flex items-center justify-end gap-2">
+                                      <span
+                                        className={`font-black text-sm ${
+                                          p.current_stock > 5
+                                            ? 'text-emerald-600 dark:text-emerald-400'
+                                            : p.current_stock > 0
+                                            ? 'text-amber-600 dark:text-amber-400'
+                                            : 'text-rose-600 dark:text-rose-400'
+                                        }`}
+                                      >
+                                        {p.current_stock}
+                                      </span>
+                                      {p.is_active && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setStockUpdateProduct(p);
+                                            setShowStockUpdateModal(true);
+                                          }}
+                                          className="inline-flex items-center justify-center h-6 w-6 rounded-md bg-brand-50 dark:bg-brand-950/40 hover:bg-brand-600 text-brand-700 dark:text-brand-300 hover:text-white border border-brand-300/80 dark:border-brand-800 shadow-2xs transition group"
+                                          title={`Add / Update stock for ${p.name}`}
+                                        >
+                                          <Plus className="h-3.5 w-3.5 transition group-hover:scale-110" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="py-3.5 px-6 text-center whitespace-nowrap">
+                                  {p.is_service ? (
+                                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shadow-2xs">
+                                      No-Stock
+                                    </span>
+                                  ) : (
+                                    <Badge
+                                      status={
+                                        p.current_stock > 5
+                                          ? 'IN_STOCK'
+                                          : p.current_stock > 0
+                                          ? 'LOW_STOCK'
+                                          : 'OUT_OF_STOCK'
+                                      }
+                                    />
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Table 2: Dedicated Actions Table (Separate Table with whitespace!) */}
+                  <div className="w-[200px] flex-shrink-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+                    <table className="w-full text-left text-sm border-collapse">
+                      <thead className="bg-slate-50 dark:bg-slate-800 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
+                        <tr className="h-12">
+                          <th className="py-3.5 px-4 text-center whitespace-nowrap">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {group.products.map((p) => {
+                          const isHighlighted = highlightedProductIds.includes(p.id);
+                          const isScanned = highlightedProductId === p.id;
+                          const isHovered = hoveredProductId === p.id;
+
+                          return (
+                            <tr
+                              key={p.id}
+                              onMouseEnter={() => setHoveredProductId(p.id)}
+                              onMouseLeave={() => setHoveredProductId(null)}
+                              className={`h-[60px] transition-colors duration-150 ${
+                                isHighlighted
+                                  ? 'bg-amber-100/70 dark:bg-amber-950/60 ring-2 ring-amber-500 shadow-sm'
+                                  : isScanned
+                                  ? 'bg-brand-100/70 dark:bg-brand-950/60 ring-2 ring-brand-500 shadow-sm'
+                                  : isHovered
+                                  ? 'bg-slate-50/80 dark:bg-slate-800/60'
+                                  : ''
+                              }`}
+                            >
+                              <td className="py-3.5 px-4 whitespace-nowrap">
+                                {p.is_active ? (
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    {/* Direct SELL Button */}
+                                    {onSellProduct && (p.is_service || p.current_stock > 0) && (
+                                      <Button
+                                        variant="primary"
+                                        size="sm"
+                                        icon={<ShoppingCart className="h-3 w-3" />}
+                                        onClick={() => onSellProduct(p)}
+                                        className="text-xs py-1 px-2.5 font-bold shadow-sm"
+                                      >
+                                        Sell
+                                      </Button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEdit(p)}
+                                      className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                                      title="Edit Product"
+                                    >
+                                      <Edit2 className="h-4 w-4" />
+                                    </button>
+                                    {enableBarcodePrinter && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setBarcodePrintProducts([p]);
+                                          setBarcodePrintCopies(Math.max(1, p.current_stock || 1));
+                                          setShowBarcodeModal(true);
+                                        }}
+                                        className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-brand-700 dark:hover:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-950/40 transition"
+                                        title={`Print Barcode Label for ${p.name}`}
+                                      >
+                                        <Barcode className="h-4 w-4" />
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => setDeletingProduct(p)}
+                                      className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
+                                      title="Deactivate Product"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </button>
                                   </div>
                                 ) : (
-                                  '—'
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      icon={<RotateCcw className="h-3.5 w-3.5" />}
+                                      onClick={() => handleRestore(p.id)}
+                                      className="text-xs py-1 px-2.5 font-semibold text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-950/40"
+                                    >
+                                      Restore
+                                    </Button>
+                                    <Button
+                                      variant="danger"
+                                      size="sm"
+                                      icon={<Trash2 className="h-3.5 w-3.5" />}
+                                      onClick={() => setDeletingProduct(p)}
+                                      className="text-xs py-1 px-2.5 font-bold shadow-sm"
+                                      title="Delete Permanently"
+                                    >
+                                      Delete
+                                    </Button>
+                                  </div>
                                 )}
                               </td>
-                            )}
-                            <td className="py-4 px-6 text-right text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                              {p.is_service ? (
-                                <span className="text-slate-300 dark:text-slate-600 font-bold">—</span>
-                              ) : (
-                                formatCurrency(p.purchase_price, currency)
-                              )}
-                            </td>
-                            <td className="py-4 px-6 text-right font-bold text-slate-900 dark:text-white whitespace-nowrap">
-                              {formatCurrency(p.selling_price, currency)}
-                            </td>
-                            <td className="py-4 px-6 text-right whitespace-nowrap">
-                              {p.is_service ? (
-                                <span className="text-slate-400 dark:text-slate-500 font-semibold text-xs">
-                                  No Stock
-                                </span>
-                              ) : (
-                                <div className="flex items-center justify-end gap-2">
-                                  <span
-                                    className={`font-black text-sm ${
-                                      p.current_stock > 5
-                                        ? 'text-emerald-600 dark:text-emerald-400'
-                                        : p.current_stock > 0
-                                        ? 'text-amber-600 dark:text-amber-400'
-                                        : 'text-rose-600 dark:text-rose-400'
-                                    }`}
-                                  >
-                                    {p.current_stock}
-                                  </span>
-                                  {p.is_active && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setStockUpdateProduct(p);
-                                        setShowStockUpdateModal(true);
-                                      }}
-                                      className="inline-flex items-center justify-center h-6 w-6 rounded-md bg-brand-50 dark:bg-brand-950/40 hover:bg-brand-600 text-brand-700 dark:text-brand-300 hover:text-white border border-brand-300/80 dark:border-brand-800 shadow-2xs transition group"
-                                      title={`Add / Update stock for ${p.name}`}
-                                    >
-                                      <Plus className="h-3.5 w-3.5 transition group-hover:scale-110" />
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </td>
-                            <td className="py-4 px-6 text-center whitespace-nowrap">
-                              {p.is_service ? (
-                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shadow-2xs">
-                                  No-Stock
-                                </span>
-                              ) : (
-                                <Badge
-                                  status={
-                                    p.current_stock > 5
-                                      ? 'IN_STOCK'
-                                      : p.current_stock > 0
-                                      ? 'LOW_STOCK'
-                                      : 'OUT_OF_STOCK'
-                                  }
-                                />
-                              )}
-                            </td>
-                            <td className="py-4 px-6 text-right whitespace-nowrap">
-                              {p.is_active ? (
-                                <div className="flex items-center justify-end gap-2">
-                                  {/* Direct SELL Button */}
-                                  {onSellProduct && (p.is_service || p.current_stock > 0) && (
-                                    <Button
-                                      variant="primary"
-                                      size="sm"
-                                      icon={<ShoppingCart className="h-3 w-3" />}
-                                      onClick={() => onSellProduct(p)}
-                                      className="text-xs py-1 px-2.5 font-bold shadow-sm"
-                                    >
-                                      Sell
-                                    </Button>
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenEdit(p)}
-                                    className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                                    title="Edit Product"
-                                  >
-                                    <Edit2 className="h-4 w-4" />
-                                  </button>
-                                  {enableBarcodePrinter && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setBarcodePrintProducts([p]);
-                                        setBarcodePrintCopies(Math.max(1, p.current_stock || 1));
-                                        setShowBarcodeModal(true);
-                                      }}
-                                      className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-brand-700 dark:hover:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-950/40 transition"
-                                      title={`Print Barcode Label for ${p.name}`}
-                                    >
-                                      <Barcode className="h-4 w-4" />
-                                    </button>
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={() => setDeletingProduct(p)}
-                                    className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
-                                    title="Deactivate Product"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="flex items-center justify-end gap-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    icon={<RotateCcw className="h-3.5 w-3.5" />}
-                                    onClick={() => handleRestore(p.id)}
-                                    className="text-xs py-1 px-2.5 font-semibold text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-950/40"
-                                  >
-                                    Restore
-                                  </Button>
-                                  <Button
-                                    variant="danger"
-                                    size="sm"
-                                    icon={<Trash2 className="h-3.5 w-3.5" />}
-                                    onClick={() => setDeletingProduct(p)}
-                                    className="text-xs py-1 px-2.5 font-bold shadow-sm"
-                                    title="Delete Permanently"
-                                  >
-                                    Delete
-                                  </Button>
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             );
@@ -1397,7 +1501,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
             );
           })()}
 
-          {showBarcode && !formData.is_service && (
+          {!formData.is_service && (
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">

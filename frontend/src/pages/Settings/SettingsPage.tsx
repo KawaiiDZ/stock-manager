@@ -49,6 +49,9 @@ import {
   Bell,
   Gauge,
   Activity,
+  Minus,
+  ZoomIn,
+  ZoomOut,
   Maximize2,
   Minimize2,
   ExternalLink,
@@ -511,7 +514,22 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [pinError, setPinError] = useState<string | null>(null);
   const [checkingPin, setCheckingPin] = useState(false);
 
-  const { themeMode, colorTheme, effectiveMode, setThemeMode, setColorTheme } = useTheme();
+  const { themeMode, colorTheme, effectiveMode, setThemeMode, setColorTheme, uiZoom: currentCtxZoom, setUiZoom } = useTheme();
+
+  // Display Scale & UI Zoom State
+  const [uiZoom, setUiZoomLocal] = useState<number>(settings?.ui_zoom ?? currentCtxZoom ?? 100);
+
+  useEffect(() => {
+    if (settings?.ui_zoom !== undefined) {
+      setUiZoomLocal(settings.ui_zoom);
+    }
+  }, [settings?.ui_zoom]);
+
+  const handleZoomChange = (val: number) => {
+    const clamped = Math.max(70, Math.min(160, Math.round(val)));
+    setUiZoomLocal(clamped);
+    setUiZoom(clamped);
+  };
 
   // Reorganized Master Categories & Quick-Find
   const [activeCategory, setActiveCategory] = useState<
@@ -935,6 +953,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         auto_launch_kiosk: autoLaunchKiosk,
         kiosk_window_mode: kioskWindowMode,
         kiosk_browser: kioskBrowser,
+        ui_zoom: uiZoom,
       });
       setGlobalFormattingPreferences({
         dateFormat,
@@ -1006,6 +1025,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     setAutoLaunchKiosk(settings.auto_launch_kiosk ?? false);
     setKioskWindowMode(settings.kiosk_window_mode || 'fullscreen');
     setKioskBrowser(settings.kiosk_browser || 'auto');
+    const originalZoom = settings.ui_zoom ?? 100;
+    setUiZoomLocal(originalZoom);
+    setUiZoom(originalZoom);
   };
 
   const isFormDirty = useMemo(() => {
@@ -1059,6 +1081,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     if (autoLaunchKiosk !== (settings.auto_launch_kiosk ?? false)) return true;
     if (kioskWindowMode !== (settings.kiosk_window_mode || 'fullscreen')) return true;
     if (kioskBrowser !== (settings.kiosk_browser || 'auto')) return true;
+    if (uiZoom !== (settings.ui_zoom ?? 100)) return true;
     return false;
   }, [
     settings, bizName, bizPhone, bizAddress, currency, showSku, showBarcode,
@@ -1072,7 +1095,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     enableBarcodeScanner, enableBarcodePrinter, barcodeLabelSize,
     barcodeLabelShowBusinessName, barcodeLabelShowProductName, barcodeLabelShowPrice,
     barcodeLabelShowSku, barcodeLabelCustomText, autoLaunchKiosk,
-    kioskWindowMode, kioskBrowser
+    kioskWindowMode, kioskBrowser, uiZoom
   ]);
 
   const handleSavePaymentAccounts = async (accountsToSave: string[]) => {
@@ -3490,6 +3513,59 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                                   Edge is preinstalled on Windows 10/11. Supports instant silent printing.
                                 </p>
                               </div>
+
+                              {/* Setting 4: Kiosk Display Scale */}
+                              <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/80 space-y-1.5 sm:col-span-3">
+                                <div className="flex items-center justify-between">
+                                  <label className="block text-xs font-bold text-slate-200">
+                                    Display Scale & Screen Zoom (Kiosk Fit)
+                                  </label>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                      {uiZoom}%
+                                    </span>
+                                    {uiZoom !== 100 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleZoomChange(100)}
+                                        className="text-[10px] font-bold text-slate-300 hover:text-white underline transition"
+                                      >
+                                        Reset (100%)
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleZoomChange(Math.max(70, uiZoom - 5))}
+                                    className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 transition"
+                                    title="Decrease Scale (-5%)"
+                                  >
+                                    <Minus className="h-3.5 w-3.5" />
+                                  </button>
+                                  <input
+                                    type="range"
+                                    min={70}
+                                    max={160}
+                                    step={1}
+                                    value={uiZoom}
+                                    onChange={(e) => handleZoomChange(Number(e.target.value))}
+                                    className="flex-1 accent-emerald-500 cursor-pointer h-1.5 bg-slate-700 rounded-lg"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleZoomChange(Math.min(160, uiZoom + 5))}
+                                    className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 transition"
+                                    title="Increase Scale (+5%)"
+                                  >
+                                    <Plus className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                                <p className="text-[10px] text-slate-400 leading-tight">
+                                  Proportionally scale fonts and buttons for 10"–15" touchscreens (1024×768 / 1366×768) or 2K/4K displays. Press <kbd className="px-1 py-0.5 rounded bg-slate-700 text-slate-200 font-mono">Ctrl</kbd> + <kbd className="px-1 py-0.5 rounded bg-slate-700 text-slate-200 font-mono">+</kbd> / <kbd className="px-1 py-0.5 rounded bg-slate-700 text-slate-200 font-mono">-</kbd> anytime.
+                                </p>
+                              </div>
                             </div>
                           </div>
 
@@ -4628,6 +4704,133 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   Live Indicator
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Display Scaling & UI Zoom */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base flex items-center gap-2">
+                  <Monitor className="h-5 w-5 text-brand-600" />
+                  Display Scaling & Screen Zoom
+                </h3>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                  Proportionally scale the entire POS interface to fit small touchscreens, compact monitors, or high-density 2K/4K displays.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Current Scale:</span>
+                <span className="text-sm font-mono font-bold px-3 py-1 rounded-xl bg-brand-50 text-brand-700 dark:bg-brand-950/60 dark:text-brand-300 border border-brand-200 dark:border-brand-800">
+                  {uiZoom}%
+                </span>
+                {uiZoom !== 100 && (
+                  <button
+                    type="button"
+                    onClick={() => handleZoomChange(100)}
+                    className="px-2.5 py-1 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Quick Scale Presets */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">
+                Quick Scale Presets
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {[
+                  { value: 75, label: '75%', desc: 'Compact (1024×768)' },
+                  { value: 85, label: '85%', desc: 'Condensed' },
+                  { value: 90, label: '90%', desc: 'Slightly Smaller' },
+                  { value: 100, label: '100%', desc: 'Standard (Default)' },
+                  { value: 110, label: '110%', desc: 'Comfortable' },
+                  { value: 125, label: '125%', desc: 'Large Touchscreen' },
+                  { value: 140, label: '140%', desc: 'HiDPI / 2K Display' },
+                  { value: 150, label: '150%', desc: 'Maximum Legibility' },
+                ].map((preset) => {
+                  const isSelected = uiZoom === preset.value;
+                  return (
+                    <button
+                      key={preset.value}
+                      type="button"
+                      onClick={() => handleZoomChange(preset.value)}
+                      className={`p-3 rounded-2xl border text-left transition-all relative ${
+                        isSelected
+                          ? 'border-brand-600 bg-brand-50/50 dark:bg-brand-950/30 ring-2 ring-brand-500/20 shadow-xs'
+                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/40 dark:bg-slate-800/40'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className={`font-mono font-bold text-sm ${isSelected ? 'text-brand-700 dark:text-brand-300' : 'text-slate-800 dark:text-slate-100'}`}>
+                          {preset.label}
+                        </span>
+                        {isSelected && <Check className="h-4 w-4 text-brand-600 stroke-[3]" />}
+                      </div>
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500 block mt-0.5 font-medium truncate">
+                        {preset.desc}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Fine-Tuning Continuous Slider & Steppers */}
+            <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                  Fine-Tuning Slider (70% – 160%)
+                </label>
+                <span className="text-xs text-slate-400 dark:text-slate-500">Live instant preview</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleZoomChange(Math.max(70, uiZoom - 5))}
+                  className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+                  title="Decrease Scale (-5%)"
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+
+                <div className="flex-1 relative flex items-center">
+                  <input
+                    type="range"
+                    min={70}
+                    max={160}
+                    step={1}
+                    value={uiZoom}
+                    onChange={(e) => handleZoomChange(Number(e.target.value))}
+                    className="w-full accent-brand-600 cursor-pointer h-2 bg-slate-200 dark:bg-slate-700 rounded-lg"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleZoomChange(Math.min(160, uiZoom + 5))}
+                  className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+                  title="Increase Scale (+5%)"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="flex justify-between text-[11px] text-slate-400 dark:text-slate-500 font-mono px-1">
+                <span>70% (Min)</span>
+                <span>100% (Default)</span>
+                <span>160% (Max)</span>
+              </div>
+            </div>
+
+            {/* Keyboard Shortcut Note */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 flex items-center gap-3 text-xs text-slate-600 dark:text-slate-400">
+              <Keyboard className="h-4 w-4 text-brand-600 shrink-0" />
+              <span>
+                <strong>Fullscreen & Kiosk Shortcuts:</strong> Press <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 font-mono text-[11px] text-slate-800 dark:text-slate-200">Ctrl</kbd> + <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 font-mono text-[11px] text-slate-800 dark:text-slate-200">+</kbd> / <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 font-mono text-[11px] text-slate-800 dark:text-slate-200">-</kbd> anytime to zoom, or <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 font-mono text-[11px] text-slate-800 dark:text-slate-200">Ctrl</kbd> + <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 font-mono text-[11px] text-slate-800 dark:text-slate-200">0</kbd> to reset.
+              </span>
             </div>
           </div>
 

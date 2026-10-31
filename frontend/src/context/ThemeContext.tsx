@@ -53,10 +53,12 @@ interface ThemeContextType {
   themeMode: ThemeMode;
   colorTheme: ColorTheme;
   effectiveMode: 'light' | 'dark';
+  uiZoom: number;
   setThemeMode: (mode: ThemeMode) => void;
   setColorTheme: (theme: ColorTheme) => void;
+  setUiZoom: (zoom: number) => void;
   toggleDarkMode: () => void;
-  syncFromSettings: (mode?: string, color?: string) => void;
+  syncFromSettings: (mode?: string, color?: string, zoom?: number) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -74,6 +76,17 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return saved;
     }
     return 'emerald';
+  });
+
+  const [uiZoom, setUiZoomState] = useState<number>(() => {
+    const saved = localStorage.getItem('sm_ui_zoom');
+    if (saved) {
+      const parsed = parseInt(saved, 10);
+      if (!isNaN(parsed) && parsed >= 70 && parsed <= 160) {
+        return parsed;
+      }
+    }
+    return 100;
   });
 
   const [systemIsDark, setSystemIsDark] = useState<boolean>(() => {
@@ -115,6 +128,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('sm_color_theme', colorTheme);
   }, [themeMode, colorTheme, effectiveMode]);
 
+  // Apply UI zoom to root HTML element
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.zoom = `${uiZoom}%`;
+      localStorage.setItem('sm_ui_zoom', String(uiZoom));
+    }
+  }, [uiZoom]);
+
   const setThemeMode = useCallback((mode: ThemeMode) => {
     setThemeModeState(mode);
     localStorage.setItem('sm_theme_mode', mode);
@@ -125,6 +146,15 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('sm_color_theme', color);
   }, []);
 
+  const setUiZoom = useCallback((zoom: number) => {
+    const clamped = Math.max(70, Math.min(160, Math.round(zoom)));
+    setUiZoomState(clamped);
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.zoom = `${clamped}%`;
+      localStorage.setItem('sm_ui_zoom', String(clamped));
+    }
+  }, []);
+
   const toggleDarkMode = useCallback(() => {
     setThemeModeState((prev) => {
       const next = prev === 'dark' ? 'light' : 'dark';
@@ -133,7 +163,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   }, []);
 
-  const syncFromSettings = useCallback((mode?: string, color?: string) => {
+  const syncFromSettings = useCallback((mode?: string, color?: string, zoom?: number) => {
     if (mode && (mode === 'light' || mode === 'dark' || mode === 'system')) {
       setThemeModeState(mode);
       localStorage.setItem('sm_theme_mode', mode);
@@ -141,6 +171,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (color && (color === 'emerald' || color === 'indigo' || color === 'sky' || color === 'rose' || color === 'slate')) {
       setColorThemeState(color);
       localStorage.setItem('sm_color_theme', color);
+    }
+    if (typeof zoom === 'number' && !isNaN(zoom) && zoom >= 70 && zoom <= 160) {
+      const clamped = Math.round(zoom);
+      setUiZoomState(clamped);
+      if (typeof document !== 'undefined') {
+        document.documentElement.style.zoom = `${clamped}%`;
+        localStorage.setItem('sm_ui_zoom', String(clamped));
+      }
     }
   }, []);
 
@@ -150,8 +188,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         themeMode,
         colorTheme,
         effectiveMode,
+        uiZoom,
         setThemeMode,
         setColorTheme,
+        setUiZoom,
         toggleDarkMode,
         syncFromSettings,
       }}

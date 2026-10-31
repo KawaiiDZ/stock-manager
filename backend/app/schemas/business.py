@@ -41,6 +41,8 @@ class BusinessSettingsResponse(BaseModel):
     hide_header_text_with_letterhead: bool = False
     invoice_title: str = "TAX INVOICE"
     enable_quotations: bool = True
+    enable_thermal_quotations: bool = True
+    quotation_receipt_type: str = "pdf"
     enable_bill_templates: bool = True
     enable_navigation_hub: bool = True
     theme_mode: str = "light"
@@ -62,6 +64,7 @@ class BusinessSettingsResponse(BaseModel):
     auto_launch_kiosk: bool = False
     kiosk_window_mode: str = "fullscreen"
     kiosk_browser: str = "auto"
+    ui_zoom: int = 100
 
     @field_validator("payment_accounts", mode="before")
     def parse_payment_accounts(cls, v):
@@ -122,6 +125,8 @@ class BusinessSettingsUpdate(BaseModel):
     hide_header_text_with_letterhead: Optional[bool] = None
     invoice_title: Optional[str] = None
     enable_quotations: Optional[bool] = None
+    enable_thermal_quotations: Optional[bool] = None
+    quotation_receipt_type: Optional[str] = None
     enable_bill_templates: Optional[bool] = None
     enable_navigation_hub: Optional[bool] = None
     theme_mode: Optional[str] = None
@@ -143,6 +148,7 @@ class BusinessSettingsUpdate(BaseModel):
     auto_launch_kiosk: Optional[bool] = None
     kiosk_window_mode: Optional[str] = None
     kiosk_browser: Optional[str] = None
+    ui_zoom: Optional[int] = None
 
 class PresetTemplateResponse(BaseModel):
     key: str

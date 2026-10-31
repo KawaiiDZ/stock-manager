@@ -35,6 +35,8 @@ export interface BusinessSettings {
   hide_header_text_with_letterhead?: boolean;
   invoice_title?: string;
   enable_quotations?: boolean;
+  enable_thermal_quotations?: boolean;
+  quotation_receipt_type?: 'pdf' | 'thermal';
   enable_bill_templates?: boolean;
   enable_navigation_hub?: boolean;
   theme_mode?: 'light' | 'dark' | 'system';
@@ -57,6 +59,7 @@ export interface BusinessSettings {
   auto_launch_kiosk?: boolean;
   kiosk_window_mode?: 'fullscreen' | 'kiosk' | 'maximized';
   kiosk_browser?: 'auto' | 'chrome' | 'msedge' | 'system';
+  ui_zoom?: number;
 }
 
 export interface PaymentSplit {

@@ -53,6 +53,7 @@ class PrinterDiagnosticResponse(BaseModel):
 
 class ThermalPrintRequest(BaseModel):
     sale_id: Optional[int] = None
+    quotation_id: Optional[int] = None
     printer_name: Optional[str] = None
     paper_width: Optional[str] = None  # "58mm" | "58mm_narrow" | "80mm" | "80mm_compact"
     header_style: Optional[str] = None  # "logo_text" | "text_only"
@@ -170,7 +171,43 @@ def print_thermal_receipt(data: ThermalPrintRequest, db: Session = Depends(get_d
 
     sale_dict: Dict[str, Any] = {}
 
-    if data.is_sample or not data.sale_id:
+    if data.quotation_id:
+        from backend.app.models.quotation import Quotation
+        quotation = db.query(Quotation).filter(Quotation.id == data.quotation_id).first()
+        if not quotation:
+            raise HTTPException(status_code=404, detail=f"Quotation #{data.quotation_id} not found.")
+
+        sale_dict = {
+            "receipt_number": quotation.quotation_number,
+            "created_at": quotation.created_at,
+            "valid_until": quotation.valid_until,
+            "customer_name": quotation.customer_name or "Counter Walk-in",
+            "is_quotation": True,
+            "quotation_status": quotation.status or "PENDING",
+            "subtotal": float(quotation.subtotal or 0),
+            "discount_amount": float(quotation.discount_amount or 0),
+            "tax_amount": float(quotation.tax_amount or 0),
+            "tax_rate": float(quotation.tax_rate or 0),
+            "total_amount": float(quotation.total_amount or 0),
+            "paid_amount": 0.0,
+            "due_amount": float(quotation.total_amount or 0),
+            "payment_status": quotation.status or "PENDING",
+            "notes": quotation.notes,
+            "terms": getattr(settings, "quotation_terms", "") or "",
+            "items": [
+                {
+                    "product_name": it.product_name,
+                    "quantity": float(it.quantity or 0),
+                    "returned_quantity": 0.0,
+                    "unit_price": float(it.unit_price or 0),
+                    "discount_amount": float(it.discount_amount or 0),
+                    "total_price": float(it.total_price or 0),
+                    "notes": getattr(it, "notes", ""),
+                }
+                for it in quotation.items
+            ],
+        }
+    elif data.is_sample or not data.sale_id:
         # Realistic sample retail transaction for diagnostics
         currency = settings.currency if settings else "Rs."
         sale_dict = {

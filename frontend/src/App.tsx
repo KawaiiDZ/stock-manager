@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from './services/api';
 import { BusinessSettings, Product } from './types';
 import { Sidebar } from './components/layout/Sidebar';
@@ -33,7 +33,7 @@ import { dispatchGlobalShortcut } from './utils/shortcuts';
 import { useTheme } from './context/ThemeContext';
 
 export const App: React.FC = () => {
-  const { syncFromSettings } = useTheme();
+  const { uiZoom, setUiZoom, syncFromSettings } = useTheme();
   const [currentUser, setCurrentUser] = useState<{ username: string; full_name: string } | null>(
     () => {
       const saved = localStorage.getItem('sm_user');
@@ -53,6 +53,18 @@ export const App: React.FC = () => {
   const [isShuttingDown, setIsShuttingDown] = useState<boolean>(false);
   const [isShutdownComplete, setIsShutdownComplete] = useState<boolean>(false);
   const [shutdownMessage, setShutdownMessage] = useState<string>('');
+  const [zoomHud, setZoomHud] = useState<{ zoom: number; visible: boolean } | null>(null);
+  const zoomHudTimeoutRef = useRef<any>(null);
+
+  const triggerZoomHud = (zoomVal: number) => {
+    if (zoomHudTimeoutRef.current) {
+      clearTimeout(zoomHudTimeoutRef.current);
+    }
+    setZoomHud({ zoom: zoomVal, visible: true });
+    zoomHudTimeoutRef.current = setTimeout(() => {
+      setZoomHud((prev) => (prev ? { ...prev, visible: false } : null));
+    }, 1500);
+  };
 
   const loadSettingsAndBadges = async () => {
     try {
@@ -68,7 +80,7 @@ export const App: React.FC = () => {
           formatPricesWithCommas: bizSettings.format_prices_with_commas,
           currency: bizSettings.currency || 'Rs.',
         });
-        syncFromSettings(bizSettings.theme_mode, bizSettings.color_theme);
+        syncFromSettings(bizSettings.theme_mode, bizSettings.color_theme, bizSettings.ui_zoom);
       }
       setUrgentBillsCount(billsAttention.length);
       setPendingQuotationsCount(pendingQuotes?.length || 0);
@@ -92,7 +104,7 @@ export const App: React.FC = () => {
           formatPricesWithCommas: s.format_prices_with_commas,
           currency: s.currency || 'Rs.',
         });
-        syncFromSettings(s.theme_mode, s.color_theme);
+        syncFromSettings(s.theme_mode, s.color_theme, s.ui_zoom);
       }
     }).catch(() => {});
 
@@ -192,6 +204,31 @@ export const App: React.FC = () => {
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
+
+  // Global UI zoom shortcuts: Ctrl/Cmd + Plus, Ctrl/Cmd + Minus, Ctrl/Cmd + 0
+  useEffect(() => {
+    const handleZoomKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === '=' || e.key === '+' || e.code === 'NumpadAdd' || e.code === 'Equal') {
+          e.preventDefault();
+          const next = Math.min(160, Math.round((uiZoom + 5) / 5) * 5);
+          setUiZoom(next);
+          triggerZoomHud(next);
+        } else if (e.key === '-' || e.key === '_' || e.code === 'NumpadSubtract' || e.code === 'Minus') {
+          e.preventDefault();
+          const next = Math.max(70, Math.round((uiZoom - 5) / 5) * 5);
+          setUiZoom(next);
+          triggerZoomHud(next);
+        } else if (e.key === '0' || e.code === 'Numpad0' || e.code === 'Digit0') {
+          e.preventDefault();
+          setUiZoom(100);
+          triggerZoomHud(100);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleZoomKeyDown, { passive: false });
+    return () => window.removeEventListener('keydown', handleZoomKeyDown);
+  }, [uiZoom, setUiZoom]);
 
   const handleTriggerShutdown = () => {
     setShowShutdownConfirm(true);
@@ -431,6 +468,21 @@ export const App: React.FC = () => {
         variant="danger"
         loading={isShuttingDown}
       />
+      {/* Display Zoom HUD Overlay Toast */}
+      {zoomHud && zoomHud.visible && (
+        <div className="fixed bottom-6 right-6 z-[9999] pointer-events-none transition-all duration-300 transform animate-in fade-in zoom-in-95">
+          <div className="bg-slate-900/95 dark:bg-slate-800/95 text-white px-4 py-2.5 rounded-2xl shadow-2xl border border-slate-700/80 backdrop-blur-md flex items-center gap-2.5 text-sm font-bold tracking-wide">
+            <span className="text-brand-400">🔍</span>
+            <span>Display Scale:</span>
+            <span className="bg-brand-500/20 text-brand-300 px-2 py-0.5 rounded-lg font-mono text-xs border border-brand-500/30">
+              {zoomHud.zoom}%
+            </span>
+            {zoomHud.zoom === 100 && (
+              <span className="text-[11px] text-slate-400 font-normal">(Default)</span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

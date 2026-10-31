@@ -18,6 +18,13 @@
           }
           document.documentElement.setAttribute('data-theme', color);
           document.documentElement.classList.add('theme-' + color);
+          var zoom = localStorage.getItem('sm_ui_zoom');
+          if (zoom) {
+            var zVal = parseInt(zoom, 10);
+            if (!isNaN(zVal) && zVal >= 70 && zVal <= 160) {
+              document.documentElement.style.zoom = zVal + '%';
+            }
+          }
         } catch (e) {}
       })();
     </script>

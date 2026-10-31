@@ -41,6 +41,8 @@ class BusinessSettings(Base):
     hide_header_text_with_letterhead = Column(Boolean, nullable=False, default=False)
     invoice_title = Column(String(100), nullable=False, default="TAX INVOICE")
     enable_quotations = Column(Boolean, nullable=False, default=True)
+    enable_thermal_quotations = Column(Boolean, nullable=False, default=True)
+    quotation_receipt_type = Column(String(20), nullable=False, default="pdf")  # "pdf" | "thermal"
     enable_bill_templates = Column(Boolean, nullable=False, default=True)
     enable_navigation_hub = Column(Boolean, nullable=False, default=True)
     theme_mode = Column(String(20), nullable=False, default="light")  # light, dark, system
@@ -65,4 +67,5 @@ class BusinessSettings(Base):
     auto_launch_kiosk = Column(Boolean, nullable=False, default=False)
     kiosk_window_mode = Column(String(30), nullable=False, default="fullscreen")  # fullscreen, kiosk, maximized
     kiosk_browser = Column(String(30), nullable=False, default="auto")  # auto, chrome, msedge, system
+    ui_zoom = Column(Integer, nullable=False, default=100)  # UI Zoom percentage (70 to 160)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

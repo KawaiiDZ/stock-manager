@@ -627,6 +627,7 @@ export const api = {
     ),
   printThermalDirect: (data: {
     sale_id?: number;
+    quotation_id?: number;
     printer_name?: string;
     paper_width?: string;
     header_style?: string;
