@@ -18,11 +18,12 @@ import {
 } from 'lucide-react';
 
 interface ReviseItemState {
-  product_id: number;
+  product_id?: number | null;
   product_name: string;
   quantity: number;
   unit_price: number;
   discount_amount: number;
+  is_external?: boolean;
   notes?: string;
 }
 
@@ -88,6 +89,7 @@ export const ReviseQuotationModal: React.FC<ReviseQuotationModalProps> = ({
           quantity: Number(it.quantity || 1),
           unit_price: Number(it.unit_price || 0),
           discount_amount: Number(it.discount_amount || 0),
+          is_external: it.is_external,
           notes: it.notes || '',
         }))
       );
@@ -202,7 +204,9 @@ export const ReviseQuotationModal: React.FC<ReviseQuotationModalProps> = ({
         customer_phone: customerPhone.trim(),
         customer_address: customerAddress.trim() || undefined,
         items: items.map((it) => ({
-          product_id: it.product_id,
+          product_id: it.is_external ? null : it.product_id,
+          external_name: it.is_external ? it.product_name : undefined,
+          is_external: Boolean(it.is_external),
           quantity: it.quantity,
           unit_price: it.unit_price,
           discount_amount: it.discount_amount,

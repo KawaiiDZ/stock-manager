@@ -20,7 +20,7 @@ from backend.app.models.inventory import InventoryBatch, InventoryMovement
 from backend.app.models.business import BusinessSettings
 from backend.app.schemas.sales import (
     SaleCreate, SaleResponse, SaleItemResponse, SalePaymentResponse,
-    ReceiptPrintResponse, SaleItemBatchResponse
+    ReceiptPrintResponse, SaleItemBatchResponse, ExternalSaleCreate
 )
 from backend.app.services.id_generator import generate_receipt_number, generate_customer_id
 from backend.app.core.errors import EntityNotFoundException, InsufficientStockException, BusinessRuleException
@@ -78,6 +78,7 @@ def _format_sale_response(sale: Sale) -> SaleResponse:
             realized_profit=item_realized_profit,
             returned_quantity=ret_qty,
             remaining_returnable_quantity=rem_ret_qty,
+            is_external=bool(getattr(item, 'is_external', False)),
             batches=batch_links,
             notes=item.notes
         ))
@@ -134,6 +135,7 @@ def _format_sale_response(sale: Sale) -> SaleResponse:
         gross_profit=sale.gross_profit,
         realized_profit=realized_sale_profit,
         unrealized_profit=unrealized_sale_profit,
+        is_external=bool(getattr(sale, 'is_external', False)),
         notes=sale.notes,
         created_at=sale.created_at,
         items=items_dto,
@@ -197,10 +199,47 @@ def _execute_create_sale(db: Session, data: SaleCreate) -> SaleResponse:
     total_sale_cost = Decimal("0.00")
     processed_items = []
 
-    p_ids = [it.product_id for it in data.items]
+    p_ids = [it.product_id for it in data.items if it.product_id is not None and not getattr(it, 'is_external', False)]
     products = {p.id: p for p in db.query(Product).filter(Product.id.in_(p_ids)).all()}
 
     for item_data in data.items:
+        # Check if external sourced passthrough item (not in inventory, zero profit impact)
+        if getattr(item_data, 'is_external', False) or item_data.product_id is None:
+            ext_name = (getattr(item_data, 'external_name', None) or item_data.notes or "External Sourced Item").strip()
+            if item_data.quantity <= Decimal("0.00"):
+                raise BusinessRuleException(f"Quantity for '{ext_name}' must be greater than zero.")
+            if item_data.unit_price < Decimal("0.00"):
+                raise BusinessRuleException(f"Unit price for '{ext_name}' cannot be negative.")
+            if item_data.discount_amount < Decimal("0.00"):
+                raise BusinessRuleException(f"Discount for '{ext_name}' cannot be negative.")
+
+            item_total_price = ((item_data.quantity * item_data.unit_price) - item_data.discount_amount).quantize(Decimal("0.01"))
+            if item_total_price < Decimal("0.00"):
+                item_total_price = Decimal("0.00")
+
+            subtotal += item_total_price
+
+            # Sourced elsewhere with zero profit impact: cost equals selling price
+            item_fifo_cost = item_total_price
+            item_unit_cost = item_data.unit_price
+            total_sale_cost += item_fifo_cost
+
+            processed_items.append({
+                "product_id": None,
+                "product_name": ext_name,
+                "quantity": item_data.quantity,
+                "unit_price": item_data.unit_price,
+                "discount_amount": item_data.discount_amount,
+                "total_price": item_total_price,
+                "unit_cost": item_unit_cost,
+                "total_cost": item_fifo_cost,
+                "gross_profit": Decimal("0.00"),
+                "is_external": True,
+                "batches": [],
+                "notes": item_data.notes
+            })
+            continue
+
         product = products.get(item_data.product_id)
         if not product:
             raise EntityNotFoundException("Product", str(item_data.product_id))
@@ -374,6 +413,7 @@ def _execute_create_sale(db: Session, data: SaleCreate) -> SaleResponse:
             unit_cost=p_item["unit_cost"],
             total_cost=p_item["total_cost"],
             gross_profit=p_item["gross_profit"],
+            is_external=bool(p_item.get("is_external", False)),
             notes=p_item.get("notes")
         )
         db.add(sale_item)
@@ -561,6 +601,94 @@ def record_additional_sale_payment(db: Session, sale_id: int, amount: Decimal, p
 
     db.commit()
     return get_sale(db, sale.id)
+
+def record_external_sale(db: Session, data: ExternalSaleCreate) -> SaleResponse:
+    """
+    Records an outside sale or service balance into the system.
+    Adds directly to Total Sales revenue, Gross Profit, and cash flow accounts.
+    """
+    if data.amount <= Decimal("0.00"):
+        raise BusinessRuleException("Sale balance amount must be greater than zero.")
+    if data.profit < Decimal("0.00"):
+        raise BusinessRuleException("Profit cannot be negative.")
+    if data.profit > data.amount:
+        raise BusinessRuleException("Profit cannot exceed total sale amount.")
+    if not (data.notes or "").strip():
+        raise BusinessRuleException("A description or note is required for the external sale.")
+
+    # 1. Customer resolution
+    cust_name = (data.customer_name or "").strip() or "Direct Entry"
+    customer = db.query(Customer).filter(Customer.name.ilike(cust_name)).first()
+    if not customer:
+        customer = db.query(Customer).filter(Customer.customer_id == "C-000001").first()
+    if not customer:
+        customer = db.query(Customer).first()
+    if not customer:
+        new_cid = generate_customer_id(db)
+        customer = Customer(
+            customer_id=new_cid,
+            name=cust_name,
+            phone="0000-0000000",
+            address="Outside service sale",
+            is_active=True
+        )
+        db.add(customer)
+        db.flush()
+
+    receipt_no = generate_receipt_number(db)
+    sale_cost = data.amount - data.profit
+    created_at_dt = data.created_at or datetime.now()
+
+    sale = Sale(
+        receipt_number=receipt_no,
+        customer_id=customer.id,
+        subtotal=data.amount,
+        discount_amount=Decimal("0.00"),
+        tax_rate=Decimal("0.00"),
+        tax_amount=Decimal("0.00"),
+        total_amount=data.amount,
+        paid_amount=data.amount,
+        due_amount=Decimal("0.00"),
+        payment_status="PAID",
+        total_cost=sale_cost,
+        gross_profit=data.profit,
+        notes=data.notes.strip(),
+        is_external=True,
+        created_at=created_at_dt
+    )
+    db.add(sale)
+    db.flush()
+
+    sale_item = SaleItem(
+        sale_id=sale.id,
+        product_id=None,
+        product_name=data.notes.strip(),
+        quantity=Decimal("1.00"),
+        unit_price=data.amount,
+        discount_amount=Decimal("0.00"),
+        total_price=data.amount,
+        unit_cost=sale_cost,
+        total_cost=sale_cost,
+        gross_profit=data.profit,
+        is_external=True,
+        notes=data.notes.strip()
+    )
+    db.add(sale_item)
+    db.flush()
+
+    payment_method_str = (data.payment_method or "Cash").strip()
+    payment = SalePayment(
+        sale_id=sale.id,
+        amount=data.amount,
+        payment_method=payment_method_str,
+        customer_payment_id=None,
+        created_at=created_at_dt
+    )
+    db.add(payment)
+    db.commit()
+    db.refresh(sale)
+
+    return _format_sale_response(sale)
 
 def get_receipt_print_data(db: Session, receipt_number: str) -> ReceiptPrintResponse:
     sale = get_sale_by_receipt(db, receipt_number)

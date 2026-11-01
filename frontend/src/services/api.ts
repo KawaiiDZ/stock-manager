@@ -2,7 +2,7 @@ import {
   Product, Category, CustomField, CustomValueDto,
   Customer, CustomerLedgerEntry,
   Supplier, SupplierLedgerEntry,
-  Sale, SalesReturn, ReceiptPrintData, PaymentSplit,
+  Sale, SalesReturn, ReceiptPrintData, PaymentSplit, ExternalSaleCreate,
   Purchase, Bill, BillCategory, BillAttention,
   Expense, ExpenseCategory,
   DashboardKPIs, MonthlySalesData, DaySalesDetail,
@@ -413,7 +413,15 @@ export const api = {
     customer_id?: number;
     customer_name?: string;
     customer_phone?: string;
-    items: Array<{ product_id: number; quantity: number; unit_price: number; discount_amount?: number }>;
+    items: Array<{
+      product_id?: number | null;
+      external_name?: string;
+      is_external?: boolean;
+      quantity: number;
+      unit_price: number;
+      discount_amount?: number;
+      notes?: string;
+    }>;
     discount_amount?: number;
     tax_rate?: number;
     paid_amount?: number;
@@ -421,6 +429,8 @@ export const api = {
     payment_splits?: PaymentSplit[];
     notes?: string;
   }) => request<Sale>('/sales', { method: 'POST', body: JSON.stringify(data) }),
+  addExternalSaleBalance: (data: ExternalSaleCreate) =>
+    request<Sale>('/sales/external-balance', { method: 'POST', body: JSON.stringify(data) }),
   recordSalePayment: (id: number, amount: number, paymentMethod = 'Cash') =>
     request<Sale>(`/sales/${id}/payments?amount=${amount}&payment_method=${paymentMethod}`, { method: 'POST' }),
   getReceiptPrintData: (receiptNumber: string) => request<ReceiptPrintData>(`/sales/receipt/${receiptNumber}/print`),

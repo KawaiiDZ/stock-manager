@@ -4,7 +4,9 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 
 class QuotationItemCreate(BaseModel):
-    product_id: int
+    product_id: Optional[int] = None
+    external_name: Optional[str] = None
+    is_external: bool = False
     quantity: Decimal = Field(..., gt=Decimal('0'))
     unit_price: Decimal = Field(..., ge=Decimal('0'))
     discount_amount: Decimal = Field(default=Decimal('0.00'), ge=Decimal('0'))
@@ -13,12 +15,13 @@ class QuotationItemCreate(BaseModel):
 class QuotationItemResponse(BaseModel):
     id: int
     quotation_id: int
-    product_id: int
+    product_id: Optional[int] = None
     product_name: str
     quantity: Decimal
     unit_price: Decimal
     discount_amount: Decimal
     total_price: Decimal
+    is_external: bool = False
     notes: Optional[str] = None
 
     class Config:
@@ -61,7 +64,7 @@ class QuotationResponse(BaseModel):
         from_attributes = True
 
 class QuotationConversionCheckItem(BaseModel):
-    product_id: int
+    product_id: Optional[int] = None
     product_name: str
     quantity: Decimal
     quoted_price: Decimal

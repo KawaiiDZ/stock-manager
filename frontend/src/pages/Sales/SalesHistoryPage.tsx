@@ -16,6 +16,8 @@ import {
   ArrowDownRight,
   RefreshCw,
   Loader2,
+  Plus,
+  Share2,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -24,6 +26,9 @@ import { Badge } from '../../components/common/Badge';
 import { DateFilter, DatePreset } from '../../components/common/DateFilter';
 import { EmptyState } from '../../components/common/EmptyState';
 import { ReceiptModal } from '../../components/receipts/ReceiptModal';
+import { AddSaleBalanceModal } from '../../components/sales/AddSaleBalanceModal';
+import { WhatsAppShareModal } from '../../components/common/WhatsAppShareModal';
+import { formatSaleWhatsAppMessage } from '../../utils/whatsapp';
 import { formatCurrency, formatMoney, formatDateTime } from '../../utils/format';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { rasterizeReceiptFast, rasterizeReceiptOffscreen } from '../../utils/receiptRasterizer';
@@ -51,6 +56,9 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
   // Print & Details Modal
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [showAddSaleBalanceModal, setShowAddSaleBalanceModal] = useState(false);
+  const [shareSale, setShareSale] = useState<Sale | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [printingSaleId, setPrintingSaleId] = useState<number | null>(null);
 
@@ -268,6 +276,16 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
             title="Refresh Sales"
           >
             Refresh
+          </Button>
+
+          <Button
+            variant="outline"
+            size="md"
+            className="bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 font-bold"
+            onClick={() => setShowAddSaleBalanceModal(true)}
+            icon={<Plus className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
+          >
+            + Add Sale Balance
           </Button>
 
           {onNavigateToNewSale && (
@@ -494,6 +512,12 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
                       <td className="py-4 px-6 font-bold text-slate-900 dark:text-white">
                         <div className="flex flex-col">
                           <span className="hover:text-brand-600 dark:hover:text-brand-400 transition">{sale.receipt_number}</span>
+                          {sale.is_external && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/60 px-1.5 py-0.5 rounded-md mt-0.5 w-fit">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                              Direct Entry
+                            </span>
+                          )}
                           {returnedNum > 0 && (
                             <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold">
                               ({formatCurrency(returnedNum, currency)} returned)
@@ -509,6 +533,11 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
                           <div>{sale.customer_name || 'Walk-in Customer'}</div>
                           {sale.customer_phone && (
                             <div className="text-[11px] text-slate-400 dark:text-slate-500">{sale.customer_phone}</div>
+                          )}
+                          {sale.is_external && sale.notes && (
+                            <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate max-w-xs italic" title={sale.notes}>
+                              "{sale.notes}"
+                            </div>
                           )}
                         </div>
                       </td>
@@ -575,6 +604,16 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
                             ) : (
                               <Printer className="h-4 w-4" />
                             )}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShareSale(sale);
+                              setShowShareModal(true);
+                            }}
+                            className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition"
+                            title="Share Receipt via WhatsApp"
+                          >
+                            <Share2 className="h-4 w-4" />
                           </button>
                           {onNavigateToReturn && (
                             <button
@@ -785,6 +824,37 @@ export const SalesHistoryPage: React.FC<SalesHistoryPageProps> = ({
             </button>
           </div>
         </div>
+      )}
+
+      {/* Add External Outside Service / Sale Balance Modal */}
+      <AddSaleBalanceModal
+        isOpen={showAddSaleBalanceModal}
+        onClose={() => setShowAddSaleBalanceModal(false)}
+        currency={currency}
+        settings={settings}
+        onSuccess={(sale) => {
+          loadSales();
+          setToastMessage({
+            type: 'success',
+            text: `Added outside sale balance ${formatCurrency(sale.total_amount, currency)} successfully!`,
+          });
+        }}
+      />
+
+      {/* WhatsApp Share Modal */}
+      {shareSale && (
+        <WhatsAppShareModal
+          isOpen={showShareModal}
+          onClose={() => {
+            setShowShareModal(false);
+            setShareSale(null);
+          }}
+          title="Share Receipt via WhatsApp"
+          subtitle={`Receipt #${shareSale.receipt_number} • ${shareSale.customer_name || 'Walk-in'}`}
+          initialPhone={shareSale.customer_phone}
+          customerName={shareSale.customer_name}
+          defaultMessage={formatSaleWhatsAppMessage(shareSale, settings)}
+        />
       )}
     </div>
   );

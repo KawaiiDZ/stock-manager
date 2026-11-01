@@ -149,6 +149,7 @@ export interface Product {
   selling_price: number;
   current_stock: number;
   is_service?: boolean;
+  is_external?: boolean;
   is_active: boolean;
   custom_fields?: CustomValueDto[];
   created_at: string;
@@ -224,7 +225,7 @@ export interface SaleItemBatch {
 
 export interface SaleItem {
   id: number;
-  product_id: number;
+  product_id?: number | null;
   product_name: string;
   quantity: number;
   unit_price: number;
@@ -235,6 +236,7 @@ export interface SaleItem {
   gross_profit: number;
   returned_quantity?: number;
   remaining_returnable_quantity?: number;
+  is_external?: boolean;
   batches?: SaleItemBatch[];
   notes?: string | null;
 }
@@ -266,10 +268,20 @@ export interface Sale {
   gross_profit: number;
   realized_profit?: number;
   unrealized_profit?: number;
+  is_external?: boolean;
   notes?: string | null;
   created_at: string;
   items: SaleItem[];
   payments: SalePayment[];
+}
+
+export interface ExternalSaleCreate {
+  amount: number;
+  profit: number;
+  notes: string;
+  payment_method?: string;
+  customer_name?: string;
+  created_at?: string;
 }
 
 export interface SalesReturnItem {
@@ -545,12 +557,13 @@ export interface LoginResponse {
 export interface QuotationItem {
   id: number;
   quotation_id: number;
-  product_id: number;
+  product_id?: number | null;
   product_name: string;
   quantity: number;
   unit_price: number;
   discount_amount: number;
   total_price: number;
+  is_external?: boolean;
   notes?: string | null;
 }
 
@@ -578,7 +591,9 @@ export interface Quotation {
 }
 
 export interface QuotationItemCreate {
-  product_id: number;
+  product_id?: number | null;
+  external_name?: string;
+  is_external?: boolean;
   quantity: number;
   unit_price: number;
   discount_amount?: number;
@@ -598,7 +613,7 @@ export interface QuotationCreate {
 }
 
 export interface QuotationConversionCheckItem {
-  product_id: number;
+  product_id?: number | null;
   product_name: string;
   quantity: number;
   quoted_price: number;

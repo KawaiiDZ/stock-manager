@@ -30,6 +30,7 @@ def _format_quotation_response(quotation: Quotation) -> QuotationResponse:
             unit_price=item.unit_price,
             discount_amount=item.discount_amount,
             total_price=item.total_price,
+            is_external=bool(getattr(item, 'is_external', False)),
             notes=item.notes
         )
         for item in quotation.items
@@ -103,13 +104,38 @@ def _execute_create_quotation(db: Session, data: QuotationCreate, supersede_quot
     quote_number = generate_quotation_number(db)
 
     # 5. Process quotation items
-    p_ids = [it.product_id for it in data.items]
+    p_ids = [it.product_id for it in data.items if it.product_id is not None and not getattr(it, 'is_external', False)]
     products = {p.id: p for p in db.query(Product).filter(Product.id.in_(p_ids)).all()}
 
     subtotal = Decimal('0.00')
     quotation_items = []
 
     for item_in in data.items:
+        if getattr(item_in, 'is_external', False) or item_in.product_id is None:
+            ext_name = (getattr(item_in, 'external_name', None) or item_in.notes or "External Sourced Item").strip()
+            if item_in.quantity <= Decimal('0.00'):
+                raise BusinessRuleException(f'Quantity for {ext_name} must be greater than zero.')
+            if item_in.unit_price < Decimal('0.00'):
+                raise BusinessRuleException(f'Unit price for {ext_name} cannot be negative.')
+            if item_in.discount_amount < Decimal('0.00'):
+                raise BusinessRuleException(f'Discount for {ext_name} cannot be negative.')
+
+            line_gross = item_in.quantity * item_in.unit_price
+            line_total = max(Decimal('0.00'), line_gross - item_in.discount_amount).quantize(Decimal('0.01'))
+            subtotal += line_total
+
+            quotation_items.append(QuotationItem(
+                product_id=None,
+                product_name=ext_name,
+                quantity=item_in.quantity,
+                unit_price=item_in.unit_price,
+                discount_amount=item_in.discount_amount,
+                total_price=line_total,
+                is_external=True,
+                notes=item_in.notes
+            ))
+            continue
+
         product = products.get(item_in.product_id)
         if not product:
             raise EntityNotFoundException('Product', str(item_in.product_id))
@@ -132,6 +158,7 @@ def _execute_create_quotation(db: Session, data: QuotationCreate, supersede_quot
             unit_price=item_in.unit_price,
             discount_amount=item_in.discount_amount,
             total_price=line_total,
+            is_external=False,
             notes=item_in.notes
         ))
 
@@ -223,7 +250,7 @@ def check_quotation_conversion(db: Session, quotation_id: int) -> QuotationConve
     if quotation.status != 'PENDING':
         raise BusinessRuleException(f'Quotation {quotation.quotation_number} cannot be converted because its status is {quotation.status}.')
 
-    p_ids = [it.product_id for it in quotation.items]
+    p_ids = [it.product_id for it in quotation.items if it.product_id is not None]
     products = {p.id: p for p in db.query(Product).filter(Product.id.in_(p_ids)).all()}
 
     items_check = []
@@ -231,6 +258,20 @@ def check_quotation_conversion(db: Session, quotation_id: int) -> QuotationConve
     has_stock_shortages = False
 
     for item in quotation.items:
+        if item.is_external or item.product_id is None:
+            items_check.append(QuotationConversionCheckItem(
+                product_id=item.product_id,
+                product_name=item.product_name,
+                quantity=item.quantity,
+                quoted_price=item.unit_price,
+                current_price=item.unit_price,
+                price_difference=Decimal('0.00'),
+                price_changed=False,
+                current_stock=Decimal('0.00'),
+                has_stock_shortage=False
+            ))
+            continue
+
         prod = products.get(item.product_id)
         current_price = prod.selling_price if prod else item.unit_price
         current_stock = prod.current_stock if prod else Decimal('0.00')
@@ -271,11 +312,13 @@ def convert_quotation_to_sale(db: Session, quotation_id: int, request: Quotation
     if quotation.status != 'PENDING':
         raise BusinessRuleException(f'Quotation {quotation.quotation_number} cannot be converted because it is already {quotation.status}.')
 
-    p_ids = [it.product_id for it in quotation.items]
+    p_ids = [it.product_id for it in quotation.items if it.product_id is not None]
     products = {p.id: p for p in db.query(Product).filter(Product.id.in_(p_ids)).all()}
 
     # Check stock shortages before proceeding
     for it in quotation.items:
+        if it.is_external or it.product_id is None:
+            continue
         p = products.get(it.product_id)
         if not p:
             raise EntityNotFoundException('Product', str(it.product_id))
@@ -293,17 +336,32 @@ def convert_quotation_to_sale(db: Session, quotation_id: int, request: Quotation
     use_current_price = (request.price_mode == 'current')
 
     for it in quotation.items:
-        p = products[it.product_id]
-        unit_price = p.selling_price if use_current_price else it.unit_price
-        line_total = max(Decimal('0.00'), (it.quantity * unit_price) - it.discount_amount)
-        subtotal += line_total
+        if it.is_external or it.product_id is None:
+            unit_price = it.unit_price
+            line_total = max(Decimal('0.00'), (it.quantity * unit_price) - it.discount_amount)
+            subtotal += line_total
 
-        sale_items.append(SaleItemCreate(
-            product_id=it.product_id,
-            quantity=it.quantity,
-            unit_price=unit_price,
-            discount_amount=it.discount_amount
-        ))
+            sale_items.append(SaleItemCreate(
+                product_id=None,
+                external_name=it.product_name,
+                is_external=True,
+                quantity=it.quantity,
+                unit_price=unit_price,
+                discount_amount=it.discount_amount
+            ))
+        else:
+            p = products[it.product_id]
+            unit_price = p.selling_price if use_current_price else it.unit_price
+            line_total = max(Decimal('0.00'), (it.quantity * unit_price) - it.discount_amount)
+            subtotal += line_total
+
+            sale_items.append(SaleItemCreate(
+                product_id=it.product_id,
+                quantity=it.quantity,
+                unit_price=unit_price,
+                discount_amount=it.discount_amount,
+                is_external=False
+            ))
 
     # Calculate expected sale total to determine payment defaults
     sale_discount = max(Decimal('0.00'), min(quotation.discount_amount, subtotal))

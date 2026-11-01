@@ -4,11 +4,13 @@ import { Button } from '../common/Button';
 import { PdfQuotationReceipt } from './PdfQuotationReceipt';
 import { ThermalQuotationReceipt } from './ThermalQuotationReceipt';
 import { Quotation, BusinessSettings } from '../../types';
-import { Printer, FileText, Receipt, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Printer, FileText, Receipt, CheckCircle2, AlertTriangle, Share2 } from 'lucide-react';
 import { printElement } from '../../utils/print';
 import { rasterizeReceiptElementFast } from '../../utils/receiptRasterizer';
 import { playReceiptCutBeep } from '../../utils/audio';
 import { api } from '../../services/api';
+import { WhatsAppShareModal } from '../common/WhatsAppShareModal';
+import { formatQuotationWhatsAppMessage } from '../../utils/whatsapp';
 
 interface QuotationModalProps {
   isOpen: boolean;
@@ -31,6 +33,7 @@ export const QuotationModal: React.FC<QuotationModalProps> = ({
   const [directPrinting, setDirectPrinting] = useState<boolean>(false);
   const [printSuccessMsg, setPrintSuccessMsg] = useState<string | null>(null);
   const [printErrorMsg, setPrintErrorMsg] = useState<string | null>(null);
+  const [showShareModal, setShowShareModal] = useState<boolean>(false);
   const isPrintingRef = useRef<boolean>(false);
 
   const paperWidth: '80mm' | '58mm' = settings?.receipt_printer_type === '58mm' ? '58mm' : '80mm';
@@ -352,6 +355,18 @@ export const QuotationModal: React.FC<QuotationModalProps> = ({
             Close
           </Button>
 
+          <Button
+            type="button"
+            variant="outline"
+            size="md"
+            icon={<Share2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
+            onClick={() => setShowShareModal(true)}
+            className="font-bold border-emerald-500/50 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+            title="Share Quotation via WhatsApp"
+          >
+            Share
+          </Button>
+
           {/* Browser Print Fallback Button when in Direct Mode */}
           {receiptType === 'thermal' &&
             isThermalAllowed &&
@@ -388,6 +403,19 @@ export const QuotationModal: React.FC<QuotationModalProps> = ({
           </Button>
         </div>
       </div>
+
+      {/* WhatsApp Share Modal */}
+      {quotation && (
+        <WhatsAppShareModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          title="Share Quotation via WhatsApp"
+          subtitle={`Quotation #${quotation.quotation_number} • ${quotation.customer_name}`}
+          initialPhone={quotation.customer_phone}
+          customerName={quotation.customer_name}
+          defaultMessage={formatQuotationWhatsAppMessage(quotation, settings)}
+        />
+      )}
     </Modal>
   );
 };

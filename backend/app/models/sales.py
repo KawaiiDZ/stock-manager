@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, Numeric, DateTime, ForeignKey, CheckConstraint
+from sqlalchemy import Column, Integer, String, Text, Boolean, Numeric, DateTime, ForeignKey, CheckConstraint
 from sqlalchemy.orm import relationship
 from backend.app.core.database import Base
 
@@ -20,6 +20,7 @@ class Sale(Base):
     total_cost = Column(Numeric(12, 2), nullable=False, default=0.00)
     gross_profit = Column(Numeric(12, 2), nullable=False, default=0.00)
     notes = Column(Text, nullable=True)
+    is_external = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.now, index=True)
 
     customer = relationship("Customer", back_populates="sales")
@@ -32,7 +33,7 @@ class SaleItem(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     sale_id = Column(Integer, ForeignKey("sales.id", ondelete="CASCADE"), nullable=False, index=True)
-    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=True, index=True)
     product_name = Column(String(150), nullable=False)
     quantity = Column(Numeric(12, 2), nullable=False)
     unit_price = Column(Numeric(12, 2), nullable=False)
@@ -41,6 +42,7 @@ class SaleItem(Base):
     unit_cost = Column(Numeric(12, 2), nullable=False, default=0.00)
     total_cost = Column(Numeric(12, 2), nullable=False, default=0.00)
     gross_profit = Column(Numeric(12, 2), nullable=False, default=0.00)
+    is_external = Column(Boolean, nullable=False, default=False)
     notes = Column(Text, nullable=True)
 
     __table_args__ = (
@@ -107,10 +109,12 @@ class SalesReturnItem(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     sales_return_id = Column(Integer, ForeignKey("sales_returns.id", ondelete="CASCADE"), nullable=False, index=True)
-    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=True, index=True)
+    product_name = Column(String(150), nullable=True)
     quantity = Column(Numeric(12, 2), nullable=False)
     unit_price = Column(Numeric(12, 2), nullable=False)
     total_amount = Column(Numeric(12, 2), nullable=False)
+    is_external = Column(Boolean, nullable=False, default=False)
 
     __table_args__ = (
         CheckConstraint('quantity > 0', name='check_sales_return_quantity_positive'),

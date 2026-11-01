@@ -4,12 +4,14 @@ import { Button } from '../common/Button';
 import { ThermalReceipt } from './ThermalReceipt';
 import { PdfInvoiceReceipt } from './PdfInvoiceReceipt';
 import { Sale, BusinessSettings } from '../../types';
-import { Printer, Plus, Receipt, FileText, CheckCircle2, AlertTriangle, Activity } from 'lucide-react';
+import { Printer, Plus, Receipt, FileText, CheckCircle2, AlertTriangle, Activity, Share2 } from 'lucide-react';
 import { api } from '../../services/api';
 import { printElement } from '../../utils/print';
 import { rasterizeReceiptElement, rasterizeReceiptElementFast } from '../../utils/receiptRasterizer';
 import { playReceiptCutBeep } from '../../utils/audio';
 import { PrinterDiagnosticsModal } from '../printing/PrinterDiagnosticsModal';
+import { WhatsAppShareModal } from '../common/WhatsAppShareModal';
+import { formatSaleWhatsAppMessage } from '../../utils/whatsapp';
 
 interface ReceiptModalProps {
   isOpen: boolean;
@@ -31,6 +33,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   const [printSuccessMsg, setPrintSuccessMsg] = useState<string | null>(null);
   const [printErrorMsg, setPrintErrorMsg] = useState<string | null>(null);
   const [showDiagnosticsModal, setShowDiagnosticsModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const isPrintingRef = useRef<boolean>(false);
 
   // Directly derive roll geometry and layout from user settings
@@ -339,6 +342,18 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             {receiptType === 'thermal' ? 'Print Thermal Receipt' : 'Print A4 Invoice'}
           </Button>
 
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="font-bold border-emerald-500/50 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 flex items-center justify-center gap-1.5 shrink-0"
+            icon={<Share2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />}
+            onClick={() => setShowShareModal(true)}
+            title="Share Receipt via WhatsApp"
+          >
+            Share
+          </Button>
+
           {onNewSale ? (
             <Button
               variant="outline"
@@ -374,6 +389,19 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         onClose={() => setShowDiagnosticsModal(false)}
         settings={settings}
       />
+
+      {/* WhatsApp Share Modal */}
+      {sale && (
+        <WhatsAppShareModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          title="Share Receipt via WhatsApp"
+          subtitle={`Receipt #${sale.receipt_number} • ${sale.customer_name || 'Walk-in'}`}
+          initialPhone={sale.customer_phone}
+          customerName={sale.customer_name}
+          defaultMessage={formatSaleWhatsAppMessage(sale, settings)}
+        />
+      )}
     </Modal>
   );
 };

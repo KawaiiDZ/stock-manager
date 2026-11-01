@@ -20,7 +20,8 @@ import {
   Check,
   X,
   Edit,
-  RotateCcw
+  RotateCcw,
+  Share2
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -28,6 +29,8 @@ import { Modal } from '../../components/common/Modal';
 import { QuotationModal } from '../../components/receipts/QuotationModal';
 import { ReceiptModal } from '../../components/receipts/ReceiptModal';
 import { ReviseQuotationModal } from '../../components/quotations/ReviseQuotationModal';
+import { WhatsAppShareModal } from '../../components/common/WhatsAppShareModal';
+import { formatQuotationWhatsAppMessage } from '../../utils/whatsapp';
 
 interface QuotationsPageProps {
   settings: BusinessSettings | null;
@@ -47,6 +50,8 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
 
   // Quotation viewing/printing
   const [previewQuotation, setPreviewQuotation] = useState<Quotation | null>(null);
+  const [shareQuotation, setShareQuotation] = useState<Quotation | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   // Agreement Revision Modal state
   const [revisingQuotation, setRevisingQuotation] = useState<Quotation | null>(null);
@@ -131,7 +136,9 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
     // Calculate total at current prices
     let currentSubtotal = 0;
     for (const item of conversionCheck.items) {
-      const origItem = approvingQuotation.items.find((it) => it.product_id === item.product_id);
+      const origItem = approvingQuotation.items.find((it) =>
+        item.product_id != null ? it.product_id === item.product_id : it.product_name === item.product_name
+      );
       const disc = origItem ? Number(origItem.discount_amount || 0) : 0;
       currentSubtotal += Math.max(0, item.quantity * item.current_price - disc);
     }
@@ -493,6 +500,21 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
                             className="font-semibold"
                           >
                             {settings?.enable_thermal_quotations !== false ? "Print" : "A4"}
+                          </Button>
+
+                          {/* Share via WhatsApp */}
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            icon={<Share2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />}
+                            onClick={() => {
+                              setShareQuotation(q);
+                              setShowShareModal(true);
+                            }}
+                            title="Share Quotation via WhatsApp"
+                            className="font-semibold text-xs text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                          >
+                            Share
                           </Button>
 
                           {/* Edit / Revise Agreement Button */}
@@ -892,6 +914,22 @@ export const QuotationsPage: React.FC<QuotationsPageProps> = ({
           setPreviewQuotation(newQ);
         }}
       />
+
+      {/* 6. WhatsApp Share Modal */}
+      {shareQuotation && (
+        <WhatsAppShareModal
+          isOpen={showShareModal}
+          onClose={() => {
+            setShowShareModal(false);
+            setShareQuotation(null);
+          }}
+          title="Share Quotation via WhatsApp"
+          subtitle={`Quotation #${shareQuotation.quotation_number} • ${shareQuotation.customer_name}`}
+          initialPhone={shareQuotation.customer_phone}
+          customerName={shareQuotation.customer_name}
+          defaultMessage={formatQuotationWhatsAppMessage(shareQuotation, settings)}
+        />
+      )}
     </div>
   );
 };

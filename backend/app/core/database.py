@@ -142,6 +142,87 @@ def auto_upgrade_schema(target_engine=None):
         except Exception as e:
             print("Auto-upgrade error (purchases constraint rebuild):", e)
 
+        # 3b. Check sale_items table (ensure product_id allows NULL for external sourced items)
+        try:
+            res = conn.execute(text("PRAGMA table_info(sale_items)"))
+            cols = {r[1]: r for r in res.fetchall()}
+            if cols and "product_id" in cols and cols["product_id"][3] == 1:
+                conn.execute(text("PRAGMA foreign_keys=OFF"))
+                conn.execute(text("""
+                    CREATE TABLE sale_items_temp (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        sale_id INTEGER NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+                        product_id INTEGER REFERENCES products(id) NULL,
+                        product_name VARCHAR(150) NOT NULL,
+                        quantity NUMERIC(12, 2) NOT NULL,
+                        unit_price NUMERIC(12, 2) NOT NULL,
+                        discount_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                        total_price NUMERIC(12, 2) NOT NULL,
+                        unit_cost NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                        total_cost NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                        gross_profit NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                        is_external BOOLEAN NOT NULL DEFAULT 0,
+                        notes TEXT NULL,
+                        CHECK (quantity > 0),
+                        CHECK (unit_price >= 0)
+                    )
+                """))
+                has_ext = "is_external" in cols
+                ext_col = "is_external," if has_ext else "0 as is_external,"
+                conn.execute(text(f"""
+                    INSERT INTO sale_items_temp (id, sale_id, product_id, product_name, quantity, unit_price, discount_amount, total_price, unit_cost, total_cost, gross_profit, is_external, notes)
+                    SELECT id, sale_id, product_id, product_name, quantity, unit_price, discount_amount, total_price, unit_cost, total_cost, gross_profit, {ext_col} notes FROM sale_items
+                """))
+                conn.execute(text("DROP TABLE sale_items"))
+                conn.execute(text("ALTER TABLE sale_items_temp RENAME TO sale_items"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sale_items_id ON sale_items (id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sale_items_sale_id ON sale_items (sale_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sale_items_product_id ON sale_items (product_id)"))
+                conn.commit()
+                conn.execute(text("PRAGMA foreign_keys=ON"))
+        except Exception as e:
+            print("Auto-upgrade error (sale_items constraint rebuild):", e)
+
+        # 3c. Check quotation_items table (ensure product_id allows NULL for external items)
+        try:
+            res = conn.execute(text("PRAGMA table_info(quotation_items)"))
+            cols = {r[1]: r for r in res.fetchall()}
+            if cols and "product_id" in cols and cols["product_id"][3] == 1:
+                conn.execute(text("PRAGMA foreign_keys=OFF"))
+                conn.execute(text("""
+                    CREATE TABLE quotation_items_temp (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        quotation_id INTEGER NOT NULL REFERENCES quotations(id) ON DELETE CASCADE,
+                        product_id INTEGER REFERENCES products(id) NULL,
+                        product_name VARCHAR(150) NOT NULL,
+                        quantity NUMERIC(12, 2) NOT NULL DEFAULT 1.00,
+                        unit_price NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                        discount_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                        total_price NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                        is_external BOOLEAN NOT NULL DEFAULT 0,
+                        notes TEXT NULL,
+                        CHECK (quantity > 0),
+                        CHECK (unit_price >= 0),
+                        CHECK (discount_amount >= 0),
+                        CHECK (total_price >= 0)
+                    )
+                """))
+                has_ext = "is_external" in cols
+                ext_col = "is_external," if has_ext else "0 as is_external,"
+                conn.execute(text(f"""
+                    INSERT INTO quotation_items_temp (id, quotation_id, product_id, product_name, quantity, unit_price, discount_amount, total_price, is_external, notes)
+                    SELECT id, quotation_id, product_id, product_name, quantity, unit_price, discount_amount, total_price, {ext_col} notes FROM quotation_items
+                """))
+                conn.execute(text("DROP TABLE quotation_items"))
+                conn.execute(text("ALTER TABLE quotation_items_temp RENAME TO quotation_items"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_quotation_items_id ON quotation_items (id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_quotation_items_quotation_id ON quotation_items (quotation_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_quotation_items_product_id ON quotation_items (product_id)"))
+                conn.commit()
+                conn.execute(text("PRAGMA foreign_keys=ON"))
+        except Exception as e:
+            print("Auto-upgrade error (quotation_items constraint rebuild):", e)
+
         # 4. Auto-heal missing entity identifiers and active flags in legacy tables
         try:
             conn.execute(text("UPDATE products SET product_id = 'P-' || printf('%06d', id) WHERE product_id IS NULL OR product_id = ''"))

@@ -33,6 +33,7 @@ import { Modal } from '../../components/common/Modal';
 import { Badge } from '../../components/common/Badge';
 import { Input } from '../../components/common/Input';
 import { formatCurrency, formatMoney, formatDateTime } from '../../utils/format';
+import { AddSaleBalanceModal } from '../../components/sales/AddSaleBalanceModal';
 
 interface DashboardPageProps {
   settings: BusinessSettings | null;
@@ -69,6 +70,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
   const [showTransferHistoryModal, setShowTransferHistoryModal] = useState<boolean>(false);
   const [transfersList, setTransfersList] = useState<AccountTransfer[]>([]);
   const [loadingTransfers, setLoadingTransfers] = useState<boolean>(false);
+  const [showAddSaleBalanceModal, setShowAddSaleBalanceModal] = useState<boolean>(false);
 
   // Day detail modal state
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -336,6 +338,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
             )}
           </button>
 
+          <Button
+            variant="outline"
+            size="md"
+            className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border-emerald-400/30 font-bold"
+            onClick={() => setShowAddSaleBalanceModal(true)}
+            icon={<Plus className="h-4 w-4 text-emerald-300" />}
+          >
+            Add Sale Balance
+          </Button>
           <Button
             variant="primary"
             size="md"
@@ -817,6 +828,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setShowAddSaleBalanceModal(true)}
+                        className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-xs active:scale-[0.98]"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add Sale Balance
+                      </button>
                       <button
                         type="button"
                         onClick={handleOpenTransferHistory}
@@ -1358,6 +1377,20 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ settings, onNaviga
           </div>
         )}
       </Modal>
+
+      {/* Add External Outside Service / Sale Balance Modal */}
+      <AddSaleBalanceModal
+        isOpen={showAddSaleBalanceModal}
+        onClose={() => setShowAddSaleBalanceModal(false)}
+        currency={currency}
+        settings={settings}
+        onSuccess={(sale) => {
+          loadDashboardData();
+          if (selectedDate) {
+            handleOpenTodaySalesDetail();
+          }
+        }}
+      />
     </div>
   );
 };

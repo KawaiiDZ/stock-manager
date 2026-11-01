@@ -5,11 +5,11 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from backend.app.core.database import get_db
 from backend.app.schemas.sales import (
-    SaleCreate, SaleResponse, ReceiptPrintResponse
+    SaleCreate, SaleResponse, ReceiptPrintResponse, ExternalSaleCreate
 )
 from backend.app.services.sales_service import (
     create_sale, get_sale, get_sale_by_receipt, list_sales,
-    record_additional_sale_payment, get_receipt_print_data
+    record_additional_sale_payment, get_receipt_print_data, record_external_sale
 )
 
 router = APIRouter(prefix="/sales", tags=["Sales"])
@@ -39,6 +39,10 @@ def get_sales(
 @router.post("", response_model=SaleResponse)
 def make_sale(data: SaleCreate, db: Session = Depends(get_db)):
     return create_sale(db, data)
+
+@router.post("/external-balance", response_model=SaleResponse)
+def add_external_sale_balance(data: ExternalSaleCreate, db: Session = Depends(get_db)):
+    return record_external_sale(db, data)
 
 @router.get("/{id}", response_model=SaleResponse)
 def get_single_sale(id: int, db: Session = Depends(get_db)):

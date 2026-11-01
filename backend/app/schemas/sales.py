@@ -4,11 +4,21 @@ from typing import Optional, List
 from pydantic import BaseModel
 
 class SaleItemCreate(BaseModel):
-    product_id: int
+    product_id: Optional[int] = None
+    external_name: Optional[str] = None
+    is_external: bool = False
     quantity: Decimal
     unit_price: Decimal
     discount_amount: Decimal = Decimal("0.00")
     notes: Optional[str] = None
+
+class ExternalSaleCreate(BaseModel):
+    amount: Decimal
+    profit: Decimal
+    notes: str
+    payment_method: str = "Cash"
+    customer_name: Optional[str] = "Direct Entry"
+    created_at: Optional[datetime] = None
 
 class PaymentSplit(BaseModel):
     payment_method: str
@@ -38,7 +48,7 @@ class SaleItemBatchResponse(BaseModel):
 
 class SaleItemResponse(BaseModel):
     id: int
-    product_id: int
+    product_id: Optional[int] = None
     product_name: str
     quantity: Decimal
     unit_price: Decimal
@@ -50,6 +60,7 @@ class SaleItemResponse(BaseModel):
     realized_profit: Decimal = Decimal("0.00")
     returned_quantity: Decimal = Decimal("0.00")
     remaining_returnable_quantity: Decimal = Decimal("0.00")
+    is_external: bool = False
     batches: Optional[List[SaleItemBatchResponse]] = None
     notes: Optional[str] = None
 
@@ -85,6 +96,7 @@ class SaleResponse(BaseModel):
     realized_profit: Decimal = Decimal("0.00")
     unrealized_profit: Decimal = Decimal("0.00")
     notes: Optional[str] = None
+    is_external: bool = False
     created_at: datetime
     items: List[SaleItemResponse] = []
     payments: List[SalePaymentResponse] = []

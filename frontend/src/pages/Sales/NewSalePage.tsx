@@ -23,6 +23,8 @@ import {
   Check,
   ArrowRight,
   X,
+  User,
+  Phone,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -43,6 +45,7 @@ import { playCheckoutSuccessBeep } from '../../utils/audio';
 import { PrinterDiagnosticsModal } from '../../components/printing/PrinterDiagnosticsModal';
 import { SaveTemplateModal } from '../../components/pos/SaveTemplateModal';
 import { SlotProductPicker, PosTemplateSlot } from '../../components/pos/SlotProductPicker';
+import { AddToBillModal } from '../../components/sales/AddToBillModal';
 
 interface CartItem {
   product: Product;
@@ -75,6 +78,10 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   const [isTemplateDropdownOpen, setIsTemplateDropdownOpen] = useState(false);
   const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
 
+  // Add to Bill (External Sourced Item) State
+  const [showAddToBillModal, setShowAddToBillModal] = useState(false);
+  const [addToBillInitialName, setAddToBillInitialName] = useState('');
+
   // Customer Management on Sale
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
   const [inlineCustomerName, setInlineCustomerName] = useState('');
@@ -82,6 +89,12 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
   const [customerActiveIndex, setCustomerActiveIndex] = useState(0);
+
+  // Inline Customer Autocomplete State (Zero-Modal Fast Selection)
+  const [isInlineCustomerDropdownOpen, setIsInlineCustomerDropdownOpen] = useState(false);
+  const [inlineCustomerActiveIdx, setInlineCustomerActiveIdx] = useState(-1);
+  const inlineCustomerInputRef = useRef<HTMLInputElement>(null);
+  const inlineCustomerDropdownRef = useRef<HTMLDivElement>(null);
 
   // Financial inputs
   const [saleDiscount, setSaleDiscount] = useState<number>(0);
@@ -224,6 +237,22 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       el?.scrollIntoView({ block: 'nearest' });
     }
   }, [customerActiveIndex, showAddCustomerModal]);
+
+  // Close inline customer autocomplete on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        inlineCustomerDropdownRef.current &&
+        !inlineCustomerDropdownRef.current.contains(e.target as Node) &&
+        inlineCustomerInputRef.current &&
+        !inlineCustomerInputRef.current.contains(e.target as Node)
+      ) {
+        setIsInlineCustomerDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleCartNavigateUp = (fromIndex: number) => {
     if (fromIndex > 0) {
@@ -581,7 +610,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
 
     if (existingIndex >= 0) {
       const currentQty = cart[existingIndex].quantity;
-      if (!product.is_service && currentQty + 1 > availableStock) {
+      if (!product.is_service && !product.is_external && currentQty + 1 > availableStock) {
         if (availableStock <= 0) {
           setOutOfStockProduct(product);
           return;
@@ -595,7 +624,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       updatedCart[existingIndex].quantity += 1;
       setCart(updatedCart);
     } else {
-      if (!product.is_service && availableStock < 1) {
+      if (!product.is_service && !product.is_external && availableStock < 1) {
         setOutOfStockProduct(product);
         return;
       }
@@ -612,6 +641,34 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
     }
   };
 
+  const handleAddExternalToBill = (item: { name: string; quantity: number; unit_price: number; notes?: string }) => {
+    const fakeProduct: Product = {
+      id: -Date.now(),
+      product_id: 'EXT-' + Math.floor(1000 + Math.random() * 9000),
+      name: item.name,
+      purchase_price: item.unit_price,
+      selling_price: item.unit_price,
+      current_stock: 999999,
+      is_service: true,
+      is_external: true,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    setCart((prev) => [
+      ...prev,
+      {
+        product: fakeProduct,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        discount_amount: 0,
+        notes: item.notes,
+      },
+    ]);
+    setSuccessToast(`Added "${item.name}" to bill.`);
+  };
+
   const updateQuantity = (productId: number, qty: number) => {
     setErrorMsg(null);
     const item = cart.find((i) => i.product.id === productId);
@@ -620,7 +677,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
     const availableStock = Math.max(0, Number(item.product.current_stock || 0));
 
     let finalQty = qty;
-    if (!item.product.is_service && finalQty > availableStock) {
+    if (!item.product.is_service && !item.product.is_external && finalQty > availableStock) {
       finalQty = availableStock;
       setErrorMsg(
         `Quantity capped to maximum available stock (${availableStock} units of ${item.product.name}).`
@@ -912,6 +969,49 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
       ? 'PARTIAL'
       : 'UNPAID';
 
+  // Fast Inline Customer Suggestions (Top matches without opening modal)
+  const inlineCustomerMatches = useMemo(() => {
+    const q = (inlineCustomerName || '').trim().toLowerCase();
+    if (q.length < 1 || selectedCustomerId !== null) return [];
+    return customers
+      .filter((c) => {
+        return (
+          c.name.toLowerCase().includes(q) ||
+          (c.phone && c.phone.includes(q)) ||
+          c.customer_id.toLowerCase().includes(q)
+        );
+      })
+      .slice(0, 6);
+  }, [customers, inlineCustomerName, selectedCustomerId]);
+
+  // Smart Quick Cash Tender Denominations based on current Grand Total
+  const quickCashOptions = useMemo(() => {
+    if (grandTotal <= 0) return [];
+    const options: number[] = [grandTotal];
+
+    [500, 1000, 5000].forEach((note) => {
+      if (note > grandTotal && !options.includes(note)) {
+        options.push(note);
+      }
+    });
+
+    if (grandTotal >= 500) {
+      const round100 = Math.ceil((grandTotal + 1) / 100) * 100;
+      if (round100 > grandTotal && !options.includes(round100)) options.push(round100);
+
+      const round500 = Math.ceil((grandTotal + 1) / 500) * 500;
+      if (round500 > grandTotal && !options.includes(round500)) options.push(round500);
+
+      const round1000 = Math.ceil((grandTotal + 1) / 1000) * 1000;
+      if (round1000 > grandTotal && !options.includes(round1000)) options.push(round1000);
+
+      const round5000 = Math.ceil((grandTotal + 1) / 5000) * 5000;
+      if (round5000 > grandTotal && !options.includes(round5000)) options.push(round5000);
+    }
+
+    return Array.from(new Set(options)).sort((a, b) => a - b).slice(0, 4);
+  }, [grandTotal]);
+
   // Trigger Quick-Pay Modal if enabled, or complete immediately
   const handleOpenQuickPayOrComplete = () => {
     if (isPrintingReceipt) return;
@@ -993,7 +1093,9 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
     try {
       const payload: any = {
         items: effectiveCartItems.map((i) => ({
-          product_id: i.product.id,
+          product_id: i.product.is_external ? null : i.product.id,
+          external_name: i.product.is_external ? i.product.name : undefined,
+          is_external: Boolean(i.product.is_external),
           quantity: i.quantity,
           unit_price: Number(i.unit_price),
           discount_amount: Number(i.discount_amount || 0),
@@ -1185,7 +1287,9 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         customer_phone: custPhone,
         customer_address: selectedCust ? (selectedCust.address || undefined) : undefined,
         items: effectiveCartItems.map((i) => ({
-          product_id: i.product.id,
+          product_id: i.product.is_external ? null : i.product.id,
+          external_name: i.product.is_external ? i.product.name : undefined,
+          is_external: Boolean(i.product.is_external),
           quantity: i.quantity,
           unit_price: Number(i.unit_price),
           discount_amount: Number(i.discount_amount || 0),
@@ -1275,64 +1379,64 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         </div>
       )}
 
-      {/* Top Banner with Quick Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-emerald-700 via-emerald-800 to-slate-900 rounded-3xl p-6 text-white shadow-xl shadow-emerald-950/15">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-emerald-500/20 rounded-2xl border border-emerald-400/30">
-            <Zap className="h-6 w-6 text-emerald-300 animate-pulse" />
+      {/* Top Command Bar (Compact & Ergonomic) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-emerald-700 via-emerald-800 to-slate-900 rounded-2xl py-2.5 px-4 sm:px-5 text-white shadow-md shadow-emerald-950/15">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="p-2 bg-emerald-500/20 rounded-xl border border-emerald-400/30 shrink-0">
+            <Zap className="h-4 w-4 text-emerald-300" />
           </div>
-          <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-2xl font-black tracking-tight">Point of Sale (POS)</h1>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-base sm:text-lg font-black tracking-tight">Point of Sale</h1>
               {scannerEnabled && (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-400/20 border border-emerald-300/40 text-emerald-200 text-[11px] font-bold tracking-wide">
-                  <Barcode className="h-3.5 w-3.5 text-emerald-300" />
-                  Scanner Active
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-400/20 border border-emerald-300/40 text-emerald-200 text-[10px] font-bold tracking-wide">
+                  <Barcode className="h-3 w-3 text-emerald-300" />
+                  Scanner
                 </span>
               )}
               <button
                 type="button"
                 onClick={handleTogglePosAutoPrint}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide transition border ${
+                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide transition border ${
                   autoPrintEnabled
                     ? 'bg-amber-400/25 border-amber-300/50 text-amber-200 hover:bg-amber-400/35 shadow-xs'
                     : 'bg-white/10 border-white/20 text-slate-300 hover:bg-white/20'
                 }`}
                 title={
                   autoPrintEnabled
-                    ? '1-Click Auto-Print is active. Completing sale prints automatically. Click to switch to Preview Modal.'
-                    : 'Receipt Preview Modal is active. Click to enable 1-Click Auto-Print.'
+                    ? '1-Click Auto-Print is active: Completing sale prints automatically. Click to switch to Preview Modal.'
+                    : 'Receipt Preview Modal is active: Click to enable 1-Click Auto-Print.'
                 }
               >
-                <Zap className={`h-3.5 w-3.5 ${autoPrintEnabled ? 'text-amber-300 animate-pulse' : 'text-slate-400'}`} />
+                <Zap className={`h-3 w-3 ${autoPrintEnabled ? 'text-amber-300 animate-pulse' : 'text-slate-400'}`} />
                 <span>{autoPrintEnabled ? '1-Click Print: Active' : 'Preview Modal: Active'}</span>
               </button>
             </div>
-            <p className="text-emerald-200 text-xs mt-0.5 font-medium flex items-center gap-1.5 flex-wrap">
-              <span>{showBarcode ? 'Scan barcode or search •' : 'Search product •'}</span>
-              <span>Press <kbd className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-mono">F4</kbd> Search</span>
-              <span>• <kbd className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-mono">F8</kbd> Customer</span>
-              <span>• <kbd className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-mono">F9 / Ctrl+Enter</kbd> Checkout</span>
+            <p className="text-emerald-200/90 text-[11px] font-medium flex items-center gap-1.5 flex-wrap mt-0.5">
+              <span>{showBarcode ? 'Scan barcode or' : 'Search:'}</span>
+              <span><kbd className="bg-white/20 px-1 py-0.2 rounded text-[10px] font-mono">F4</kbd> Search</span>
+              <span>• <kbd className="bg-white/20 px-1 py-0.2 rounded text-[10px] font-mono">F8</kbd> Customer</span>
+              <span>• <kbd className="bg-white/20 px-1 py-0.2 rounded text-[10px] font-mono">F9</kbd> Checkout</span>
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3.5">
+        <div className="flex items-center gap-3 shrink-0 justify-between sm:justify-end">
           {completedSale && (
             <button
               type="button"
               onClick={() => setShowReceipt(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/25 text-white text-xs font-bold transition shadow-xs"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/25 text-white text-[11px] font-bold transition shadow-xs"
               title="View or reprint receipt for the previous sale"
             >
               <Printer className="h-3.5 w-3.5 text-emerald-300" />
-              <span>Reprint Sale (#{completedSale.receipt_number})</span>
+              <span>Reprint #{completedSale.receipt_number}</span>
             </button>
           )}
 
-          <div className="text-right">
-            <div className="text-xs text-emerald-100 font-semibold">Current Cart Total</div>
-            <div className="text-2xl font-black tracking-tight">
+          <div className="text-right pl-3 sm:border-l sm:border-emerald-600/50">
+            <div className="text-[10px] text-emerald-200/80 font-bold uppercase tracking-wider">Cart Total</div>
+            <div className="text-xl sm:text-2xl font-black tracking-tight leading-tight">
               {formatCurrency(grandTotal, currency)}
             </div>
           </div>
@@ -1402,6 +1506,20 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                   autoFocus
                 />
               </div>
+
+              {/* Add to Bill Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setAddToBillInitialName('');
+                  setShowAddToBillModal(true);
+                }}
+                className="h-[48px] px-3.5 rounded-2xl flex items-center gap-1.5 font-bold text-xs transition border shadow-xs bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 shrink-0"
+                title="Add external or sourced items to bill without affecting business profit"
+              >
+                <Plus className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <span className="hidden sm:inline">Add to Bill</span>
+              </button>
 
               {/* Bill / Product Kit Template Selector Dropdown */}
               {templatesEnabled && (
@@ -1490,8 +1608,22 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
             {searchQuery.trim().length > 0 && (
               <div className="absolute left-4 right-4 top-18 z-30 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
                 {filteredProducts.length === 0 ? (
-                  <div className="p-4 text-center text-sm text-slate-400 dark:text-slate-500">
-                    No products match "{searchQuery}"
+                  <div className="p-4 text-center">
+                    <p className="text-sm text-slate-400 dark:text-slate-500 mb-2">
+                      No products match "{searchQuery}"
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAddToBillInitialName(searchQuery.trim());
+                        setShowAddToBillModal(true);
+                        setSearchQuery('');
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-xs font-bold hover:bg-amber-100 dark:hover:bg-amber-900/60 transition shadow-xs"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add "{searchQuery}" directly to Bill
+                    </button>
                   </div>
                 ) : (
                   filteredProducts.map((prod, idx) => {
@@ -1824,14 +1956,18 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-100 text-sm truncate">
                             <span className="truncate">{item.product.name}</span>
-                            {item.product.is_service && (
+                            {item.product.is_external ? (
+                              <span className="inline-flex items-center px-1.5 py-0.2 text-[10px] font-semibold bg-amber-50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 rounded border border-amber-200 dark:border-amber-800/60 shrink-0">
+                                Sourced Item
+                              </span>
+                            ) : item.product.is_service ? (
                               <span className="inline-flex items-center px-1.5 py-0.2 text-[10px] font-semibold bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded border border-blue-200 dark:border-blue-800/60 shrink-0">
                                 No-Stock
                               </span>
-                            )}
+                            ) : null}
                           </div>
                           <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                            {item.product.is_service ? (
+                            {item.product.is_service || item.product.is_external ? (
                               <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                                 <span className="text-slate-500 font-medium">Rate:</span>
                                 <div className="inline-flex items-center bg-white dark:bg-slate-800 border border-teal-300 dark:border-teal-700 rounded-lg px-2 py-0.5 shadow-2xs">
@@ -1849,10 +1985,14 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                                       updateItemPrice(item.product.id, isNaN(val) ? 0 : val);
                                     }}
                                     className="w-16 text-xs font-bold text-slate-900 dark:text-slate-100 bg-transparent border-none outline-none focus:ring-0 p-0"
-                                    title="Edit service rate"
+                                    title="Edit rate"
                                   />
                                 </div>
-                                <span className="text-[11px] text-teal-600 dark:text-teal-400 font-medium">(No Stock)</span>
+                                {item.product.is_external ? (
+                                  <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">(Zero Profit)</span>
+                                ) : (
+                                  <span className="text-[11px] text-teal-600 dark:text-teal-400 font-medium">(No Stock)</span>
+                                )}
                               </div>
                             ) : (
                               <span>
@@ -1932,94 +2072,44 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
           </div>
         </div>
 
-        {/* Right Column: Checkout & Payment Options */}
-        <div className="lg:col-span-5 space-y-4">
-          {/* Box 1: Customer & Payment Details */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
+        {/* Right Column: Unified Checkout & Payment Panel */}
+        <div className="lg:col-span-5">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-sm space-y-3.5 sticky top-4">
+            {/* Header: Title & Select Existing Modal Trigger */}
+            <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                Customer & Payment
+                Customer & Checkout
               </span>
               <button
                 type="button"
                 onClick={() => setShowAddCustomerModal(true)}
-                className="text-xs font-bold text-brand-600 dark:text-brand-400 hover:underline"
+                className="text-xs font-bold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1"
+                title="Open customer search modal (Press F8)"
               >
-                {selectedCustomerId ? 'Change Customer' : 'Select Existing'}
+                <span>{selectedCustomerId ? 'Change Customer' : 'Select Existing'}</span>
+                <kbd className="hidden sm:inline-block px-1 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono text-slate-500">F8</kbd>
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <Input
-                label="Customer Name"
-                placeholder="Walk-in Customer"
-                value={inlineCustomerName}
-                onChange={(e) => {
-                  setInlineCustomerName(e.target.value);
-                  if (selectedCustomerId) setSelectedCustomerId(null);
-                }}
-                className="text-xs py-2"
-              />
-
-              <Input
-                label="Phone Number"
-                placeholder="Optional"
-                value={inlineCustomerPhone}
-                onChange={(e) => setInlineCustomerPhone(e.target.value)}
-                className="text-xs py-2"
-              />
-
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
-                  Payment Method
-                </label>
-                <select
-                  value={paymentMethod}
-                  onChange={(e: any) => {
-                    const val = e.target.value;
-                    if (val === '__SPLIT__') {
-                      setIsQuickPaySplit(true);
-                      handleOpenQuickPayOrComplete();
-                    } else {
-                      setPaymentMethod(val);
-                    }
-                  }}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100"
-                >
-                  {configuredPaymentAccounts.map((acc) => (
-                    <option key={acc} value={acc}>
-                      {acc}
-                    </option>
-                  ))}
-                  <option value="__SPLIT__">⚡ Split / Mix Payment...</option>
-                </select>
-              </div>
-
-              <Input
-                label="Discount"
-                type="number"
-                min="0"
-                prefix={currency}
-                placeholder="0.00"
-                value={saleDiscount || ''}
-                onChange={(e) => {
-                  const v = parseFloat(e.target.value);
-                  setSaleDiscount(isNaN(v) || v < 0 ? 0 : v);
-                }}
-                className="text-xs py-2"
-              />
-            </div>
-
-            {selectedCustomerObj && (
-              <div className="flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2">
-                <span className="text-slate-600 dark:text-slate-300 truncate">
-                  Selected: <strong className="text-slate-900 dark:text-slate-100">{selectedCustomerObj.name}</strong>
-                  {Number(selectedCustomerObj.current_due || 0) > 0 && (
-                    <span className="text-rose-600 dark:text-rose-400 ml-1.5 font-semibold">
-                      (Previous Due: {formatCurrency(selectedCustomerObj.current_due, currency)})
+            {/* Customer Section */}
+            {selectedCustomerObj ? (
+              <div className="flex items-center justify-between text-xs bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl px-3 py-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <User className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span className="font-bold text-emerald-900 dark:text-emerald-200 truncate">
+                    {selectedCustomerObj.name}
+                  </span>
+                  {selectedCustomerObj.phone && (
+                    <span className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                      ({selectedCustomerObj.phone})
                     </span>
                   )}
-                </span>
+                  {Number(selectedCustomerObj.current_due || 0) > 0 && (
+                    <span className="text-[10px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-200 dark:border-rose-800 shrink-0 ml-1">
+                      Due: {formatCurrency(selectedCustomerObj.current_due, currency)}
+                    </span>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => {
@@ -2027,30 +2117,186 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                     setInlineCustomerName('');
                     setInlineCustomerPhone('');
                   }}
-                  className="text-xs text-rose-600 dark:text-rose-400 font-bold hover:underline ml-2"
+                  className="text-xs text-rose-600 dark:text-rose-400 hover:text-rose-700 font-bold hover:underline shrink-0 ml-2"
                 >
-                  Clear
+                  ✕ Walk-in
                 </button>
               </div>
-            )}
-          </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 relative">
+                {/* Customer Name with Inline Autocomplete */}
+                <div className="relative">
+                  <Input
+                    ref={inlineCustomerInputRef}
+                    label="Customer Name"
+                    placeholder="Walk-in Customer"
+                    value={inlineCustomerName}
+                    onChange={(e) => {
+                      setInlineCustomerName(e.target.value);
+                      setIsInlineCustomerDropdownOpen(true);
+                      setInlineCustomerActiveIdx(-1);
+                      if (selectedCustomerId) setSelectedCustomerId(null);
+                    }}
+                    onFocus={() => {
+                      if (inlineCustomerMatches.length > 0) {
+                        setIsInlineCustomerDropdownOpen(true);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (inlineCustomerMatches.length > 0) {
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          setIsInlineCustomerDropdownOpen(true);
+                          setInlineCustomerActiveIdx((prev) =>
+                            prev < inlineCustomerMatches.length - 1 ? prev + 1 : 0
+                          );
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setInlineCustomerActiveIdx((prev) =>
+                            prev > 0 ? prev - 1 : inlineCustomerMatches.length - 1
+                          );
+                        } else if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const target =
+                            inlineCustomerActiveIdx >= 0
+                              ? inlineCustomerMatches[inlineCustomerActiveIdx]
+                              : inlineCustomerMatches[0];
+                          if (target) {
+                            setSelectedCustomerId(target.id);
+                            setInlineCustomerName(target.name);
+                            setInlineCustomerPhone(target.phone || '');
+                            setIsInlineCustomerDropdownOpen(false);
+                            setInlineCustomerActiveIdx(-1);
+                          }
+                        } else if (e.key === 'Escape') {
+                          setIsInlineCustomerDropdownOpen(false);
+                        }
+                      }
+                    }}
+                    className="text-xs py-1.5"
+                  />
 
-          {/* Box 2: Totals & Settlement */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
-            {/* Financial Summary */}
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between text-slate-600 dark:text-slate-400 text-xs">
+                  {/* Floating Inline Autocomplete Dropdown */}
+                  {isInlineCustomerDropdownOpen && inlineCustomerMatches.length > 0 && (
+                    <div
+                      ref={inlineCustomerDropdownRef}
+                      className="absolute left-0 right-0 top-full mt-1 z-30 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-800 max-h-52 overflow-y-auto"
+                    >
+                      {inlineCustomerMatches.map((c, cIdx) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCustomerId(c.id);
+                            setInlineCustomerName(c.name);
+                            setInlineCustomerPhone(c.phone || '');
+                            setIsInlineCustomerDropdownOpen(false);
+                          }}
+                          onMouseEnter={() => setInlineCustomerActiveIdx(cIdx)}
+                          className={`w-full text-left p-2.5 transition flex items-center justify-between text-xs ${
+                            inlineCustomerActiveIdx === cIdx
+                              ? 'bg-brand-50 dark:bg-brand-950/60 text-brand-950 dark:text-brand-100 font-bold'
+                              : 'hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-800 dark:text-slate-200'
+                          }`}
+                        >
+                          <div className="min-w-0 mr-2">
+                            <div className="font-bold truncate">{c.name}</div>
+                            <div className="text-[10px] text-slate-400 truncate">
+                              {c.phone || c.customer_id}
+                            </div>
+                          </div>
+                          {Number(c.current_due || 0) > 0 && (
+                            <span className="text-[10px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-200 dark:border-rose-800 shrink-0">
+                              Due: {formatCurrency(c.current_due, currency)}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <Input
+                  label="Phone Number"
+                  placeholder="Optional"
+                  value={inlineCustomerPhone}
+                  onChange={(e) => setInlineCustomerPhone(e.target.value)}
+                  className="text-xs py-1.5"
+                />
+              </div>
+            )}
+
+            {/* 1-Click Payment Method Quick Pills */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Payment Method
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsQuickPaySplit(true);
+                    handleOpenQuickPayOrComplete();
+                  }}
+                  className="text-[11px] font-bold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1"
+                >
+                  <Zap className="h-3 w-3 text-amber-500" />
+                  <span>Split / Mix</span>
+                </button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                {configuredPaymentAccounts.slice(0, 4).map((acc) => {
+                  const isSelected = paymentMethod === acc;
+                  return (
+                    <button
+                      key={acc}
+                      type="button"
+                      onClick={() => setPaymentMethod(acc)}
+                      className={`py-2 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border shadow-2xs ${
+                        isSelected
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm shadow-emerald-600/20'
+                          : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700/80'
+                      }`}
+                    >
+                      {acc.toLowerCase().includes('cash') ? (
+                        <DollarSign className="h-3.5 w-3.5 shrink-0" />
+                      ) : acc.toLowerCase().includes('bank') ? (
+                        <CreditCard className="h-3.5 w-3.5 shrink-0" />
+                      ) : (
+                        <Wallet className="h-3.5 w-3.5 shrink-0" />
+                      )}
+                      <span className="truncate">{acc}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Financial Summary Box */}
+            <div className="bg-slate-50/80 dark:bg-slate-800/50 rounded-2xl p-3 border border-slate-100 dark:border-slate-800/80 space-y-2">
+              <div className="flex justify-between items-center text-xs text-slate-600 dark:text-slate-400">
                 <span>Subtotal:</span>
                 <span className="font-semibold text-slate-800 dark:text-slate-200">
                   {formatCurrency(subtotal, currency)}
                 </span>
               </div>
-              {saleDiscount > 0 && (
-                <div className="flex justify-between text-brand-600 dark:text-brand-400 text-xs font-semibold">
-                  <span>Discount:</span>
-                  <span>- {formatCurrency(saleDiscount, currency)}</span>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-600 dark:text-slate-400">Discount:</span>
+                <div className="w-28">
+                  <Input
+                    type="number"
+                    min="0"
+                    prefix={currency}
+                    placeholder="0.00"
+                    value={saleDiscount || ''}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      setSaleDiscount(isNaN(v) || v < 0 ? 0 : v);
+                    }}
+                    className="text-xs py-1 text-right"
+                  />
                 </div>
-              )}
+              </div>
               {taxAmount > 0 && (
                 <div className="flex justify-between text-slate-600 dark:text-slate-400 text-xs">
                   <span>Tax ({taxRate}%):</span>
@@ -2059,36 +2305,34 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                   </span>
                 </div>
               )}
-              <div className="flex justify-between text-slate-900 dark:text-slate-100 font-black text-lg border-t border-slate-200 dark:border-slate-800 pt-2">
-                <span>Net Total:</span>
-                <span className="text-brand-600 dark:text-brand-400 font-black">
+              <div className="flex justify-between items-center text-slate-900 dark:text-slate-100 border-t border-slate-200 dark:border-slate-700/80 pt-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Net Total:
+                </span>
+                <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">
                   {formatCurrency(grandTotal, currency)}
                 </span>
               </div>
             </div>
 
-            {/* Amount Paid Input & Live Settlement */}
-            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
+            {/* Amount Paid & Live Settlement */}
+            <div className="space-y-2">
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
                     Amount Paid
                   </label>
-                  {grandTotal > 0 && (
-                    <div className="flex items-center gap-2">
-                      {currentPaid !== grandTotal && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPaidAmount(grandTotal);
-                            setIsPaidAmountCustomized(false);
-                          }}
-                          className="text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:underline"
-                        >
-                          Exact Cash
-                        </button>
-                      )}
-                    </div>
+                  {grandTotal > 0 && currentPaid !== grandTotal && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaidAmount(grandTotal);
+                        setIsPaidAmountCustomized(false);
+                      }}
+                      className="text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:underline"
+                    >
+                      Exact Cash
+                    </button>
                   )}
                 </div>
                 <Input
@@ -2103,20 +2347,50 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                     setPaidAmount(val);
                     setIsPaidAmountCustomized(true);
                   }}
-                  className="text-sm font-bold py-2"
+                  className="text-sm font-black py-2"
                 />
               </div>
 
+              {/* Smart Quick Cash Tender Presets */}
+              {paymentMethod.toLowerCase().includes('cash') && quickCashOptions.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-0.5">
+                    Quick Cash:
+                  </span>
+                  {quickCashOptions.map((opt) => {
+                    const isSelected = Number(paidAmount) === opt;
+                    const isExact = opt === grandTotal;
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => {
+                          setPaidAmount(opt);
+                          setIsPaidAmountCustomized(true);
+                        }}
+                        className={`px-2 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 border ${
+                          isSelected
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                            : 'bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100'
+                        }`}
+                      >
+                        {isExact ? <span>Exact</span> : <span>{formatMoney(opt)}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               {/* High-visibility Change Due Banner */}
               {changeAmount > 0 && (
-                <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 shadow-xs">
+                <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-100 shadow-xs animate-in fade-in duration-150">
                   <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                    <span className="text-xs font-extrabold uppercase tracking-wide text-emerald-800">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-xs font-extrabold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">
                       Change to Return
                     </span>
                   </div>
-                  <span className="text-base font-black text-emerald-800">
+                  <span className="text-base font-black text-emerald-800 dark:text-emerald-200">
                     {formatCurrency(changeAmount, currency)}
                   </span>
                 </div>
@@ -2127,17 +2401,17 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                 <div className="flex items-center gap-1.5">
                   <span className="text-slate-500 font-medium">Status:</span>
                   {paymentStatus === 'PAID' && (
-                    <span className="px-2 py-0.5 rounded-md font-bold text-emerald-700 bg-emerald-50 border border-emerald-200">
+                    <span className="px-2 py-0.5 rounded-md font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
                       Fully Paid
                     </span>
                   )}
                   {paymentStatus === 'PARTIAL' && (
-                    <span className="px-2 py-0.5 rounded-md font-bold text-amber-700 bg-amber-50 border border-amber-200">
+                    <span className="px-2 py-0.5 rounded-md font-bold text-amber-700 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800">
                       Partial Pay
                     </span>
                   )}
                   {paymentStatus === 'UNPAID' && (
-                    <span className="px-2 py-0.5 rounded-md font-bold text-rose-700 bg-rose-50 border border-rose-200">
+                    <span className="px-2 py-0.5 rounded-md font-bold text-rose-700 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800">
                       Unpaid (Credit)
                     </span>
                   )}
@@ -2164,20 +2438,20 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
             </div>
 
             {/* Action Buttons: Complete Sale & Create Quotation */}
-            <div className="flex flex-col sm:flex-row items-stretch gap-2.5">
+            <div className="flex flex-col sm:flex-row items-stretch gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
               {settings?.enable_quotations !== false && (
                 <Button
                   type="button"
                   variant="outline"
-                  size="lg"
-                  icon={<FileText className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
+                  size="md"
+                  icon={<FileText className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />}
                   onClick={handleSaveQuotation}
                   disabled={effectiveCartItems.length === 0 || savingQuotation || completing}
                   loading={savingQuotation}
-                  className="py-3.5 text-sm font-bold border-indigo-200 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200 bg-indigo-50/50 dark:bg-indigo-950/40 hover:bg-indigo-100/60 dark:hover:bg-indigo-900/60 rounded-2xl whitespace-nowrap"
+                  className="py-3 text-xs font-bold border-indigo-200 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200 bg-indigo-50/50 dark:bg-indigo-950/40 hover:bg-indigo-100/60 dark:hover:bg-indigo-900/60 rounded-xl whitespace-nowrap"
                   title="Create uncharged quotation (does not deduct stock or money)"
                 >
-                  Save as Quotation
+                  Quotation
                 </Button>
               )}
 
@@ -2188,7 +2462,7 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                 onClick={() => handleCompleteSale()}
                 disabled={effectiveCartItems.length === 0 || completing || savingQuotation || Boolean(isPrintingReceipt)}
                 loading={completing || Boolean(isPrintingReceipt)}
-                className="flex-1 py-3.5 text-base font-bold tracking-wide rounded-2xl shadow-lg shadow-brand-600/20 flex items-center justify-center gap-2"
+                className="flex-1 py-3 text-base font-bold tracking-wide rounded-xl shadow-lg shadow-emerald-600/20 bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center gap-2"
               >
                 {autoPrintEnabled && <Zap className="h-4 w-4 text-emerald-200 shrink-0" />}
                 <span>Complete Sale ({formatCurrency(grandTotal, currency)})</span>
@@ -2462,17 +2736,39 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
         maxWidth={isQuickPaySplit ? 'lg' : 'md'}
       >
         <div className="space-y-4">
-          {/* Total Bill Card */}
+          {/* Total Bill & Customer Summary Card */}
           <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between">
             <div>
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Total Bill</span>
-              <span className="text-3xl font-black text-slate-900 dark:text-white">
+              <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400">
                 {formatCurrency(grandTotal, currency)}
               </span>
+              {selectedCustomerObj ? (
+                <div className="text-xs font-semibold text-slate-700 dark:text-slate-200 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                  <User className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                  <span>{selectedCustomerObj.name}</span>
+                  {selectedCustomerObj.phone && (
+                    <span className="text-[11px] text-slate-400">({selectedCustomerObj.phone})</span>
+                  )}
+                  {Number(selectedCustomerObj.current_due || 0) > 0 && (
+                    <span className="text-[10px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/60 px-1.5 py-0.2 rounded border border-rose-200 dark:border-rose-800">
+                      Due: {formatCurrency(selectedCustomerObj.current_due, currency)}
+                    </span>
+                  )}
+                </div>
+              ) : inlineCustomerName.trim() ? (
+                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mt-0.5">
+                  Customer: <strong>{inlineCustomerName.trim()}</strong>
+                </div>
+              ) : (
+                <div className="text-xs text-slate-400 mt-0.5">
+                  Walk-in Customer
+                </div>
+              )}
             </div>
             <div className="text-right">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Items in Cart</span>
-              <span className="text-xs font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-600 inline-block mt-0.5">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 px-3 py-1 rounded-xl border border-slate-200 dark:border-slate-600 inline-block mt-0.5 shadow-2xs">
                 {effectiveCartItems.reduce((sum, item) => sum + item.quantity, 0)} units ({effectiveCartItems.length} items)
               </span>
             </div>
@@ -2512,9 +2808,9 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
             </div>
 
             {!isQuickPaySplit ? (
-              /* Single Method Selection Pills */
-              <div className="flex flex-wrap gap-1.5 pt-0.5">
-                {configuredPaymentAccounts.map((acc) => {
+              /* Single Method Selection Pills (Symmetric Grid) */
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-0.5">
+                {configuredPaymentAccounts.slice(0, 4).map((acc) => {
                   const isSelected = quickPayMethod === acc;
                   return (
                     <button
@@ -2525,18 +2821,20 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                         setPaymentMethod(acc);
                         quickPayInputRef.current?.focus();
                       }}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border ${
+                      className={`py-2 px-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border shadow-2xs ${
                         isSelected
-                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm shadow-emerald-600/20'
                           : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750'
                       }`}
                     >
-                      {acc.toLowerCase() === 'cash' ? (
-                        <Wallet className="h-3.5 w-3.5" />
-                      ) : (
+                      {acc.toLowerCase().includes('cash') ? (
+                        <DollarSign className="h-3.5 w-3.5" />
+                      ) : acc.toLowerCase().includes('bank') ? (
                         <CreditCard className="h-3.5 w-3.5" />
+                      ) : (
+                        <Wallet className="h-3.5 w-3.5" />
                       )}
-                      <span>{acc}</span>
+                      <span className="truncate">{acc}</span>
                       {isSelected && <span className="text-[10px] ml-0.5 opacity-80">✓</span>}
                     </button>
                   );
@@ -2547,23 +2845,25 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
 
           {!isQuickPaySplit ? (
             /* Single Tender Amount Input */
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                   Amount Paid / Tendered ({quickPayMethod}) *
                 </label>
                 <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setQuickPayAmount(grandTotal);
-                      setQuickPayTouched(true);
-                      quickPayInputRef.current?.focus();
-                    }}
-                    className="text-[11px] font-bold text-brand-600 dark:text-brand-400 hover:underline bg-brand-50 dark:bg-brand-950/40 px-2 py-0.5 rounded-lg border border-brand-200 dark:border-brand-800"
-                  >
-                    Exact ({formatCurrency(grandTotal, currency)})
-                  </button>
+                  {grandTotal > 0 && Number(quickPayAmount || 0) !== grandTotal && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuickPayAmount(grandTotal);
+                        setQuickPayTouched(true);
+                        quickPayInputRef.current?.focus();
+                      }}
+                      className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 hover:underline"
+                    >
+                      Exact Cash
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -2606,9 +2906,40 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                   }}
                   placeholder="0.00"
                   autoFocus
-                  className="w-full pl-14 pr-4 py-3 rounded-2xl border-2 border-brand-500 focus:border-brand-600 focus:ring-4 focus:ring-brand-500/20 text-2xl font-black text-slate-900 dark:text-white bg-white dark:bg-slate-800 shadow-inner"
+                  className="w-full pl-14 pr-4 py-3 rounded-2xl border-2 border-emerald-500 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/20 text-2xl font-black text-slate-900 dark:text-white bg-white dark:bg-slate-800 shadow-inner [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
               </div>
+
+              {/* Smart Quick Cash Tender Presets */}
+              {quickPayMethod.toLowerCase().includes('cash') && quickCashOptions.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-0.5">
+                    Quick Cash:
+                  </span>
+                  {quickCashOptions.map((opt) => {
+                    const isSelected = Number(quickPayAmount) === opt;
+                    const isExact = opt === grandTotal;
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => {
+                          setQuickPayAmount(opt);
+                          setQuickPayTouched(true);
+                          quickPayInputRef.current?.focus();
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 border ${
+                          isSelected
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                            : 'bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100'
+                        }`}
+                      >
+                        {isExact ? <span>Exact ({formatMoney(opt)})</span> : <span>{formatMoney(opt)}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           ) : (
             /* Split / Mix Payment Mode */
@@ -2841,9 +3172,9 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
                   ? quickPaySplits.reduce((sum, s) => sum + (Number(s.amount) || 0), 0) < grandTotal
                   : Number(quickPayAmount || 0) < grandTotal)
               }
-              className="font-bold flex items-center gap-2 px-5 py-2.5"
+              className="font-bold flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 rounded-xl"
             >
-              <span>Finalize Sale</span>
+              <span>Finalize Sale ({formatCurrency(grandTotal, currency)})</span>
               <kbd className="px-1.5 py-0.5 rounded bg-white/20 text-white text-[10px] font-mono font-bold">
                 Enter ↵
               </kbd>
@@ -2876,6 +3207,15 @@ export const NewSalePage: React.FC<NewSalePageProps> = ({
           setSuccessToast(`Template "${newTpl.name}" saved successfully!`);
           setShowSaveTemplateModal(false);
         }}
+      />
+
+      {/* Add Sourced Item to Bill Modal */}
+      <AddToBillModal
+        isOpen={showAddToBillModal}
+        onClose={() => setShowAddToBillModal(false)}
+        currency={currency}
+        initialName={addToBillInitialName}
+        onAdd={handleAddExternalToBill}
       />
     </div>
   );

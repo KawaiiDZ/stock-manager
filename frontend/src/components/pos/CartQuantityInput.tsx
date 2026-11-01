@@ -157,6 +157,7 @@ export const CartQuantityInput: React.FC<CartQuantityInputProps> = ({
           pattern="[0-9]*"
           value={localVal}
           onChange={handleChange}
+          onFocus={(e) => e.target.select()}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           maxLength={6}
@@ -173,17 +174,14 @@ export const CartQuantityInput: React.FC<CartQuantityInputProps> = ({
           onClick={(e) => {
             e.stopPropagation();
             onFocusItem?.();
-          }}
-          onDoubleClick={(e) => {
-            e.stopPropagation();
             handleStartEditing();
           }}
           className={`w-12 h-7 flex items-center justify-center font-black text-sm text-slate-900 bg-white rounded-lg border transition shadow-2xs select-none cursor-pointer ${
             justCapped
               ? 'border-amber-500 ring-2 ring-amber-400/40 bg-amber-50/70 text-amber-900'
-              : 'border-slate-200 hover:border-slate-300'
+              : 'border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/20'
           }`}
-          title={`In stock: ${availableStock}. Double-click to type quantity, or use ← → arrows to adjust.`}
+          title={`In stock: ${availableStock}. Click to type quantity, or use ← → arrows to adjust.`}
         >
           {quantity}
         </div>

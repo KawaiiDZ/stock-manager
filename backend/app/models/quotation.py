@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from sqlalchemy import Column, Integer, String, Text, Numeric, DateTime, ForeignKey, CheckConstraint
+from sqlalchemy import Column, Integer, String, Text, Boolean, Numeric, DateTime, ForeignKey, CheckConstraint
 from sqlalchemy.orm import relationship
 from backend.app.core.database import Base
 
@@ -48,12 +48,13 @@ class QuotationItem(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     quotation_id = Column(Integer, ForeignKey("quotations.id", ondelete="CASCADE"), nullable=False, index=True)
-    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=True, index=True)
     product_name = Column(String(150), nullable=False)
     quantity = Column(Numeric(12, 2), nullable=False, default=1.00)
     unit_price = Column(Numeric(12, 2), nullable=False, default=0.00)
     discount_amount = Column(Numeric(12, 2), nullable=False, default=0.00)
     total_price = Column(Numeric(12, 2), nullable=False, default=0.00)
+    is_external = Column(Boolean, nullable=False, default=False)
     notes = Column(Text, nullable=True)
 
     __table_args__ = (
