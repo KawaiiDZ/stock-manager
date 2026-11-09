@@ -51,7 +51,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onShutdown,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
-  const [isPinned, setIsPinned] = useState(false);
+  const [isPinned, setIsPinned] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('pinned') === '1') return true;
+      return localStorage.getItem('sm_sidebar_pinned') === 'true';
+    }
+    return false;
+  });
 
   const isExpanded = isPinned || isHovered;
 
@@ -132,21 +139,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <div
-      className={`shrink-0 transition-all duration-300 ease-in-out relative z-40 ${
+      className={`shrink-0 h-full min-h-full transition-all duration-300 ease-in-out relative z-40 ${
         isPinned ? 'w-64' : 'w-20'
       }`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       <aside
-        className={`h-screen bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col select-none transition-all duration-300 ease-in-out ${
+        className={`h-full min-h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col select-none transition-all duration-300 ease-in-out ${
           isExpanded
             ? 'w-64 shadow-2xl shadow-slate-900/15'
             : 'w-20 shadow-none'
         } ${!isPinned ? 'absolute inset-y-0 left-0' : 'w-64'}`}
       >
         {/* Brand Header */}
-        <div className="h-16 flex items-center px-4 border-b border-slate-100 dark:border-slate-800 justify-between overflow-hidden">
+        <div className="h-16 shrink-0 flex items-center px-4 border-b border-slate-100 dark:border-slate-800 justify-between overflow-hidden">
           {isExpanded ? (
             <>
               <div className="flex items-center gap-2 min-w-0">
@@ -163,7 +170,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setIsPinned(!isPinned);
+                  setIsPinned((prev) => {
+                    const next = !prev;
+                    localStorage.setItem('sm_sidebar_pinned', String(next));
+                    return next;
+                  });
                 }}
                 className={`p-1.5 rounded-lg text-xs transition ${
                   isPinned
@@ -281,7 +292,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Shut Down Action */}
         {onShutdown && (
-          <div className="p-2 border-t border-slate-100 dark:border-slate-800">
+          <div className="p-2 border-t border-slate-100 dark:border-slate-800 shrink-0">
             <button
               type="button"
               onClick={onShutdown}
@@ -299,7 +310,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
 
         {/* Footer info */}
-        <div className="p-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/60 flex items-center justify-between text-xs text-slate-400 dark:text-slate-500 overflow-hidden">
+        <div className="p-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/60 flex items-center justify-between text-xs text-slate-400 dark:text-slate-500 overflow-hidden shrink-0">
           {isExpanded ? (
             <>
               <span className="flex items-center gap-1.5 whitespace-nowrap text-[11px]">
