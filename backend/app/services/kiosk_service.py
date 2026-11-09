@@ -314,6 +314,7 @@ def build_kiosk_command(
         "--disable-features=Translate",
         "--disable-pinch",
         "--overscroll-history-navigation=0",
+        "--disable-application-cache",
     ]
 
     if profile_dir:

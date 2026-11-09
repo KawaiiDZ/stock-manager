@@ -150,7 +150,10 @@ if frontend_dist.exists():
         file_path = frontend_dist / full_path
         if file_path.exists() and file_path.is_file():
             return FileResponse(file_path)
-        return FileResponse(frontend_dist / "index.html")
+        return FileResponse(
+            frontend_dist / "index.html",
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+        )
 else:
     from fastapi.responses import HTMLResponse
     @app.get("/{full_path:path}")

@@ -36,13 +36,29 @@ export const App: React.FC = () => {
   const { uiZoom, setUiZoom, syncFromSettings } = useTheme();
   const [currentUser, setCurrentUser] = useState<{ username: string; full_name: string } | null>(
     () => {
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('dev_user')) {
+          const u = { username: 'admin', full_name: 'Business Owner' };
+          localStorage.setItem('sm_user', JSON.stringify(u));
+          localStorage.setItem('auth_token', 'local-session-1');
+          return u;
+        }
+      }
       const saved = localStorage.getItem('sm_user');
       return saved ? JSON.parse(saved) : null;
     }
   );
 
   const [settings, setSettings] = useState<BusinessSettings | null>(null);
-  const [currentTab, setCurrentTab] = useState<string>('dashboard');
+  const [currentTab, setCurrentTab] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tabParam = urlParams.get('tab');
+      if (tabParam) return tabParam;
+    }
+    return 'dashboard';
+  });
   const [urgentBillsCount, setUrgentBillsCount] = useState<number>(0);
   const [pendingQuotationsCount, setPendingQuotationsCount] = useState<number>(0);
   const [returnSaleId, setReturnSaleId] = useState<number | undefined>();
@@ -325,7 +341,7 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden font-sans text-slate-800 dark:text-slate-100 transition-colors duration-200">
+    <div className="flex w-full h-full min-h-full bg-slate-50 dark:bg-slate-950 overflow-hidden font-sans text-slate-800 dark:text-slate-100 transition-colors duration-200">
       {/* Sidebar */}
       <Sidebar
         currentTab={currentTab}

@@ -79,6 +79,16 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   });
 
   const [uiZoom, setUiZoomState] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const zoomParam = urlParams.get('zoom');
+      if (zoomParam) {
+        const parsed = parseInt(zoomParam, 10);
+        if (!isNaN(parsed) && parsed >= 70 && parsed <= 160) {
+          return parsed;
+        }
+      }
+    }
     const saved = localStorage.getItem('sm_ui_zoom');
     if (saved) {
       const parsed = parseInt(saved, 10);
@@ -128,13 +138,22 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('sm_color_theme', colorTheme);
   }, [themeMode, colorTheme, effectiveMode]);
 
-  // Apply UI zoom to root HTML element
+  // Apply UI zoom and inverse viewport dimensions to root HTML element
+  const applyZoomStyles = useCallback((zoomPercent: number) => {
+    if (typeof document === 'undefined') return;
+    const clamped = Math.max(70, Math.min(160, Math.round(zoomPercent)));
+    const scale = clamped / 100;
+    const root = document.documentElement;
+    root.style.zoom = `${clamped}%`;
+    root.style.width = `${100 / scale}vw`;
+    root.style.height = `${100 / scale}vh`;
+    root.style.minHeight = `${100 / scale}vh`;
+    localStorage.setItem('sm_ui_zoom', String(clamped));
+  }, []);
+
   useEffect(() => {
-    if (typeof document !== 'undefined') {
-      document.documentElement.style.zoom = `${uiZoom}%`;
-      localStorage.setItem('sm_ui_zoom', String(uiZoom));
-    }
-  }, [uiZoom]);
+    applyZoomStyles(uiZoom);
+  }, [uiZoom, applyZoomStyles]);
 
   const setThemeMode = useCallback((mode: ThemeMode) => {
     setThemeModeState(mode);
@@ -149,11 +168,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const setUiZoom = useCallback((zoom: number) => {
     const clamped = Math.max(70, Math.min(160, Math.round(zoom)));
     setUiZoomState(clamped);
-    if (typeof document !== 'undefined') {
-      document.documentElement.style.zoom = `${clamped}%`;
-      localStorage.setItem('sm_ui_zoom', String(clamped));
-    }
-  }, []);
+    applyZoomStyles(clamped);
+  }, [applyZoomStyles]);
 
   const toggleDarkMode = useCallback(() => {
     setThemeModeState((prev) => {
@@ -175,12 +191,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (typeof zoom === 'number' && !isNaN(zoom) && zoom >= 70 && zoom <= 160) {
       const clamped = Math.round(zoom);
       setUiZoomState(clamped);
-      if (typeof document !== 'undefined') {
-        document.documentElement.style.zoom = `${clamped}%`;
-        localStorage.setItem('sm_ui_zoom', String(clamped));
-      }
+      applyZoomStyles(clamped);
     }
-  }, []);
+  }, [applyZoomStyles]);
 
   return (
     <ThemeContext.Provider

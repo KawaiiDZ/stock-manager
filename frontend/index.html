@@ -18,19 +18,25 @@
           }
           document.documentElement.setAttribute('data-theme', color);
           document.documentElement.classList.add('theme-' + color);
-          var zoom = localStorage.getItem('sm_ui_zoom');
+          var urlParams = new URLSearchParams(window.location.search);
+          var zoomParam = urlParams.get('zoom');
+          var zoom = zoomParam || localStorage.getItem('sm_ui_zoom');
           if (zoom) {
             var zVal = parseInt(zoom, 10);
             if (!isNaN(zVal) && zVal >= 70 && zVal <= 160) {
+              var scale = zVal / 100;
               document.documentElement.style.zoom = zVal + '%';
+              document.documentElement.style.width = (100 / scale) + 'vw';
+              document.documentElement.style.height = (100 / scale) + 'vh';
+              document.documentElement.style.minHeight = (100 / scale) + 'vh';
             }
           }
         } catch (e) {}
       })();
     </script>
   </head>
-  <body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased select-none font-sans min-h-screen">
-    <div id="root"></div>
+  <body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased select-none font-sans w-full h-full min-h-full">
+    <div id="root" class="w-full h-full min-h-full"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
