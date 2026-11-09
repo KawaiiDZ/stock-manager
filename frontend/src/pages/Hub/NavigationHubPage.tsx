@@ -353,7 +353,7 @@ export const NavigationHubPage: React.FC<NavigationHubPageProps> = ({
   });
 
   return (
-    <div className="space-y-3 pb-2 animate-fadeIn max-w-7xl mx-auto">
+    <div className="space-y-3 pb-2 animate-fadeIn w-full mx-auto">
       {/* Sleek Compact Header Bar with Time-of-Day Greeting */}
       <div className="relative rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white px-4 py-2.5 sm:px-5 sm:py-3 shadow-md border border-slate-800">
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">

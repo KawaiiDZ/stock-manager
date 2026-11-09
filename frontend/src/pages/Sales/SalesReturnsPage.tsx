@@ -684,49 +684,56 @@ export const SalesReturnsPage: React.FC<SalesReturnsPageProps> = ({
 
       {/* Tab 2: Manual Return */}
       {activeTab === 'manual' && (
-        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm max-w-xl">
-          <h3 className="font-bold text-slate-800 dark:text-white mb-4">Manual Return (Lost Receipt)</h3>
+        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm w-full space-y-5">
+          <div>
+            <h3 className="font-bold text-slate-800 dark:text-white text-base">Manual Return (Lost Receipt)</h3>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+              Process customer item returns and inventory adjustments when the original sale receipt is unavailable.
+            </p>
+          </div>
           <form onSubmit={handleProcessManualReturn} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">
-                Customer
-              </label>
-              <select
-                value={manualCustomerId}
-                onChange={(e) => setManualCustomerId(Number(e.target.value))}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-brand-500"
-              >
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} {c.phone ? `(${c.phone})` : ''}
-                  </option>
-                ))}
-              </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">
+                  Customer
+                </label>
+                <select
+                  value={manualCustomerId}
+                  onChange={(e) => setManualCustomerId(Number(e.target.value))}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-brand-500"
+                >
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.phone ? `(${c.phone})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">
+                  Product to Return
+                </label>
+                <select
+                  value={manualProductId}
+                  onChange={(e) => {
+                    const pid = Number(e.target.value);
+                    setManualProductId(pid);
+                    const prod = products.find((p) => p.id === pid);
+                    if (prod) setManualPrice(prod.selling_price);
+                  }}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-brand-500"
+                >
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} (Price: {currency} {p.selling_price})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">
-                Product to Return
-              </label>
-              <select
-                value={manualProductId}
-                onChange={(e) => {
-                  const pid = Number(e.target.value);
-                  setManualProductId(pid);
-                  const prod = products.find((p) => p.id === pid);
-                  if (prod) setManualPrice(prod.selling_price);
-                }}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-brand-500"
-              >
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} (Price: {currency} {p.selling_price})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
                 label="Return Quantity *"
                 type="number"

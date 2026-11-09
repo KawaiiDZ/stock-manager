@@ -2130,8 +2130,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
             {/* 2. Main 2-Column Responsive Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Left Sidebar: 6 Master Categories (3 cols on lg+) */}
-              <div className="lg:col-span-3 xl:col-span-3 space-y-2 sticky top-6">
+              {/* Left Sidebar: 6 Master Categories (3 cols on lg+, 2 cols on 2xl) */}
+              <div className="lg:col-span-3 xl:col-span-3 2xl:col-span-2 space-y-2 sticky top-6">
                 <div className="hidden lg:block text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 pb-1">
                   Configuration Sections
                 </div>
@@ -2196,8 +2196,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 </div>
               </div>
 
-              {/* Right Content Area (9 cols on lg+) */}
-              <div className="lg:col-span-9 xl:col-span-9 space-y-6">
+              {/* Right Content Area (9 cols on lg+, 10 cols on 2xl) */}
+              <div className="lg:col-span-9 xl:col-span-9 2xl:col-span-10 space-y-6">
                 {/* CATEGORY 1: STORE & GENERAL */}
                 {activeCategory === 'general' && (
                   <div className="space-y-6">
@@ -2211,25 +2211,29 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       </div>
                     </div>
 
-                            <div className="max-w-3xl space-y-6">
-          <form onSubmit={handleSaveSettings} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
-            <h3 className="font-bold text-slate-800 text-base mb-2">Business Profile</h3>
-            <Input
-              label="Shop / Business Name *"
-              value={bizName}
-              onChange={(e) => setBizName(e.target.value)}
-              required
-            />
-            <Input
-              label="Phone Number"
-              value={bizPhone}
-              onChange={(e) => setBizPhone(e.target.value)}
-            />
-            <Input
-              label="Shop Address"
-              value={bizAddress}
-              onChange={(e) => setBizAddress(e.target.value)}
-            />
+                    <div className="w-full space-y-6">
+          <form onSubmit={handleSaveSettings} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-5">
+            <h3 className="font-bold text-slate-800 text-base mb-1">Business Profile</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input
+                label="Shop / Business Name *"
+                value={bizName}
+                onChange={(e) => setBizName(e.target.value)}
+                required
+              />
+              <Input
+                label="Phone Number"
+                value={bizPhone}
+                onChange={(e) => setBizPhone(e.target.value)}
+              />
+              <div className="md:col-span-2">
+                <Input
+                  label="Shop Address"
+                  value={bizAddress}
+                  onChange={(e) => setBizAddress(e.target.value)}
+                />
+              </div>
+            </div>
             {/* Currency Selector with Presets & Live Preview */}
             <div className="md:col-span-2 p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -2430,39 +2434,41 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 </p>
               </div>
 
-              <label className="flex items-start gap-3 p-3.5 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition">
-                <input
-                  type="checkbox"
-                  checked={enablePosQuickPay}
-                  onChange={(e) => setEnablePosQuickPay(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                />
-                <div className="text-xs">
-                  <span className="font-bold text-slate-800 block">
-                    Quick-Pay Dialogue on Ctrl + Enter (or Cmd + Enter / F9)
-                  </span>
-                  <span className="text-slate-500 text-[11px] leading-relaxed">
-                    When pressing Ctrl+Enter in POS, opens a fast pop-up dialogue to enter the amount paid, preview change or remaining due, and finalize on Enter. Pressing Esc closes the dialogue and preserves the sale on screen.
-                  </span>
-                </div>
-              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className="flex items-start gap-3 p-3.5 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition">
+                  <input
+                    type="checkbox"
+                    checked={enablePosQuickPay}
+                    onChange={(e) => setEnablePosQuickPay(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div className="text-xs">
+                    <span className="font-bold text-slate-800 block">
+                      Quick-Pay Dialogue on Ctrl + Enter (or Cmd + Enter / F9)
+                    </span>
+                    <span className="text-slate-500 text-[11px] leading-relaxed">
+                      When pressing Ctrl+Enter in POS, opens a fast pop-up dialogue to enter the amount paid, preview change or remaining due, and finalize on Enter. Pressing Esc closes the dialogue and preserves the sale on screen.
+                    </span>
+                  </div>
+                </label>
 
-              <label className="flex items-start gap-3 p-3.5 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition">
-                <input
-                  type="checkbox"
-                  checked={enableBillTemplates}
-                  onChange={(e) => setEnableBillTemplates(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
-                />
-                <div className="text-xs">
-                  <span className="font-bold text-slate-800 block">
-                    Enable Bill & Product Kit Templates
-                  </span>
-                  <span className="text-slate-500 text-[11px] leading-relaxed">
-                    Show the "Templates" dropdown and "Save as Template" buttons on the POS checkout screen. When turned off, standard retail checkout is used without template controls.
-                  </span>
-                </div>
-              </label>
+                <label className="flex items-start gap-3 p-3.5 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition">
+                  <input
+                    type="checkbox"
+                    checked={enableBillTemplates}
+                    onChange={(e) => setEnableBillTemplates(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                  />
+                  <div className="text-xs">
+                    <span className="font-bold text-slate-800 block">
+                      Enable Bill & Product Kit Templates
+                    </span>
+                    <span className="text-slate-500 text-[11px] leading-relaxed">
+                      Show the "Templates" dropdown and "Save as Template" buttons on the POS checkout screen. When turned off, standard retail checkout is used without template controls.
+                    </span>
+                  </div>
+                </label>
+              </div>
             </div>
 
             <div className="pt-2">
@@ -2573,7 +2579,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       </div>
                     </div>
 
-                            <div className="max-w-3xl space-y-6">
+                    <div className="w-full space-y-6">
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
               <div>
@@ -2628,7 +2634,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 Active Payment Accounts ({paymentAccounts.length})
               </label>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
                 {paymentAccounts.map((account, idx) => {
                   const isCash = account.toLowerCase() === 'cash';
                   return (
@@ -2687,40 +2693,40 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               💡 Tip: Configured accounts appear in Quick-Pay (Ctrl + Enter), Checkout split payments, and in the Customer & Supplier ledger dialogs.
             </div>
           </div>
-        </div>
 
-                            <form onSubmit={handleSaveSettings} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm max-w-2xl space-y-5">
-          <h3 className="font-bold text-slate-800 text-base">Tax Configuration</h3>
-          
-          <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
-            <div>
-              <div className="font-bold text-slate-800 text-sm">Enable Sales Tax</div>
-              <p className="text-xs text-slate-400">Apply tax automatically on point of sale checkouts</p>
+          <form onSubmit={handleSaveSettings} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm w-full space-y-5">
+            <h3 className="font-bold text-slate-800 text-base">Tax Configuration</h3>
+            
+            <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
+              <div>
+                <div className="font-bold text-slate-800 text-sm">Enable Sales Tax</div>
+                <p className="text-xs text-slate-400">Apply tax automatically on point of sale checkouts</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={taxEnabled}
+                onChange={(e) => setTaxEnabled(e.target.checked)}
+                className="h-5 w-5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+              />
             </div>
-            <input
-              type="checkbox"
-              checked={taxEnabled}
-              onChange={(e) => setTaxEnabled(e.target.checked)}
-              className="h-5 w-5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-            />
-          </div>
 
-          {taxEnabled && (
-            <Input
-              label="Default Tax Rate (%)"
-              type="number"
-              step="0.01"
-              min="0"
-              value={defaultTaxRate}
-              onChange={(e) => setDefaultTaxRate(Number(e.target.value))}
-              hint="e.g. 5 for 5% tax"
-            />
-          )}
+            {taxEnabled && (
+              <Input
+                label="Default Tax Rate (%)"
+                type="number"
+                step="0.01"
+                min="0"
+                value={defaultTaxRate}
+                onChange={(e) => setDefaultTaxRate(Number(e.target.value))}
+                hint="e.g. 5 for 5% tax"
+              />
+            )}
 
-          <Button type="submit" variant="primary" loading={saving}>
-            Save Tax Settings
-          </Button>
-        </form>
+            <Button type="submit" variant="primary" loading={saving}>
+              Save Tax Settings
+            </Button>
+          </form>
+        </div>
                   </div>
                 )}
 
@@ -3397,7 +3403,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
                     {/* Sub-tab 2: Printers & Diagnostics */}
                     {hardwareSubTab === 'printers' && (
-                      <div className="space-y-6 max-w-4xl">
+                      <div className="space-y-6 w-full">
                         <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
 
                           {/* Kiosk & Fullscreen POS Display Auto-Launch Card */}
@@ -3749,7 +3755,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                                 </div>
 
                                 <div className="flex items-center justify-between pt-1 border-t border-slate-200/80">
-                                  <p className="text-[11px] text-slate-500 truncate max-w-[140px]" title={selectedThermalPrinter || 'Auto-detect'}>
+                                  <p className="text-[11px] text-slate-500 truncate max-w-xs md:max-w-md" title={selectedThermalPrinter || 'Auto-detect'}>
                                     Target:{' '}
                                     <span className="font-semibold text-emerald-800 font-mono text-[11px]">
                                       {selectedThermalPrinter ? selectedThermalPrinter : 'Auto-detect'}
@@ -3817,7 +3823,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                                 </div>
 
                                 <div className="flex items-center justify-between pt-1 border-t border-slate-200/80">
-                                  <p className="text-[11px] text-slate-500 truncate max-w-[190px]" title={selectedA4Printer || 'System Default'}>
+                                  <p className="text-[11px] text-slate-500 truncate max-w-xs md:max-w-md" title={selectedA4Printer || 'System Default'}>
                                     Target:{' '}
                                     <span className="font-semibold text-blue-800 font-mono text-[11px]">
                                       {selectedA4Printer ? selectedA4Printer : 'System Default'}
@@ -3948,7 +3954,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
                     {/* Sub-tab 3: A4 Invoices & Quotations */}
                     {hardwareSubTab === 'invoices' && (
-                      <div className="space-y-6 max-w-4xl">
+                      <div className="space-y-6 w-full">
                         <form onSubmit={handleSaveSettings} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div>
@@ -4276,8 +4282,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
                     {/* Sub-tab 4: Barcodes & Scanners */}
                     {hardwareSubTab === 'barcodes' && (
-                              <div className="max-w-4xl space-y-6">
-          <form onSubmit={handleSaveSettings} className="space-y-6">
+                      <div className="w-full space-y-6">
+                        <form onSubmit={handleSaveSettings} className="space-y-6">
             {/* 1. Barcode Scanner Configuration Card */}
             <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
@@ -4575,7 +4581,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       </div>
                     </div>
 
-                            <div className="max-w-3xl space-y-6">
+                    <div className="w-full space-y-6">
           {/* Display Mode (Light / Dark / System) */}
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-5">
             <div>
@@ -4907,7 +4913,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       <UsersManagementTab />
                     </div>
 
-                            <div className="space-y-6 max-w-4xl">
+                    <div className="space-y-6 w-full">
           {/* Dashboard Financial Privacy Card */}
           <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
             <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-100">
@@ -5062,7 +5068,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       </div>
                     </div>
 
-                            <div className="max-w-3xl space-y-6">
+                    <div className="w-full space-y-6">
           {/* Cloud Backup (WhatsApp-Style Google Drive) */}
           <GoogleBackupCard
             onSuccess={(msg) => setSuccessMsg(msg)}
@@ -5167,7 +5173,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           </div>
         </div>
 
-                            <div className="space-y-6 max-w-4xl">
+                    <div className="space-y-6 w-full">
           <div className="p-6 bg-gradient-to-r from-rose-900 to-slate-900 rounded-3xl text-white shadow-lg space-y-2">
             <div className="flex items-center gap-3">
               <div className="p-3 bg-rose-500/20 rounded-2xl border border-rose-400/30 text-rose-400">
