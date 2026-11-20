@@ -232,7 +232,7 @@ def push_pending_outbox_batch(db: Session, batch_size: int = 50) -> Dict[str, An
 
                 if item.entity_type == "SALE":
                     sale_data = data.get("sale", data)
-                    resp = client.post(f"{settings.SUPABASE_URL}/rest/v1/sales", json=sale_data, headers=headers)
+                    resp = client.post(f"{settings.SUPABASE_URL}/rest/v1/sales?on_conflict=sync_uuid", json=sale_data, headers=headers)
                     if resp.status_code in (200, 201, 204):
                         res_list = resp.json() if resp.status_code != 204 else []
                         supabase_sale_id = res_list[0]["id"] if res_list else None
@@ -241,10 +241,10 @@ def push_pending_outbox_batch(db: Session, batch_size: int = 50) -> Dict[str, An
                         if supabase_sale_id:
                             for it in data.get("items", []):
                                 it["sale_id"] = supabase_sale_id
-                                client.post(f"{settings.SUPABASE_URL}/rest/v1/sale_items", json=it, headers=headers)
+                                client.post(f"{settings.SUPABASE_URL}/rest/v1/sale_items?on_conflict=sync_uuid", json=it, headers=headers)
                             for pay in data.get("payments", []):
                                 pay["sale_id"] = supabase_sale_id
-                                client.post(f"{settings.SUPABASE_URL}/rest/v1/sale_payments", json=pay, headers=headers)
+                                client.post(f"{settings.SUPABASE_URL}/rest/v1/sale_payments?on_conflict=sync_uuid", json=pay, headers=headers)
                         success = True
                     else:
                         item.status = "FAILED"
@@ -253,19 +253,19 @@ def push_pending_outbox_batch(db: Session, batch_size: int = 50) -> Dict[str, An
                         failed_count += 1
 
                 elif item.entity_type == "CATEGORY":
-                    resp = client.post(f"{settings.SUPABASE_URL}/rest/v1/product_categories", json=data, headers=headers)
+                    resp = client.post(f"{settings.SUPABASE_URL}/rest/v1/product_categories?on_conflict=sync_uuid", json=data, headers=headers)
                     success = resp.status_code in (200, 201, 204)
                 elif item.entity_type == "CUSTOMER":
-                    resp = client.post(f"{settings.SUPABASE_URL}/rest/v1/customers", json=data, headers=headers)
+                    resp = client.post(f"{settings.SUPABASE_URL}/rest/v1/customers?on_conflict=sync_uuid", json=data, headers=headers)
                     success = resp.status_code in (200, 201, 204)
                 elif item.entity_type == "PRODUCT":
-                    resp = client.post(f"{settings.SUPABASE_URL}/rest/v1/products", json=data, headers=headers)
+                    resp = client.post(f"{settings.SUPABASE_URL}/rest/v1/products?on_conflict=sync_uuid", json=data, headers=headers)
                     success = resp.status_code in (200, 201, 204)
                 elif item.entity_type == "CUSTOMER_PAYMENT":
-                    resp = client.post(f"{settings.SUPABASE_URL}/rest/v1/customer_payments", json=data, headers=headers)
+                    resp = client.post(f"{settings.SUPABASE_URL}/rest/v1/customer_payments?on_conflict=sync_uuid", json=data, headers=headers)
                     success = resp.status_code in (200, 201, 204)
                 elif item.entity_type == "EXPENSE":
-                    resp = client.post(f"{settings.SUPABASE_URL}/rest/v1/expenses", json=data, headers=headers)
+                    resp = client.post(f"{settings.SUPABASE_URL}/rest/v1/expenses?on_conflict=sync_uuid", json=data, headers=headers)
                     success = resp.status_code in (200, 201, 204)
                 else:
                     success = True
@@ -383,7 +383,7 @@ def initial_seed_upload(db: Session) -> Dict[str, Any]:
                 "updated_at": c.updated_at.isoformat() if hasattr(c, "updated_at") and c.updated_at else None,
                 "is_deleted": False
             }
-            res = client.post(f"{settings.SUPABASE_URL}/rest/v1/product_categories", json=payload, headers=headers)
+            res = client.post(f"{settings.SUPABASE_URL}/rest/v1/product_categories?on_conflict=sync_uuid", json=payload, headers=headers)
             if res.status_code in (200, 201, 204):
                 stats["categories"] += 1
 
@@ -401,7 +401,7 @@ def initial_seed_upload(db: Session) -> Dict[str, Any]:
                 "updated_at": cust.updated_at.isoformat() if cust.updated_at else None,
                 "is_deleted": False
             }
-            res = client.post(f"{settings.SUPABASE_URL}/rest/v1/customers", json=payload, headers=headers)
+            res = client.post(f"{settings.SUPABASE_URL}/rest/v1/customers?on_conflict=sync_uuid", json=payload, headers=headers)
             if res.status_code in (200, 201, 204):
                 stats["customers"] += 1
 
@@ -423,7 +423,7 @@ def initial_seed_upload(db: Session) -> Dict[str, Any]:
                 "updated_at": p.updated_at.isoformat() if p.updated_at else None,
                 "is_deleted": False
             }
-            res = client.post(f"{settings.SUPABASE_URL}/rest/v1/products", json=payload, headers=headers)
+            res = client.post(f"{settings.SUPABASE_URL}/rest/v1/products?on_conflict=sync_uuid", json=payload, headers=headers)
             if res.status_code in (200, 201, 204):
                 stats["products"] += 1
 
@@ -440,7 +440,7 @@ def initial_seed_upload(db: Session) -> Dict[str, Any]:
                 "created_at": cp.created_at.isoformat() if cp.created_at else None,
                 "is_deleted": False
             }
-            res = client.post(f"{settings.SUPABASE_URL}/rest/v1/customer_payments", json=payload, headers=headers)
+            res = client.post(f"{settings.SUPABASE_URL}/rest/v1/customer_payments?on_conflict=sync_uuid", json=payload, headers=headers)
             if res.status_code in (200, 201, 204):
                 stats["payments"] += 1
 
@@ -466,7 +466,7 @@ def initial_seed_upload(db: Session) -> Dict[str, Any]:
                 "created_at": s.created_at.isoformat() if s.created_at else None,
                 "is_deleted": False
             }
-            res = client.post(f"{settings.SUPABASE_URL}/rest/v1/sales", json=sale_payload, headers=headers)
+            res = client.post(f"{settings.SUPABASE_URL}/rest/v1/sales?on_conflict=sync_uuid", json=sale_payload, headers=headers)
             if res.status_code in (200, 201, 204):
                 stats["sales"] += 1
                 res_data = res.json() if res.status_code != 204 else []
@@ -489,7 +489,7 @@ def initial_seed_upload(db: Session) -> Dict[str, Any]:
                             "notes": it.notes,
                             "is_deleted": False
                         }
-                        client.post(f"{settings.SUPABASE_URL}/rest/v1/sale_items", json=item_payload, headers=headers)
+                        client.post(f"{settings.SUPABASE_URL}/rest/v1/sale_items?on_conflict=sync_uuid", json=item_payload, headers=headers)
                     for pay in s.payments:
                         pay_payload = {
                             "sync_uuid": pay.sync_uuid,
@@ -500,7 +500,7 @@ def initial_seed_upload(db: Session) -> Dict[str, Any]:
                             "created_at": pay.created_at.isoformat() if pay.created_at else None,
                             "is_deleted": False
                         }
-                        client.post(f"{settings.SUPABASE_URL}/rest/v1/sale_payments", json=pay_payload, headers=headers)
+                        client.post(f"{settings.SUPABASE_URL}/rest/v1/sale_payments?on_conflict=sync_uuid", json=pay_payload, headers=headers)
 
     # Set last sync timestamp
     meta = db.query(SyncMetadata).filter(SyncMetadata.entity_type == "UPSTREAM_SYNC").first()
