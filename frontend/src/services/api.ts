@@ -732,7 +732,7 @@ export const api = {
       method: 'DELETE',
     }),
 
-  // Git-like Additive Offline Sync
+  // Git-like Additive Offline Sync & Supabase Cloud Sync
   sync: {
     push: (payload: SyncPushRequest) =>
       request<SyncPushResponse>('/sync/push', {
@@ -743,6 +743,26 @@ export const api = {
       request<{ status: string; processed_commits_count: number }>('/sync/status'),
     getSnapshot: () =>
       request<SyncSnapshotResponse>('/sync/snapshot'),
+    getSupabaseStatus: () =>
+      request<{
+        enabled: boolean;
+        configured: boolean;
+        connected: boolean;
+        latency_ms?: number;
+        pending_outbox_count: number;
+        failed_outbox_count: number;
+        last_synced_at?: string;
+        url?: string;
+        error?: string;
+      }>('/sync/supabase-status'),
+    triggerSupabaseSync: () =>
+      request<{ success: boolean; push: any; pull: any }>('/sync/supabase-trigger', {
+        method: 'POST',
+      }),
+    seedSupabaseCloud: () =>
+      request<{ success: boolean; stats: any; message: string }>('/sync/supabase-seed', {
+        method: 'POST',
+      }),
   },
 
   // Local Network Discovery

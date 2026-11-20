@@ -10,6 +10,18 @@ import {
 import { offlineStorage } from '../services/offlineStorage';
 import { SyncPushResponse, MergedItemSummary, ConnectedClientItem } from '../types';
 
+export interface SupabaseSyncStatus {
+  enabled: boolean;
+  configured: boolean;
+  connected: boolean;
+  latency_ms?: number;
+  pending_outbox_count: number;
+  failed_outbox_count: number;
+  last_synced_at?: string;
+  url?: string;
+  error?: string;
+}
+
 interface NetworkContextType {
   isOnline: boolean;
   isHost: boolean;
@@ -24,11 +36,14 @@ interface NetworkContextType {
   syncStatusMessage: string | null;
   connectedClients: ConnectedClientItem[];
   onlineClientsCount: number;
+  supabaseStatus: SupabaseSyncStatus | null;
   connectToHost: (url: string, username?: string, password?: string) => Promise<{ success: boolean; message: string }>;
   disconnectFromHost: () => void;
   syncNow: () => Promise<SyncPushResponse | null>;
   pullHostSnapshot: () => Promise<boolean>;
   refreshStatus: () => Promise<void>;
+  triggerCloudSync: () => Promise<void>;
+  seedCloudData: () => Promise<{ success: boolean; message: string }>;
 }
 
 const NetworkContext = createContext<NetworkContextType | undefined>(undefined);
@@ -46,6 +61,7 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [syncStatusMessage, setSyncStatusMessage] = useState<string | null>(null);
   const [connectedClients, setConnectedClients] = useState<ConnectedClientItem[]>([]);
   const [onlineClientsCount, setOnlineClientsCount] = useState<number>(0);
+  const [supabaseStatus, setSupabaseStatus] = useState<SupabaseSyncStatus | null>(null);
 
   const isSyncingRef = useRef<boolean>(false);
   const isOnlineRef = useRef<boolean>(true);
@@ -200,6 +216,16 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
         // Quiet during restart or quiet state
       }
     }
+
+    // Poll Supabase Cloud Sync Status
+    try {
+      const supa = await api.sync.getSupabaseStatus();
+      if (supa) {
+        setSupabaseStatus(supa);
+      }
+    } catch {
+      // Quiet if backend is starting
+    }
   }, [syncNow, pullHostSnapshot]);
 
   useEffect(() => {
@@ -307,6 +333,33 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
     updatePendingCount();
   }, [checkNetworkStatus, fetchHostInfo, updatePendingCount]);
 
+  const triggerCloudSync = useCallback(async () => {
+    setIsSyncing(true);
+    try {
+      await api.sync.triggerSupabaseSync();
+      const supa = await api.sync.getSupabaseStatus();
+      if (supa) setSupabaseStatus(supa);
+    } catch (err: any) {
+      console.warn('Manual cloud sync failed:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, []);
+
+  const seedCloudData = useCallback(async () => {
+    setIsSyncing(true);
+    try {
+      const res = await api.sync.seedSupabaseCloud();
+      const supa = await api.sync.getSupabaseStatus();
+      if (supa) setSupabaseStatus(supa);
+      return { success: res.success, message: res.message };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Failed to seed cloud data.' };
+    } finally {
+      setIsSyncing(false);
+    }
+  }, []);
+
   const value: NetworkContextType = {
     isOnline,
     isHost: !remoteHostUrl,
@@ -321,11 +374,14 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
     syncStatusMessage,
     connectedClients,
     onlineClientsCount,
+    supabaseStatus,
     connectToHost,
     disconnectFromHost,
     syncNow,
     pullHostSnapshot,
     refreshStatus,
+    triggerCloudSync,
+    seedCloudData,
   };
 
   return <NetworkContext.Provider value={value}>{children}</NetworkContext.Provider>;

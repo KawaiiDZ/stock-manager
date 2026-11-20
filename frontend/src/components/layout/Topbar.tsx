@@ -1,6 +1,6 @@
 import React from 'react';
 import { BusinessSettings } from '../../types';
-import { ShoppingCart, LogOut, Store, Zap, Compass, Sun, Moon, Radio, Wifi, WifiOff, Power } from 'lucide-react';
+import { ShoppingCart, LogOut, Store, Zap, Compass, Sun, Moon, Radio, Wifi, WifiOff, Power, Cloud } from 'lucide-react';
 import { Button } from '../common/Button';
 import { useTheme } from '../../context/ThemeContext';
 import { useNetwork } from '../../context/NetworkContext';
@@ -23,7 +23,7 @@ export const Topbar: React.FC<TopbarProps> = ({
   onShutdown,
 }) => {
   const { effectiveMode, toggleDarkMode } = useTheme();
-  const { isOnline, isHost, pendingSyncCount, isSyncing, onlineClientsCount } = useNetwork();
+  const { isOnline, isHost, pendingSyncCount, isSyncing, onlineClientsCount, supabaseStatus, triggerCloudSync } = useNetwork();
 
   return (
     <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 flex items-center justify-between shrink-0 transition-colors">
@@ -44,6 +44,43 @@ export const Topbar: React.FC<TopbarProps> = ({
 
       {/* Right actions: Network Pill + Theme Toggle + Navigation Hub + Big Sell Button + User Logout */}
       <div className="flex items-center gap-3">
+        {/* Supabase Cloud Sync Pill */}
+        {supabaseStatus?.configured && (
+          <button
+            type="button"
+            onClick={() => triggerCloudSync()}
+            disabled={isSyncing}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-xl border transition shadow-2xs ${
+              !supabaseStatus.connected
+                ? 'bg-slate-50 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
+                : (supabaseStatus.pending_outbox_count > 0 || isSyncing)
+                ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+            }`}
+            title={`Supabase Cloud Sync: ${supabaseStatus.connected ? `Connected (${supabaseStatus.latency_ms ?? 0}ms)` : 'Offline'} • Click to Sync Now`}
+          >
+            <Cloud className={`h-3.5 w-3.5 ${
+              !supabaseStatus.connected
+                ? 'text-slate-400'
+                : isSyncing
+                ? 'text-amber-500 animate-pulse'
+                : 'text-emerald-500'
+            }`} />
+            <span className="hidden md:inline">
+              {!supabaseStatus.connected
+                ? 'Cloud Offline'
+                : isSyncing
+                ? 'Syncing Cloud...'
+                : 'Cloud Synced'}
+            </span>
+            {supabaseStatus.pending_outbox_count > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-600 text-white font-bold" title="Pending cloud mutations">
+                {supabaseStatus.pending_outbox_count}
+              </span>
+            )}
+          </button>
+        )}
+
         {/* Network & Multi-Terminal Sync Pill */}
         {onNetworkClick && (
           <button

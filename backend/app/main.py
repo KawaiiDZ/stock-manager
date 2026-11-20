@@ -39,7 +39,11 @@ async def lifespan(app: FastAPI):
     start_backup_scheduler()
     # 4. Start local network discovery beacon
     start_discovery_beacon()
+    # 5. Start Supabase offline-first background sync worker
+    from backend.app.services.sync_worker import start_sync_worker, stop_sync_worker
+    start_sync_worker()
     yield
+    stop_sync_worker()
     stop_discovery_beacon()
     stop_backup_scheduler()
 

@@ -2,8 +2,9 @@ from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, Boolean, Numeric, DateTime, ForeignKey, CheckConstraint
 from sqlalchemy.orm import relationship
 from backend.app.core.database import Base
+from backend.app.models.base_sync import SyncableMixin
 
-class Sale(Base):
+class Sale(Base, SyncableMixin):
     __tablename__ = "sales"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -28,7 +29,7 @@ class Sale(Base):
     payments = relationship("SalePayment", back_populates="sale", cascade="all, delete-orphan")
     returns = relationship("SalesReturn", back_populates="sale")
 
-class SaleItem(Base):
+class SaleItem(Base, SyncableMixin):
     __tablename__ = "sale_items"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -70,7 +71,7 @@ class SaleItemBatch(Base):
     sale_item = relationship("SaleItem", back_populates="batch_links")
     batch = relationship("InventoryBatch", back_populates="sale_item_batches")
 
-class SalePayment(Base):
+class SalePayment(Base, SyncableMixin):
     __tablename__ = "sale_payments"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)

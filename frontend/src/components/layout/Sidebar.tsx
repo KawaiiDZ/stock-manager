@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { BusinessSettings } from '../../types';
+import { useNetwork } from '../../context/NetworkContext';
 import {
   LayoutDashboard,
   History,
@@ -18,6 +19,7 @@ import {
   FileText,
   Compass,
   Power,
+  Cloud,
 } from 'lucide-react';
 
 interface NavItem {
@@ -50,6 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   settings,
   onShutdown,
 }) => {
+  const { supabaseStatus, isSyncing } = useNetwork();
   const [isHovered, setIsHovered] = useState(false);
   const [isPinned, setIsPinned] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -310,21 +313,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
 
         {/* Footer info */}
-        <div className="p-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/60 flex items-center justify-between text-xs text-slate-400 dark:text-slate-500 overflow-hidden shrink-0">
-          {isExpanded ? (
-            <>
-              <span className="flex items-center gap-1.5 whitespace-nowrap text-[11px]">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                Ready & Offline
-              </span>
-              <span className="text-[10px] whitespace-nowrap">v2.1.0</span>
-            </>
-          ) : (
-            <div className="w-full flex justify-center py-0.5" title="Ready & Offline (v2.1.0)">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        {(() => {
+          const isCloudOnline = supabaseStatus?.configured && supabaseStatus?.connected;
+          const pendingCloudChanges = supabaseStatus?.pending_outbox_count || 0;
+          const statusText = isCloudOnline
+            ? (pendingCloudChanges > 0 || isSyncing ? `Syncing (${pendingCloudChanges})` : 'Cloud Synced')
+            : 'Ready & Offline';
+          const statusDot = isCloudOnline
+            ? (pendingCloudChanges > 0 || isSyncing ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500 animate-pulse')
+            : 'bg-emerald-500 animate-pulse';
+          const tooltip = isCloudOnline
+            ? `Supabase Cloud Connected • ${supabaseStatus?.latency_ms ?? 0}ms`
+            : 'Local SQLite Storage';
+
+          return (
+            <div className="p-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/60 flex items-center justify-between text-xs text-slate-400 dark:text-slate-500 overflow-hidden shrink-0">
+              {isExpanded ? (
+                <>
+                  <span className="flex items-center gap-1.5 whitespace-nowrap text-[11px]" title={tooltip}>
+                    <span className={`h-2 w-2 rounded-full ${statusDot}`}></span>
+                    {statusText}
+                  </span>
+                  <span className="text-[10px] whitespace-nowrap">v2.1.0</span>
+                </>
+              ) : (
+                <div className="w-full flex justify-center py-0.5" title={`${statusText} (v2.1.0) • ${tooltip}`}>
+                  <span className={`h-2 w-2 rounded-full ${statusDot}`}></span>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          );
+        })()}
       </aside>
     </div>
   );

@@ -1,7 +1,10 @@
+import logging
 from decimal import Decimal
 from typing import Optional, List
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, func
+
+logger = logging.getLogger("uvicorn.error")
 
 from backend.app.models.product import ProductCategory, Product, ProductCustomField, ProductCustomValue
 from backend.app.models.inventory import InventoryBatch, InventoryMovement
@@ -62,6 +65,11 @@ def create_category(db: Session, data: CategoryCreate) -> ProductCategory:
     db.add(cat)
     db.commit()
     db.refresh(cat)
+    try:
+        from backend.app.services.supabase_sync_service import enqueue_category_mutation
+        enqueue_category_mutation(db, cat, "INSERT")
+    except Exception as e:
+        logger.warning(f"Failed to enqueue category to sync outbox: {e}")
     return cat
 
 def update_category(db: Session, cat_id: int, name: str, is_active: Optional[bool] = None) -> ProductCategory:
@@ -77,6 +85,11 @@ def update_category(db: Session, cat_id: int, name: str, is_active: Optional[boo
         cat.is_active = is_active
     db.commit()
     db.refresh(cat)
+    try:
+        from backend.app.services.supabase_sync_service import enqueue_category_mutation
+        enqueue_category_mutation(db, cat, "UPDATE")
+    except Exception as e:
+        logger.warning(f"Failed to enqueue category update to sync outbox: {e}")
     return cat
 
 def delete_category(db: Session, cat_id: int) -> None:
@@ -422,6 +435,11 @@ def create_product(db: Session, data: ProductCreate) -> dict:
 
     db.commit()
     db.refresh(product)
+    try:
+        from backend.app.services.supabase_sync_service import enqueue_product_mutation
+        enqueue_product_mutation(db, product, "INSERT")
+    except Exception as e:
+        logger.warning(f"Failed to enqueue product to sync outbox: {e}")
     return get_product(db, product.id)
 
 def create_products_bulk(db: Session, products_data: List[ProductCreate]) -> BulkProductsResponse:
@@ -580,6 +598,11 @@ def adjust_stock(db: Session, product_id: int, data: StockAdjustmentRequest) -> 
     db.add(movement)
 
     db.commit()
+    try:
+        from backend.app.services.supabase_sync_service import enqueue_product_mutation
+        enqueue_product_mutation(db, product, "UPDATE")
+    except Exception as e:
+        logger.warning(f"Failed to enqueue stock adjustment to sync outbox: {e}")
     return get_product(db, product.id)
 
 def update_product(db: Session, product_id: int, data: ProductUpdate) -> dict:
@@ -639,6 +662,11 @@ def update_product(db: Session, product_id: int, data: ProductUpdate) -> dict:
 
     db.commit()
     db.refresh(product)
+    try:
+        from backend.app.services.supabase_sync_service import enqueue_product_mutation
+        enqueue_product_mutation(db, product, "INSERT")
+    except Exception as e:
+        logger.warning(f"Failed to enqueue product to sync outbox: {e}")
     return get_product(db, product.id)
 
 def deactivate_product(db: Session, product_id: int) -> dict:
@@ -647,6 +675,11 @@ def deactivate_product(db: Session, product_id: int) -> dict:
         raise EntityNotFoundException("Product", str(product_id))
     product.is_active = False
     db.commit()
+    try:
+        from backend.app.services.supabase_sync_service import enqueue_product_mutation
+        enqueue_product_mutation(db, product, "UPDATE")
+    except Exception as e:
+        logger.warning(f"Failed to enqueue stock adjustment to sync outbox: {e}")
     return get_product(db, product.id)
 
 def restore_product(db: Session, product_id: int) -> dict:
@@ -655,6 +688,11 @@ def restore_product(db: Session, product_id: int) -> dict:
         raise EntityNotFoundException("Product", str(product_id))
     product.is_active = True
     db.commit()
+    try:
+        from backend.app.services.supabase_sync_service import enqueue_product_mutation
+        enqueue_product_mutation(db, product, "UPDATE")
+    except Exception as e:
+        logger.warning(f"Failed to enqueue stock adjustment to sync outbox: {e}")
     return get_product(db, product.id)
 
 def delete_product_permanent(db: Session, product_id: int) -> None:

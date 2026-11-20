@@ -73,6 +73,7 @@ import { printElement } from '../../utils/print';
 import { STANDARD_LABEL_SIZES, generateBarcodeSvg, parseLabelDimensions } from '../../utils/barcode';
 import { STANDARD_DATE_FORMATS, setGlobalFormattingPreferences, formatDate, formatCurrency } from '../../utils/format';
 import { GoogleBackupCard } from '../../components/settings/GoogleBackupCard';
+import { SupabaseCloudSyncCard } from '../../components/settings/SupabaseCloudSyncCard';
 import { rasterizeReceiptElementFast, rasterizeReceiptFast, AcceleratedRasterResult } from '../../utils/receiptRasterizer';
 import { UsersManagementTab } from '../../components/settings/UsersManagementTab';
 import { BillTemplatesTab } from '../../components/settings/BillTemplatesTab';
@@ -5069,6 +5070,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                     </div>
 
                     <div className="w-full space-y-6">
+          {/* Supabase Cloud Sync (Optionally Online) */}
+          <SupabaseCloudSyncCard
+            onSuccess={(msg) => setSuccessMsg(msg)}
+            onError={(err) => setErrorMsg(err)}
+          />
+
           {/* Cloud Backup (WhatsApp-Style Google Drive) */}
           <GoogleBackupCard
             onSuccess={(msg) => setSuccessMsg(msg)}

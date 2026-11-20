@@ -100,6 +100,11 @@ def auto_upgrade_schema(target_engine=None):
                         conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_def}"))
                         if is_dt:
                             conn.execute(text(f"UPDATE {table_name} SET {col.name} = datetime('now') WHERE {col.name} IS NULL"))
+                        if col.name == "sync_uuid":
+                            import uuid
+                            rows = conn.execute(text(f"SELECT id FROM {table_name} WHERE sync_uuid IS NULL OR sync_uuid = ''")).fetchall()
+                            for r in rows:
+                                conn.execute(text(f"UPDATE {table_name} SET sync_uuid = :u WHERE id = :id"), {"u": str(uuid.uuid4()), "id": r[0]})
                 conn.commit()
             except Exception as e:
                 print(f"Auto-upgrade error on table {table_name}:", e)

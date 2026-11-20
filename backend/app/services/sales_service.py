@@ -1,9 +1,12 @@
+import logging
 from decimal import Decimal
 from typing import List, Optional
 from datetime import datetime, time
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
+
+logger = logging.getLogger("uvicorn.error")
 
 def _normalize_datetime_range(start_date: Optional[datetime], end_date: Optional[datetime]):
     if start_date is not None and end_date is not None and start_date > end_date:
@@ -458,6 +461,14 @@ def _execute_create_sale(db: Session, data: SaleCreate) -> SaleResponse:
 
     db.commit()
     db.refresh(sale)
+
+    # Enqueue offline-first mutation to cloud sync outbox
+    try:
+        from backend.app.services.supabase_sync_service import enqueue_sale_mutation
+        enqueue_sale_mutation(db, sale)
+    except Exception as sync_err:
+        logger.warning(f"Failed to enqueue sale {sale.receipt_number} to sync outbox: {sync_err}")
+
     return get_sale(db, sale.id)
 
 def create_sale(db: Session, data: SaleCreate) -> SaleResponse:

@@ -1,8 +1,11 @@
+import logging
 from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
+
+logger = logging.getLogger("uvicorn.error")
 
 from backend.app.models.customer import Customer, CustomerPayment
 from backend.app.models.sales import Sale, SalesReturn, SalePayment
@@ -111,6 +114,11 @@ def create_customer(db: Session, data: CustomerCreate) -> CustomerResponse:
     db.add(cust)
     db.commit()
     db.refresh(cust)
+    try:
+        from backend.app.services.supabase_sync_service import enqueue_customer_mutation
+        enqueue_customer_mutation(db, cust, "INSERT")
+    except Exception as e:
+        logger.warning(f"Failed to enqueue customer to sync outbox: {e}")
     return get_customer(db, cust.id)
 
 def update_customer(db: Session, customer_id: int, data: CustomerUpdate) -> CustomerResponse:
@@ -129,6 +137,11 @@ def update_customer(db: Session, customer_id: int, data: CustomerUpdate) -> Cust
         c.address = data.address.strip() if data.address else None
     db.commit()
     db.refresh(c)
+    try:
+        from backend.app.services.supabase_sync_service import enqueue_customer_mutation
+        enqueue_customer_mutation(db, c, "UPDATE")
+    except Exception as e:
+        logger.warning(f"Failed to enqueue customer update to sync outbox: {e}")
     return get_customer(db, c.id)
 
 def deactivate_customer(db: Session, customer_id: int) -> CustomerResponse:
@@ -216,6 +229,11 @@ def record_customer_payment(db: Session, customer_id: int, data: CustomerPayment
 
     db.commit()
     db.refresh(payment)
+    try:
+        from backend.app.services.supabase_sync_service import enqueue_customer_payment_mutation
+        enqueue_customer_payment_mutation(db, payment, "INSERT")
+    except Exception as e:
+        logger.warning(f"Failed to enqueue customer payment to sync outbox: {e}")
     return CustomerPaymentResponse.model_validate(payment)
 
 def get_customer_ledger(db: Session, customer_id: int) -> List[CustomerLedgerEntry]:

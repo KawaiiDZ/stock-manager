@@ -76,3 +76,35 @@ def get_store_snapshot(db: Session = Depends(get_db)):
         suppliers=suppliers_list,
         products_count=len(products_list)
     )
+
+@router.get("/supabase-status")
+def get_supabase_sync_status(db: Session = Depends(get_db)):
+    """
+    Get live Supabase connection status, outbox backlog, and last sync timestamp.
+    """
+    from backend.app.services.supabase_sync_service import get_sync_status_summary
+    return get_sync_status_summary(db)
+
+@router.post("/supabase-trigger")
+def trigger_supabase_sync(db: Session = Depends(get_db)):
+    """
+    Manually trigger an immediate push of pending outbox mutations
+    and pull of downstream catalog updates.
+    """
+    from backend.app.services.supabase_sync_service import push_pending_outbox_batch, pull_downstream_updates
+    push_res = push_pending_outbox_batch(db, batch_size=100)
+    pull_res = pull_downstream_updates(db)
+    return {
+        "success": True,
+        "push": push_res,
+        "pull": pull_res
+    }
+
+@router.post("/supabase-seed")
+def seed_supabase_cloud(db: Session = Depends(get_db)):
+    """
+    Push all local SQLite categories, products, customers, and sales to Supabase cloud.
+    """
+    from backend.app.services.supabase_sync_service import initial_seed_upload
+    return initial_seed_upload(db)
+

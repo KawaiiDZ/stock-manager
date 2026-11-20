@@ -2,6 +2,9 @@ import os
 import sys
 from pathlib import Path
 from pydantic_settings import BaseSettings
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def get_base_dir() -> Path:
     if getattr(sys, 'frozen', False):
@@ -81,8 +84,15 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = os.environ.get("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 
+    # Supabase Cloud Sync Configuration
+    SUPABASE_URL: str = os.environ.get("SUPABASE_URL", "")
+    SUPABASE_ANON_KEY: str = os.environ.get("SUPABASE_ANON_KEY", "")
+    SUPABASE_SERVICE_ROLE_KEY: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    SUPABASE_SYNC_ENABLED: bool = os.environ.get("SUPABASE_SYNC_ENABLED", "true").lower() in ("true", "1", "yes")
+
     class Config:
         case_sensitive = True
+        extra = "allow"
 
 settings = Settings()
 

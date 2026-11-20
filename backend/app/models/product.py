@@ -2,8 +2,9 @@ from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, Boolean, Numeric, DateTime, ForeignKey, CheckConstraint
 from sqlalchemy.orm import relationship
 from backend.app.core.database import Base
+from backend.app.models.base_sync import SyncableMixin
 
-class ProductCategory(Base):
+class ProductCategory(Base, SyncableMixin):
     __tablename__ = "product_categories"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -13,7 +14,7 @@ class ProductCategory(Base):
 
     products = relationship("Product", back_populates="category")
 
-class Product(Base):
+class Product(Base, SyncableMixin):
     __tablename__ = "products"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
