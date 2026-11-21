@@ -67,3 +67,8 @@ htmlcov/
 .env
 .env.local
 .env.*.local
+
+# Mobile App Link
+mobile
+stock manager Mobile App
+
